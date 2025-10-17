@@ -4,7 +4,7 @@ Thank you for your interest in contributing! This workspace hosts multiple crate
 
 ## Code of Conduct
 
-Please review and follow our `CODE_OF_CONDUCT.md`.
+Please review and follow our [Code of Conduct](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md)
 
 ## Development setup
 
