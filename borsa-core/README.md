@@ -161,7 +161,7 @@ borsa-core = "0.1.0"
 
 ## Contributing
 
-Contributions are welcome! Please see our [Contributing Guide]([LICENSE](https://github.com/borsaorg/borsa/blob/main/CONTRIBUTING.md) and our [Code of Conduct](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md). For major changes, please open an issue first to discuss what you would like to change.
+Contributions are welcome! Please see our [Contributing Guide](https://github.com/borsaorg/borsa/blob/main/CONTRIBUTING.md) and our [Code of Conduct](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md). For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
