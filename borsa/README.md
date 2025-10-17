@@ -226,7 +226,7 @@ for ts in calendar.earnings_dates.iter().take(3) {
 }
 ```
 
-## 🔧 Advanced Features
+## Advanced Features
 
 ### Bulk Operations
 
@@ -315,7 +315,7 @@ if !failures.is_empty() {
 }
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### The Borsa Ecosystem
 
@@ -360,7 +360,7 @@ impl borsa_core::connector::BorsaConnector for MyConnector {
 }
 ```
 
-## 📖 Examples
+## Examples
 
 Check out the [examples package](../examples/examples/) for comprehensive usage examples:
 
@@ -377,7 +377,7 @@ Check out the [examples package](../examples/examples/) for comprehensive usage 
 - `11_upcoming_events.rs` - Calendar/events
 - `12_per_symbol_priority.rs` - Per-symbol provider priority
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](https://github.com/borsaorg/borsa/blob/main/CONTRIBUTING.md) and our [Code of Conduct](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md).
 
@@ -402,16 +402,15 @@ cd examples
 cargo run --example 01_simple_quote
 ```
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](https://github.com/borsaorg/borsa/blob/main/LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Yahoo Finance for providing free market data
-- Alpha Vantage for their comprehensive financial APIs
 - The Rust community for building amazing async tools
 
 ---
 
-**Ready to build something amazing with financial data?** Start with `borsa` today! 🚀
+**Ready to build something amazing with financial data?** Start with `borsa` today!
