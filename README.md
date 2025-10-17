@@ -48,16 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Working with Symbols and Money
-
-- `Instrument::from_symbol(..)` validates and canonicalises ticker strings (upper-case, trimmed).
-  Handle the `Result` it returns when user input is dynamic.
-- `Quote::symbol` (and other symbol fields) are `paft::domain::Symbol` values. Use
-  `symbol.as_str()` when you need a `&str` or `symbol.to_string()` to allocate an owned `String`.
-- Prices and other monetary fields are `paft::money::Money` instances that carry currency
-  metadata. Call `money.format()` for a human-readable value or `money.amount()` if you only need
-  the numeric component.
-
 ## Router configuration highlights
 
 - Prefer adjusted history when merging overlaps:
