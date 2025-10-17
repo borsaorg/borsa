@@ -124,7 +124,7 @@ proptest! {
     #[test]
     fn degenerate_sequences_empty_and_singleton(len in prop::sample::select(vec![0usize, 1usize])) {
         let mut ts = Vec::with_capacity(len);
-        for i in 0..len { ts.push(i as i64); }
+        for i in 0..len { ts.push(i64::try_from(i).unwrap()); }
         let candles: Vec<Candle> = ts.into_iter().map(c).collect();
         prop_assert_eq!(estimate_step_seconds(candles.as_slice().to_vec()), None);
         prop_assert!(!is_subdaily(&candles));

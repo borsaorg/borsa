@@ -101,7 +101,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let yf_connector = Arc::new(YfConnector::new_default());
     let mock_connector = Arc::new(MockConnector);
 
-
     // 2. Build Borsa and set a priority order for history.
     // We'll tell Borsa to prefer our mock connector for history data, then yfinance, then Alpha Vantage.
     let borsa = Borsa::builder()

@@ -80,12 +80,12 @@ proptest! {
     #[test]
     fn dedup_associative_commutative(a in proptest::collection::vec(arb_action(), 0..100),
                                      b in proptest::collection::vec(arb_action(), 0..100)) {
-        let left = dedup_actions([a.clone(), b.clone()].into_iter().flatten().collect());
+        let left = dedup_actions(<[_; 2]>::from((a.clone(), b.clone())).into_iter().flatten().collect());
         let right = dedup_actions(dedup_actions(a.clone()).into_iter().chain(dedup_actions(b.clone())).collect());
         prop_assert_eq!(left, right);
 
-        let ab = dedup_actions([a.clone(), b.clone()].into_iter().flatten().collect());
-        let ba = dedup_actions([b, a].into_iter().flatten().collect());
+        let ab = dedup_actions(<[_; 2]>::from((a.clone(), b.clone())).into_iter().flatten().collect());
+        let ba = dedup_actions(<[_; 2]>::from((b, a)).into_iter().flatten().collect());
         prop_assert_eq!(ab, ba);
     }
 
