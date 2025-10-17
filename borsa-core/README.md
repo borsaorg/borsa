@@ -58,10 +58,12 @@ borsa-core = "0.1.0"
 
 ### Basic Example
 
+After adding `borsa-core` to your `Cargo.toml`, you can start with the following examples.
+
 ```rust
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
 
-// Create an instrument (validated + canonicalised)
+// Create an instrument (validated and canonicalized)
 let instrument = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
 
 // Use with any connector that implements BorsaConnector
@@ -138,15 +140,6 @@ impl BorsaConnector for MyConnector {
     fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> { Some(self) }
     fn as_history_provider(&self) -> Option<&dyn HistoryProvider> { Some(self) }
 }
-```
-
-## Install
-
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-borsa-core = "0.1.0"
 ```
 
 ## Documentation
