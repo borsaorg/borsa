@@ -1,6 +1,6 @@
-# borsa workspace
+# borsa
 
-High-level, pluggable market data API for Rust. This monorepo contains the core types and traits, the router/orchestrator, and multiple provider connectors.
+High-level, pluggable market data API for Rust. This monorepo contains the core types and traits, the router/orchestrator, and the officially supported provider connector.
 
 ## Workspace layout
 
