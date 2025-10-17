@@ -34,7 +34,7 @@ async fn quote_capability_hot_swap_returns_error_not_panic() {
     let hs_arc: Arc<dyn BorsaConnector> = hs.clone();
 
     // Prepare orchestrator
-    let borsa = Borsa::builder().with_connector(hs_arc).build();
+    let borsa = Borsa::builder().with_connector(hs_arc).build().unwrap();
 
     // First call: ensure success to confirm capability present
     let inst = crate::helpers::instrument("X", AssetKind::Equity);

@@ -9,7 +9,11 @@ async fn history_with_attribution_marks_provider_spans() {
     let a = m_hist("A", &[1, 2, 3]);
     let b = m_hist("B", &[3, 4, 5]);
 
-    let borsa = Borsa::builder().with_connector(a).with_connector(b).build();
+    let borsa = Borsa::builder()
+        .with_connector(a)
+        .with_connector(b)
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let req = HistoryRequest::try_from_range(Range::D5, Interval::D1).unwrap();

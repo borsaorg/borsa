@@ -25,7 +25,8 @@ async fn calendar_falls_back_and_succeeds() {
     let borsa = Borsa::builder()
         .with_connector(err_cal)
         .with_connector(ok_cal)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("TSLA", AssetKind::Equity);
     let cal = borsa.calendar(&inst).await.unwrap();

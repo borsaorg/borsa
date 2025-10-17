@@ -14,7 +14,8 @@ async fn merge_strategy_deep_fetches_all_providers() {
         .with_connector(b)
         .with_connector(c)
         .merge_history_strategy(MergeStrategy::Deep)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
@@ -47,7 +48,8 @@ async fn merge_strategy_fallback_stops_at_first_success() {
         .with_connector(b)
         .with_connector(c)
         .merge_history_strategy(MergeStrategy::Fallback)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
@@ -83,7 +85,8 @@ async fn merge_strategy_fallback_continues_on_empty_data() {
         .with_connector(b)
         .with_connector(c)
         .merge_history_strategy(MergeStrategy::Fallback)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
@@ -111,7 +114,8 @@ async fn merge_strategy_fallback_handles_errors_gracefully() {
         .with_connector(b)
         .with_connector(c)
         .merge_history_strategy(MergeStrategy::Fallback)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
@@ -133,7 +137,11 @@ async fn merge_strategy_default_is_deep() {
     let a = m_hist("A", &[1, 2, 3]);
     let b = m_hist("B", &[4, 5, 6]);
 
-    let borsa = Borsa::builder().with_connector(a).with_connector(b).build(); // No explicit strategy set
+    let borsa = Borsa::builder()
+        .with_connector(a)
+        .with_connector(b)
+        .build()
+        .unwrap(); // No explicit strategy set
 
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
@@ -159,7 +167,8 @@ async fn merge_strategy_fallback_with_overlapping_data() {
         .with_connector(a)
         .with_connector(b)
         .merge_history_strategy(MergeStrategy::Fallback)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();

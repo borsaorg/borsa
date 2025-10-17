@@ -34,7 +34,8 @@ async fn stream_quotes_respects_kind_hint_support() {
         .with_connector(wrong_kind.clone())
         .with_connector(right_kind.clone())
         .prefer_for_kind(AssetKind::Equity, &[wrong_kind, right_kind]) // Even if W is first, kind hint should filter it out
-        .build();
+        .build()
+        .unwrap();
 
     let (_h, mut rx) = borsa
         .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])

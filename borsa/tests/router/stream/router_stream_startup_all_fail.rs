@@ -17,7 +17,8 @@ async fn stream_quotes_errors_when_all_providers_fail_to_start() {
     let borsa = Borsa::builder()
         .with_connector(first)
         .with_connector(second)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument(AAPL, AssetKind::Equity);
 

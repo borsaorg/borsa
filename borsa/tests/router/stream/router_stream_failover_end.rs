@@ -44,7 +44,8 @@ async fn stream_quotes_fails_over_when_first_provider_ends() {
         .with_connector(p1.clone())
         .with_connector(p2.clone())
         .prefer_for_kind(AssetKind::Equity, &[p1, p2]) // P1 has higher priority
-        .build();
+        .build()
+        .unwrap();
 
     let (_handle, mut rx) = borsa
         .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])

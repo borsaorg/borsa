@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let yf_connector = Arc::new(YfConnector::new_default());
 
     // 2. Build the Borsa router and register the connectors.
-    let borsa = Borsa::builder().with_connector(yf_connector).build();
+    let borsa = Borsa::builder().with_connector(yf_connector).build()?;
 
     // 3. Define the instrument we want to query.
     let instrument =

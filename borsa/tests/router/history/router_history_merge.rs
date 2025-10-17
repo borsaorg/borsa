@@ -10,7 +10,11 @@ async fn merges_adjacent_ranges() {
     let a = m_hist("A", &[1, 2, 3]);
     let b = m_hist("B", &[4, 5]);
 
-    let borsa = Borsa::builder().with_connector(a).with_connector(b).build();
+    let borsa = Borsa::builder()
+        .with_connector(a)
+        .with_connector(b)
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let req = HistoryRequest::try_from_range(Range::D5, Interval::D1).unwrap();
@@ -26,7 +30,11 @@ async fn prefers_first_on_overlap() {
     let a = m_hist("A", &[1, 2, 3]);
     let b = m_hist("B", &[2, 3, 4]);
 
-    let borsa = Borsa::builder().with_connector(a).with_connector(b).build();
+    let borsa = Borsa::builder()
+        .with_connector(a)
+        .with_connector(b)
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let req = HistoryRequest::try_from_range(Range::D5, Interval::D1).unwrap();

@@ -39,7 +39,7 @@ async fn raw_close_preserved_for_single_source_no_resample() {
         .returns_history_ok(hist)
         .build();
 
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa
@@ -107,7 +107,8 @@ async fn raw_close_dropped_when_resampled() {
     let borsa = Borsa::builder()
         .with_connector(c)
         .resampling(Resampling::Daily)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let out = borsa

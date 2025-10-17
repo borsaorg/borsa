@@ -8,7 +8,7 @@ use crate::helpers::m_hist;
 #[tokio::test]
 async fn history_with_valid_range_succeeds() {
     let a = m_hist("A", &[1, 2, 3]);
-    let borsa = Borsa::builder().with_connector(a).build();
+    let borsa = Borsa::builder().with_connector(a).build().unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
 

@@ -8,7 +8,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Setup Borsa with yfinance connector.
     let yf_connector = Arc::new(YfConnector::new_default());
 
-    let borsa = Borsa::builder().with_connector(yf_connector).build();
+    let borsa = Borsa::builder().with_connector(yf_connector).build()?;
 
     // 2. Create a search request. We're looking for up to 5 equity results for "tesla".
     let request = SearchRequest::builder("tesla")

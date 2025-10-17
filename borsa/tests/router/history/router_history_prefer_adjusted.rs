@@ -64,7 +64,8 @@ async fn prefers_adjusted_series_over_non_adjusted_on_overlap() {
         .with_connector(unadj)
         .with_connector(adj)
         .prefer_adjusted_history(true)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa
@@ -107,7 +108,8 @@ async fn default_behavior_keeps_priority_if_flag_not_set() {
         .with_connector(unadj)
         .with_connector(adj)
         // .prefer_adjusted_history(false) // default
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa
@@ -152,7 +154,8 @@ async fn prefer_adjusted_drops_unadjusted_even_when_non_overlapping() {
         .with_connector(unadj)
         .with_connector(adj)
         .prefer_adjusted_history(true)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa
@@ -195,7 +198,8 @@ async fn no_preference_keeps_first_series_adjustedness_even_when_non_overlapping
     let borsa = Borsa::builder()
         .with_connector(unadj)
         .with_connector(adj)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa

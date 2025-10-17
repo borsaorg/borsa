@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .prefer_for_kind(AssetKind::Equity, &[fast_conn.clone(), slow_conn.clone()])
         // Override: For the symbol "SPECIAL", prefer the slow connector.
         .prefer_symbol("SPECIAL", &[slow_conn.clone(), fast_conn.clone()])
-        .build();
+        .build()?;
 
     // --- SCENARIO 1: Fetch a normal symbol ---
     println!("# Fetching quote for a normal symbol ('NORMAL')...");

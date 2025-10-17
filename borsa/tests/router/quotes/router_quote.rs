@@ -11,7 +11,8 @@ async fn quote_fallback_first_success() {
     let borsa = Borsa::builder()
         .with_connector(c1)
         .with_connector(c2)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
@@ -30,7 +31,8 @@ async fn quote_respects_priority_override() {
         .with_connector(c1.clone())
         .with_connector(c2.clone())
         .prefer_symbol("X", &[c2, c1])
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();

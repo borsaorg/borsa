@@ -41,7 +41,7 @@
 //!     .merge_history_strategy(MergeStrategy::Deep)
 //!     .fetch_strategy(FetchStrategy::PriorityWithFallback)
 //!     .resampling(Resampling::Daily)
-//!     .build();
+//!     .build()?;
 //! ```
 //!
 //! Fetching a quote and a merged history series:

@@ -19,7 +19,8 @@ async fn holders_falls_back_and_succeeds() {
     let borsa = Borsa::builder()
         .with_connector(err)
         .with_connector(ok)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("MSFT", AssetKind::Equity);
     let rows = borsa.major_holders(&inst).await.unwrap();

@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_connector(yf_connector.clone())
         .with_connector(mock_connector.clone())
         .prefer_for_kind(AssetKind::Equity, &[mock_connector, yf_connector])
-        .build();
+        .build()?;
 
     // 3. Define the instrument and a request for recent history.
     let instrument =

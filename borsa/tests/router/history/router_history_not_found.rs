@@ -19,7 +19,7 @@ async fn all_not_found_returns_not_found() {
         .with_history_intervals(SUPP)
         .with_history_fn(|_i, _r| Err(BorsaError::not_found("history for X")))
         .build();
-    let borsa = Borsa::builder().with_connector(nf).build();
+    let borsa = Borsa::builder().with_connector(nf).build().unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let err = borsa
@@ -56,7 +56,7 @@ async fn all_ok_empty_returns_not_found() {
         })
         .build();
 
-    let borsa = Borsa::builder().with_connector(empty_ok).build();
+    let borsa = Borsa::builder().with_connector(empty_ok).build().unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let err = borsa

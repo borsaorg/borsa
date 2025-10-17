@@ -73,7 +73,8 @@ async fn quotes_per_symbol_fallback_succeeds() {
     let borsa = Borsa::builder()
         .with_connector(top)
         .with_connector(backup)
-        .build();
+        .build()
+        .unwrap();
 
     let insts = &[
         crate::helpers::instrument(AAPL, AssetKind::Equity),

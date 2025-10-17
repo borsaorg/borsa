@@ -304,7 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_connector(fast_connector.clone())
         .with_connector(slow_connector.clone())
         .merge_history_strategy(MergeStrategy::Deep)
-        .build();
+        .build()?;
 
     let (history_deep, attribution_deep) = borsa_deep
         .history_with_attribution(&instrument, req.clone())
@@ -338,7 +338,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_connector(fast_connector.clone())
         .with_connector(slow_connector.clone())
         .merge_history_strategy(MergeStrategy::Fallback)
-        .build();
+        .build()?;
 
     let (history_fallback, attribution_fallback) = borsa_fallback
         .history_with_attribution(&instrument, req)

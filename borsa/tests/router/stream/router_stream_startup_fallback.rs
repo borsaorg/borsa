@@ -42,7 +42,8 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
         .with_connector(failing.clone())
         .with_connector(ok.clone())
         .prefer_for_kind(AssetKind::Equity, &[failing, ok]) // Prefer failing first
-        .build();
+        .build()
+        .unwrap();
 
     let (_h, mut rx) = borsa
         .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])

@@ -38,7 +38,7 @@ async fn router_rounds_down_and_resamples_to_requested_minutes() {
             })
         })
         .build();
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
 
     let req = HistoryRequest::try_from_range(Range::D1, Interval::I2m).unwrap(); // request 2-minute bars

@@ -34,7 +34,8 @@ async fn price_target_respects_per_kind_priority() {
         .with_connector(low_arc.clone())
         .with_connector(high_arc.clone())
         .prefer_for_kind(AssetKind::Equity, &[high_arc, low_arc])
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa.analyst_price_target(&inst).await.unwrap();

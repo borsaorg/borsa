@@ -24,7 +24,8 @@ async fn history_falls_back_when_first_errors() {
     let borsa = Borsa::builder()
         .with_connector(first)
         .with_connector(second)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let out = borsa

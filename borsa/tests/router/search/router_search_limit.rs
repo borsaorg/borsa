@@ -32,7 +32,11 @@ async fn search_applies_limit_after_merge() {
         }],
     );
 
-    let borsa = Borsa::builder().with_connector(a).with_connector(b).build();
+    let borsa = Borsa::builder()
+        .with_connector(a)
+        .with_connector(b)
+        .build()
+        .unwrap();
 
     let req = SearchRequest::builder("aa")
         .kind(AssetKind::Equity)

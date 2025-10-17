@@ -46,7 +46,7 @@ use std::sync::Arc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a connector and build the client
     let yf = Arc::new(YfConnector::new_default());
-    let borsa = Borsa::builder().with_connector(yf).build();
+    let borsa = Borsa::builder().with_connector(yf).build()?;
 
     // Define the instrument (validated + uppercased automatically)
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
@@ -103,7 +103,7 @@ let borsa = Borsa::builder()
     .prefer_for_kind(AssetKind::Crypto, &[alpha_vantage_connector.clone(), yf_connector.clone()])
     // Use specific connector for TSLA
     .prefer_symbol("TSLA", &[alpha_vantage_connector, yf_connector])
-    .build();
+    .build()?;
 ```
 
 ## Data Types
@@ -266,7 +266,7 @@ let borsa = Borsa::builder()
     .resampling(Resampling::Daily)
     // Or convert to weekly bars
     // .resampling(Resampling::Weekly)
-    .build();
+    .build()?;
 ```
 
 ### History Merge Strategy
@@ -283,7 +283,7 @@ let borsa = Borsa::builder()
     .merge_history_strategy(MergeStrategy::Deep)
     // Or fallback: stop at first provider with data (more economical)
     // .merge_history_strategy(MergeStrategy::Fallback)
-    .build();
+    .build()?;
 ```
 
 **Merge Strategies:**

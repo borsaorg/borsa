@@ -80,7 +80,8 @@ async fn stream_backoff_exponential_no_jitter() {
             factor: 2,
             jitter_percent: 0,
         })
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let (handle, _rx) = borsa
@@ -153,7 +154,8 @@ async fn stream_backoff_jitter_bounds() {
     let borsa = Borsa::builder()
         .with_connector(conn)
         .backoff(backoff)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let (handle, _rx) = borsa

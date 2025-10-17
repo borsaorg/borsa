@@ -18,7 +18,8 @@ async fn expirations_falls_back_and_succeeds() {
     let borsa = Borsa::builder()
         .with_connector(err)
         .with_connector(ok)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa.options_expirations(&inst).await.unwrap();

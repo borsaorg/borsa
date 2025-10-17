@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid instrument symbol");
 
     // Default: PriorityWithFallback with 5s timeout
-    let borsa_default = Borsa::builder().with_connector(yf.clone()).build();
+    let borsa_default = Borsa::builder().with_connector(yf.clone()).build()?;
     let _ = borsa_default.quote(&inst).await?;
 
     // Explicitly set sequential fallback with a tighter timeout
@@ -20,14 +20,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_connector(yf.clone())
         .fetch_strategy(FetchStrategy::PriorityWithFallback)
         .provider_timeout(std::time::Duration::from_millis(800))
-        .build();
+        .build()?;
     let _ = borsa_seq.quote(&inst).await?;
 
     // Latency-first: fire all providers concurrently and take first success
     let borsa_latency = Borsa::builder()
         .with_connector(yf.clone())
         .fetch_strategy(FetchStrategy::Latency)
-        .build();
+        .build()?;
     let _ = borsa_latency.quote(&inst).await?;
 
     println!("Examples ran successfully.");

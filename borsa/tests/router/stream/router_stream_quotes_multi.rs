@@ -34,7 +34,7 @@ async fn stream_quotes_filters_symbols_and_emits_all() {
         .with_stream_updates(updates)
         .build();
 
-    let borsa = borsa::Borsa::builder().with_connector(c).build();
+    let borsa = borsa::Borsa::builder().with_connector(c).build().unwrap();
 
     let (_h, mut rx) = borsa
         .stream_quotes(&[

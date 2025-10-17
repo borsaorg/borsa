@@ -32,7 +32,8 @@ async fn empty_history_result_is_skipped() {
     let borsa = Borsa::builder()
         .with_connector(empty)
         .with_connector(filled)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
     let out = borsa

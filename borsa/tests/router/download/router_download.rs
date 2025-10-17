@@ -46,7 +46,8 @@ async fn download_builder_fetches_for_multiple_instruments() {
 
     let borsa = Borsa::builder()
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
-        .build();
+        .build()
+        .unwrap();
 
     let instruments = &[
         crate::helpers::instrument("A", AssetKind::Equity),
@@ -109,7 +110,8 @@ async fn download_builder_fetches_for_multiple_instruments() {
 async fn download_builder_rejects_duplicate_symbols_in_instruments() {
     let borsa = Borsa::builder()
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
-        .build();
+        .build()
+        .unwrap();
 
     let instruments_with_duplicates = &[
         crate::helpers::instrument("AAPL", AssetKind::Equity),
@@ -131,7 +133,8 @@ async fn download_builder_rejects_duplicate_symbols_in_instruments() {
 async fn download_builder_rejects_duplicate_symbols_in_add_instrument() {
     let borsa = Borsa::builder()
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
-        .build();
+        .build()
+        .unwrap();
 
     let result = borsa
         .download()
@@ -155,7 +158,8 @@ async fn download_builder_rejects_duplicate_symbols_in_add_instrument() {
 async fn download_builder_allows_different_symbols() {
     let borsa = Borsa::builder()
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
-        .build();
+        .build()
+        .unwrap();
 
     let result = borsa
         .download()
@@ -177,7 +181,8 @@ async fn download_builder_allows_different_symbols() {
 async fn download_builder_handles_empty_instruments_list() {
     let borsa = Borsa::builder()
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
-        .build();
+        .build()
+        .unwrap();
 
     let result = borsa
         .download()

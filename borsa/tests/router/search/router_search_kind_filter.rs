@@ -33,7 +33,8 @@ async fn search_respects_connector_kind_support() {
     let borsa = Borsa::builder()
         .with_connector(equity_only)
         .with_connector(fund_capable)
-        .build();
+        .build()
+        .unwrap();
 
     let req = SearchRequest::builder("spy")
         .kind(AssetKind::Fund)

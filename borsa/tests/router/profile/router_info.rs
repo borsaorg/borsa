@@ -107,7 +107,8 @@ impl borsa_core::BorsaConnector for InfoConnector {
 async fn router_info_aggregates_data() {
     let borsa = Borsa::builder()
         .with_connector(Arc::new(InfoConnector))
-        .build();
+        .build()
+        .unwrap();
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();
@@ -135,7 +136,8 @@ async fn router_info_aggregates_data() {
 async fn router_fast_info_works() {
     let borsa = Borsa::builder()
         .with_connector(Arc::new(InfoConnector))
-        .build();
+        .build()
+        .unwrap();
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
 
     let fast_info = borsa.fast_info(&inst).await.unwrap();
@@ -217,7 +219,8 @@ async fn router_info_partial_failures_quote_ok_profile_and_target_fail() {
     let borsa = Borsa::builder()
         .with_connector(Arc::new(QuoteOnlyConnector))
         .with_connector(Arc::new(FailingProfileAndPtConnector))
-        .build();
+        .build()
+        .unwrap();
     let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();
@@ -335,7 +338,8 @@ impl borsa_core::BorsaConnector for MinimalInfoConnector {
 async fn router_info_ignores_unused_capabilities() {
     let borsa = Borsa::builder()
         .with_connector(Arc::new(MinimalInfoConnector))
-        .build();
+        .build()
+        .unwrap();
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();

@@ -35,7 +35,8 @@ async fn per_kind_priority_applies_to_quotes() {
         .with_connector(low.clone())
         .with_connector(high.clone())
         .prefer_for_kind(AssetKind::Equity, &[high, low])
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();

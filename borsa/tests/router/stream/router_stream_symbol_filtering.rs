@@ -40,7 +40,7 @@ async fn stream_quotes_filters_to_requested_symbols_only() {
         .with_stream_updates(updates)
         .build();
 
-    let borsa = borsa::Borsa::builder().with_connector(c).build();
+    let borsa = borsa::Borsa::builder().with_connector(c).build().unwrap();
     let (_h, mut rx) = borsa
         .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])
         .await

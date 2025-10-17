@@ -12,7 +12,8 @@ async fn resamples_into_weekly_monday_start() {
     let borsa = Borsa::builder()
         .with_connector(c)
         .resampling(Resampling::Weekly)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let out = borsa
@@ -38,7 +39,8 @@ async fn weekly_takes_precedence_over_daily() {
         .with_connector(c)
         .resampling(Resampling::Daily)
         .resampling(Resampling::Weekly) // both set -> weekly wins
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
     let out = borsa

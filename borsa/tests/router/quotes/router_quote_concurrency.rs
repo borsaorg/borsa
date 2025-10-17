@@ -38,7 +38,8 @@ async fn faster_lower_priority_does_not_beat_higher_priority_success() {
         .with_connector(low.clone())
         .with_connector(high.clone())
         .prefer_symbol("X", &[high, low])
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();

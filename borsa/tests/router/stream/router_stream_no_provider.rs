@@ -9,7 +9,7 @@ async fn stream_quotes_errors_when_no_stream_connector() {
         .supports_kind(AssetKind::Equity)
         .build();
 
-    let borsa = borsa::Borsa::builder().with_connector(c).build();
+    let borsa = borsa::Borsa::builder().with_connector(c).build().unwrap();
     let res = borsa
         .stream_quotes(&[crate::helpers::instrument("AAPL", AssetKind::Equity)])
         .await;

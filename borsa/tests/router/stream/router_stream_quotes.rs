@@ -37,7 +37,8 @@ async fn stream_quotes_routes_to_streaming_connector() {
         .with_connector(a.clone())
         .with_connector(b.clone())
         .prefer_for_kind(AssetKind::Equity, &[b, a]) // prioritize B (streaming)
-        .build();
+        .build()
+        .unwrap();
 
     let (_handle, mut rx) = borsa
         .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])

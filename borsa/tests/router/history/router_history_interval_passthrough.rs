@@ -37,7 +37,7 @@ async fn router_passes_through_supported_interval() {
             })
         })
         .build();
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
 
     let req = HistoryRequest::try_from_range(Range::D1, Interval::I15m).unwrap();

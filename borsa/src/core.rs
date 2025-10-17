@@ -301,11 +301,9 @@ impl BorsaBuilder {
 
     /// Build the `Borsa` orchestrator.
     ///
-    /// Notes:
-    /// - Performs no additional validation. If no connectors are registered, most
-    ///   requests will fail with capability errors.
-    #[must_use]
-    pub fn build(mut self) -> Borsa {
+    /// # Errors
+    /// Returns `InvalidArg` if no connectors have been registered via [`with_connector`].
+    pub fn build(mut self) -> Result<Borsa, BorsaError> {
         // Validate connector keys against registered connectors; drop unknowns and dedup.
         let known: std::collections::HashSet<&'static str> =
             self.connectors.iter().map(|c| c.name()).collect();
@@ -330,10 +328,16 @@ impl BorsaBuilder {
             filter_keys(v);
         }
 
-        Borsa {
+        if self.connectors.is_empty() {
+            return Err(BorsaError::InvalidArg(
+                "no connectors registered; add at least one via with_connector(...)".to_string(),
+            ));
+        }
+
+        Ok(Borsa {
             connectors: self.connectors,
             cfg: self.cfg,
-        }
+        })
     }
 }
 
@@ -394,7 +398,7 @@ impl Borsa {
     ///     .prefer_for_kind(AssetKind::Equity, &[av, yf])
     ///     .merge_history_strategy(borsa::MergeStrategy::Deep)
     ///     .fetch_strategy(borsa::FetchStrategy::PriorityWithFallback)
-    ///     .build();
+    ///     .build()?;
     /// ```
     #[must_use]
     pub fn builder() -> BorsaBuilder {

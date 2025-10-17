@@ -45,7 +45,7 @@ async fn weekly_request_falls_back_to_daily_and_resamples() {
         })
         .build();
 
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
 
     // Request weekly bars; provider only supports D1 -> router should fetch D1 and resample to W1.

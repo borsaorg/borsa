@@ -11,7 +11,8 @@ async fn auto_resamples_when_series_is_subdaily() {
     let borsa = Borsa::builder()
         .with_connector(c)
         .auto_resample_subdaily_to_daily(true)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let out = borsa
@@ -36,7 +37,8 @@ async fn auto_does_not_trigger_for_daily_series() {
     let borsa = Borsa::builder()
         .with_connector(c)
         .auto_resample_subdaily_to_daily(true)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
     let out = borsa
@@ -60,7 +62,8 @@ async fn explicit_daily_or_weekly_overrides_auto() {
         .with_connector(c.clone())
         .resampling(Resampling::Daily)
         .auto_resample_subdaily_to_daily(true)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out_d = borsa_daily
@@ -78,7 +81,8 @@ async fn explicit_daily_or_weekly_overrides_auto() {
         .resampling(Resampling::Weekly)
         .resampling(Resampling::Daily)
         .auto_resample_subdaily_to_daily(true)
-        .build();
+        .build()
+        .unwrap();
 
     let out_w = borsa_weekly
         .history(

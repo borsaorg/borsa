@@ -36,7 +36,8 @@ async fn option_chain_falls_back_and_succeeds() {
     let borsa = Borsa::builder()
         .with_connector(err)
         .with_connector(ok)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument(X, AssetKind::Equity);
     let ch = borsa

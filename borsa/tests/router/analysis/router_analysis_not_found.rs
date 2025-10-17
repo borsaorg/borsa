@@ -35,7 +35,8 @@ impl BorsaConnector for NF {
 async fn all_not_found_returns_not_found() {
     let borsa = Borsa::builder()
         .with_connector(std::sync::Arc::new(NF))
-        .build();
+        .build()
+        .unwrap();
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let err = borsa.recommendations_summary(&inst).await.err().unwrap();
     assert!(matches!(err, BorsaError::NotFound { .. }));

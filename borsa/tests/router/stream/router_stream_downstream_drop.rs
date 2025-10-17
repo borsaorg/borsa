@@ -22,7 +22,7 @@ async fn stream_quotes_exits_when_downstream_drops() {
         .with_stream_updates(updates)
         .build();
 
-    let borsa = borsa::Borsa::builder().with_connector(p).build();
+    let borsa = borsa::Borsa::builder().with_connector(p).build().unwrap();
 
     let (handle, mut rx) = borsa
         .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])

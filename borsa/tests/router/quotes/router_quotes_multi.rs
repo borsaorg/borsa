@@ -22,7 +22,8 @@ async fn router_quotes_multi_groups_by_provider() {
         .with_connector(conn_b.clone())
         .prefer_symbol("AAPL", &[conn_a.clone(), conn_b.clone()])
         .prefer_symbol("MSFT", &[conn_b, conn_a])
-        .build();
+        .build()
+        .unwrap();
 
     let instruments = &[
         crate::helpers::instrument(AAPL, AssetKind::Equity),

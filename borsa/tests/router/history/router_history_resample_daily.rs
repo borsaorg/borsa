@@ -13,7 +13,8 @@ async fn resamples_intraday_into_daily() {
     let borsa = Borsa::builder()
         .with_connector(c)
         .resampling(Resampling::Daily)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let req =
@@ -30,7 +31,7 @@ async fn resamples_intraday_into_daily() {
 async fn without_resample_returns_original_granularity() {
     let c = m_hist("C", &[10, 20, 30, 86_410, 86_420]);
 
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
 
     let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
     let req =

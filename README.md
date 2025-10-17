@@ -33,7 +33,7 @@ use borsa_yfinance::YfConnector;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let yf = Arc::new(YfConnector::new_default());
-    let borsa = Borsa::builder().with_connector(yf).build();
+    let borsa = Borsa::builder().with_connector(yf).build()?;
 
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
     let q = borsa.quote(&aapl).await?;
@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 let borsa = Borsa::builder()
     .prefer_adjusted_history(true)
-    .build();
+    .build()?;
 ```
 
 - Resample merged history (daily or weekly):
@@ -64,7 +64,7 @@ let borsa = Borsa::builder()
 use borsa::Resampling;
 let borsa = Borsa::builder()
     .resampling(Resampling::Weekly)
-    .build();
+    .build()?;
 ```
 
 - Per-kind or per-symbol connector priority:
@@ -79,7 +79,7 @@ let borsa = Borsa::builder()
     .with_connector(av.clone())
     .prefer_for_kind(AssetKind::Equity, &[yf.clone(), av.clone()])
     .prefer_symbol("AAPL", &[av]) // overrides kind preference
-    .build();
+    .build()?;
 ```
 
 ## Examples

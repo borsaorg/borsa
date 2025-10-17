@@ -25,7 +25,7 @@ fn format_num(n: Option<borsa_core::Money>) -> String {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Setup Borsa with the yfinance connector.
     let yf_connector = Arc::new(YfConnector::new_default());
-    let borsa = Borsa::builder().with_connector(yf_connector).build();
+    let borsa = Borsa::builder().with_connector(yf_connector).build()?;
 
     // 2. Define the instrument.
     let instrument =

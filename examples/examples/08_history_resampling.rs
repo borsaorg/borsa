@@ -10,7 +10,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let borsa = Borsa::builder()
         .with_connector(yf_connector)
         .resampling(borsa::Resampling::Weekly) // Enable weekly resampling!
-        .build();
+        .build()?;
 
     // 2. Define instrument and request daily data for the past year.
     let instrument =

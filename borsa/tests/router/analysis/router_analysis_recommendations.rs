@@ -32,7 +32,8 @@ async fn recommendations_respects_per_kind_priority() {
         .with_connector(low_arc.clone())
         .with_connector(high_arc.clone())
         .prefer_for_kind(AssetKind::Equity, &[high_arc, low_arc])
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa.recommendations(&inst).await.unwrap();

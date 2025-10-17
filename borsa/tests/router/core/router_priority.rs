@@ -12,7 +12,8 @@ async fn per_kind_priority_is_applied() {
         .with_connector(low.clone())
         .with_connector(high.clone())
         .prefer_for_kind(AssetKind::Crypto, &[high, low])
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
     let req =

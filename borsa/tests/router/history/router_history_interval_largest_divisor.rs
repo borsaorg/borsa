@@ -40,7 +40,7 @@ async fn picks_largest_divisor_and_resamples_to_requested() {
             })
         })
         .build();
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
     let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
 
     // Request 90-minute bars

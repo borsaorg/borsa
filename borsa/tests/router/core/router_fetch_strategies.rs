@@ -37,7 +37,8 @@ async fn strategy_latency_returns_fastest_success() {
         .with_connector(slow_ok)
         .with_connector(fast_ok)
         .fetch_strategy(FetchStrategy::Latency)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
@@ -72,7 +73,8 @@ async fn strategy_latency_ignores_faster_failure_and_returns_first_success() {
         .with_connector(fast_fail)
         .with_connector(slow_ok)
         .fetch_strategy(FetchStrategy::Latency)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
@@ -115,7 +117,8 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .with_connector(ok)
         .fetch_strategy(FetchStrategy::PriorityWithFallback)
         .provider_timeout(std::time::Duration::from_millis(50))
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();

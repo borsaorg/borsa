@@ -36,7 +36,8 @@ async fn cashflow_falls_back_and_succeeds() {
     let borsa = Borsa::builder()
         .with_connector(err)
         .with_connector(ok)
-        .build();
+        .build()
+        .unwrap();
 
     let inst = crate::helpers::instrument(GOOG, AssetKind::Equity);
     let rows = borsa.cashflow(&inst, true).await.unwrap();

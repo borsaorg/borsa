@@ -46,7 +46,8 @@ async fn search_respects_per_kind_priority_and_dedups() {
         .with_connector(low.clone())
         .with_connector(high.clone())
         .prefer_for_kind(AssetKind::Equity, &[high, low])
-        .build();
+        .build()
+        .unwrap();
 
     let req = SearchRequest::builder("apple")
         .kind(AssetKind::Equity)

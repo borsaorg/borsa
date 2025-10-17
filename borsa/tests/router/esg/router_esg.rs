@@ -12,7 +12,7 @@ async fn esg_succeeds() {
             governance: Some(5.0),
         })
         .build();
-    let borsa = Borsa::builder().with_connector(ok).build();
+    let borsa = Borsa::builder().with_connector(ok).build().unwrap();
 
     let inst = crate::helpers::instrument("MSFT", AssetKind::Equity);
     let scores = borsa.sustainability(&inst).await.unwrap();

@@ -37,7 +37,7 @@ async fn router_rejects_non_divisible_intraday_request() {
         })
         .build();
 
-    let borsa = Borsa::builder().with_connector(c).build();
+    let borsa = Borsa::builder().with_connector(c).build().unwrap();
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
 
     let req = HistoryRequest::try_from_range(Range::D1, Interval::I45m).unwrap();

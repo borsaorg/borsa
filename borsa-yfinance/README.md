@@ -49,7 +49,7 @@ use borsa_core::{connector::QuoteProvider, AssetKind, Currency, Instrument, Mone
 use std::sync::Arc;
 
 let yf = Arc::new(YfConnector::new_default());
-let borsa = Borsa::builder().with_connector(yf).build();
+let borsa = Borsa::builder().with_connector(yf).build()?;
 let inst = Instrument::from_symbol("MSFT", AssetKind::Equity)?;
 let quote = borsa.quote(&inst).await?;
 ```
@@ -273,7 +273,7 @@ async fn router_uses_injected_yf() {
     ;
 
     let yf = Arc::new(YfConnector::from_adapter(QuotesOnlyAdapter { quotes }));
-    let borsa = Borsa::builder().with_connector(yf).build();
+    let borsa = Borsa::builder().with_connector(yf).build()?;
 
     let inst = Instrument::new("MSFT", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
