@@ -1,0 +1,30 @@
+[package]
+name = "borsa-core"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+description = "Core types, connector traits, and time-series utilities for the borsa financial data ecosystem."
+readme = "README.md"
+repository.workspace = true
+homepage = "https://github.com/borsaorg/borsa"
+documentation = "https://docs.rs/borsa-core"
+keywords = ["finance", "connector", "traits", "time-series", "financial-data", "api"]
+categories = ["api-bindings", "finance", "data-structures"]
+
+[dependencies]
+async-trait = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+bitflags = { workspace = true }
+paft = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "sync"] }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+rust_decimal = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+rust_decimal = { workspace = true }
+proptest = "1"
+loom = { version = "0.7", default-features = false }

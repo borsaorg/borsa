@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 99830316a3b255b6a26666a3e6e36d337ead74201ab226929b916c8210654dfe # shrinks to candles_raw = [(1970-01-01T00:00:00Z, false, 0), (1970-01-02T00:00:00Z, true, 0)]

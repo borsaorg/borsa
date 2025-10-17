@@ -1,0 +1,9 @@
+target/
+.DS_Store
+
+# Stitch workspace (per-user)
+.stitchworkspace/
+.cargo/
+
+# Stitch workspace (per-user)
+.stitchworkspace/local/

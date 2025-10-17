@@ -1,0 +1,30 @@
+[package]
+name = "borsa-yfinance"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+description = "Yahoo Finance API connector for the borsa financial data ecosystem with comprehensive market data and streaming support."
+readme = "README.md"
+repository.workspace = true
+homepage = "https://github.com/borsaorg/borsa"
+documentation = "https://docs.rs/borsa-yfinance"
+keywords = ["finance", "yfinance", "yahoo-finance", "api", "market-data", "stocks", "trading", "streaming"]
+categories = ["api-bindings", "finance", "web-programming::http-client"]
+
+[features]
+default = []
+test-adapters = []
+
+[dependencies]
+borsa-core = { workspace = true }
+yfinance-rs = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+reqwest = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+rust_decimal = { workspace = true }

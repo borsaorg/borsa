@@ -1,0 +1,46 @@
+# Configuration for cargo-deny security and license checking
+
+[advisories]
+# Check for security advisories
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/RustSec/advisory-db"]
+version = 2
+ignore = [
+    # paste crate is marked unmaintained but only used transitively via rmp -> polars
+    # There is no safe upgrade path at this time. Monitored upstream.
+    "RUSTSEC-2024-0436",
+]
+
+[licenses]
+# Allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause", 
+    "BSD-3-Clause",
+    "ISC",
+    "MPL-2.0",
+    "Unlicense",
+    "Zlib",
+    # Commonly used by transitive deps (e.g., ring)
+    "OpenSSL",
+    # Used by some Unicode-related crates
+    "Unicode-DFS-2016",
+    # ICU ecosystem crates
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "BSL-1.0",
+]
+
+[sources]
+# Check for supply chain attacks
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[bans]
+# Check for duplicate dependencies
+multiple-versions = "warn"
+wildcards = "warn"
+allow-wildcard-paths = true
+skip = []

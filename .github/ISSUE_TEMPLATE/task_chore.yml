@@ -1,0 +1,21 @@
+name: 🛠️ Internal Task / Chore
+description: For internal refactoring, documentation, or maintenance work.
+labels: ["chore"]
+body:
+  - type: textarea
+    id: task-description
+    attributes:
+      label: "Task Description"
+      description: "What needs to be done and why?"
+    validations:
+      required: true
+  - type: checkboxes
+    id: definition-of-done
+    attributes:
+      label: "Definition of Done"
+      description: "What criteria must be met for this task to be considered complete?"
+      options:
+        - label: "Code is implemented"
+        - label: "Relevant tests have been added or updated"
+        - label: "Documentation has been updated"
+        - label: "CI is passing"

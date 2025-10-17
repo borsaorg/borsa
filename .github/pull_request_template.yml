@@ -1,0 +1,18 @@
+## Description
+
+---
+
+## Related Issue
+
+Closes #
+
+---
+
+## Self-Review Checklist
+
+- [ ] I have run `just lint` and addressed all warnings.
+- [ ] I have run `just fmt` to ensure the code is formatted.
+- [ ] I have run `just test` to ensure the tests pass.
+- [ ] I have added or updated tests to cover my changes.
+- [ ] I have updated the documentation where necessary.
+- [ ] I have updated the `CHANGELOG.md` if this is a user-facing change.

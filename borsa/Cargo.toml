@@ -1,0 +1,26 @@
+[package]
+name = "borsa"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+description = "High-level, pluggable market data API for Rust with multi-provider support."
+readme = "README.md"
+repository.workspace = true
+homepage = "https://github.com/borsaorg/borsa"
+documentation = "https://docs.rs/borsa"
+keywords = ["finance", "stocks", "trading", "api", "market-data", "yfinance", "alphavantage", "financial-data"]
+categories = ["api-bindings", "finance", "web-programming::http-client"]
+
+[dependencies]
+borsa-core = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+rand = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+rust_decimal = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
