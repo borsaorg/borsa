@@ -1,5 +1,5 @@
 
-# borsa 👜
+# borsa
 
 [![Crates.io](https://img.shields.io/crates/v/borsa)](https://crates.io/crates/borsa)
 [![Docs.rs](https://docs.rs/borsa/badge.svg)](https://docs.rs/borsa)
@@ -14,12 +14,12 @@
 
 ## Features
 
-- **🔌 Pluggable Architecture**: Add multiple data connectors and let `borsa` automatically choose the best one
-- **🔄 Intelligent Fallback**: If one provider fails, automatically try the next one
-- **📊 Smart Data Merging**: Combine data from multiple sources for more complete datasets
-- **⚡ High Performance**: Async/await with efficient concurrent requests
-- **🎯 Asset-Specific Routing**: Configure different providers for different asset types
-- **📈 Rich Data Types**: Quotes, historical data, fundamentals, options, news, and more
+- **Pluggable Architecture**: Add multiple data connectors and let `borsa` automatically choose the best one
+- **Intelligent Fallback**: If one provider fails, automatically try the next one
+- **Smart Data Merging**: Combine data from multiple sources for more complete datasets
+- **High Performance**: Async/await with efficient concurrent requests
+- **Asset-Specific Routing**: Configure different providers for different asset types
+- **Rich Data Types**: Quotes, historical data, fundamentals, options, news, and more
 
 ## Installation
 
