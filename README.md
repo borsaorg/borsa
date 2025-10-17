@@ -9,9 +9,7 @@ High-level, pluggable market data API for Rust. This monorepo contains the core 
 - `borsa-yfinance`: Yahoo Finance connector (no API key required)
 - `examples/`: self-contained example programs demonstrating common workflows
 
-Repository: `https://github.com/borsaorg/borsa`  •  License: MIT
-
-For crate-specific usage of the high-level client, see [`borsa/README.md`](https://github.com/borsaorg/borsa/blob/main/borsa/README.md).
+For crate-specific usage of the high-level client, see [borsa/README.md](https://github.com/borsaorg/borsa/blob/main/borsa/README.md).
 
 ## Install (as a user of the library)
 
@@ -101,15 +99,15 @@ Browse `examples/examples/` for end-to-end samples (quotes, history, fundamental
 ## Developing locally
 
 - Build everything: `cargo build --workspace`
-- Run tests: `cargo test --workspace`
-- Lint: `cargo clippy --workspace --all-targets -- -D warnings`
-- Format: `cargo fmt --all`
+- Run tests: `just test`
+- Lint: `just lint`
+- Format: `just fmt`
 
 ## License and conduct
 
-- License: MIT (see [`LICENSE`](https://github.com/borsaorg/borsa/blob/main/LICENSE))
-- Participation: see [`CODE_OF_CONDUCT.md`](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md)
+- License: MIT (see [LICENSE](https://github.com/borsaorg/borsa/blob/main/LICENSE))
+- Participation: see [CODE_OF_CONDUCT.md](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md)
 
 ## Contributing
 
-Contributions are welcome. See [`CONTRIBUTING.md`](https://github.com/borsaorg/borsa/blob/main/CONTRIBUTING.md) for setup, workflow, testing, and how to implement new connectors.
+Contributions are welcome. See [CONTRIBUTING.md](https://github.com/borsaorg/borsa/blob/main/CONTRIBUTING.md) for setup, workflow, testing, and how to implement new connectors.
