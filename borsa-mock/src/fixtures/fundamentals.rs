@@ -1,11 +1,11 @@
 use borsa_core::{BalanceSheetRow, CashflowRow, Earnings, IncomeStatementRow};
 
-pub const fn earnings_by_symbol(_s: &str) -> Option<Earnings> {
-    Some(Earnings {
+pub const fn earnings_by_symbol(_s: &str) -> Earnings {
+    Earnings {
         yearly: vec![],
         quarterly: vec![],
         quarterly_eps: vec![],
-    })
+    }
 }
 
 pub const fn income_stmt_by_symbol(_s: &str) -> Vec<IncomeStatementRow> {

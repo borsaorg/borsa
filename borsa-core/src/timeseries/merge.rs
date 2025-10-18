@@ -98,10 +98,11 @@ where
 /// Merge only candles from multiple series (first series has higher priority).
 ///
 /// Returns a vector of candles with first-wins semantics on duplicate timestamps.
-/// # Panics
-/// Panics if mixed currencies are detected either within a single candle or
-/// across the merged output series. Currency consistency is required.
-pub fn merge_candles_by_priority<I>(series: I) -> Vec<Candle>
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected either
+/// within a single candle or across the merged output series. Currency
+/// consistency is required.
+pub fn merge_candles_by_priority<I>(series: I) -> Result<Vec<Candle>, BorsaError>
 where
     I: IntoIterator<Item = Vec<Candle>>,
 {
@@ -111,22 +112,27 @@ where
         for mut c in s {
             // Enforce per-candle internal currency consistency and series-wide currency invariants
             let open_cur_ref = c.open.currency();
-            assert!(
-                open_cur_ref == c.high.currency()
-                    && open_cur_ref == c.low.currency()
-                    && open_cur_ref == c.close.currency(),
-                "Mixed currencies within candle at {}",
-                c.ts
-            );
+            if !(open_cur_ref == c.high.currency()
+                && open_cur_ref == c.low.currency()
+                && open_cur_ref == c.close.currency())
+            {
+                return Err(BorsaError::Data(format!(
+                    "Mixed currencies within candle at {}: open={:?} high={:?} low={:?} close={:?}",
+                    c.ts,
+                    c.open.currency(),
+                    c.high.currency(),
+                    c.low.currency(),
+                    c.close.currency()
+                )));
+            }
 
             if let Some(cur) = &series_currency {
-                assert!(
-                    cur == open_cur_ref,
-                    "Mixed currencies across merged series at {}: expected {:?}, got {:?}",
-                    c.ts,
-                    cur,
-                    open_cur_ref
-                );
+                if cur != open_cur_ref {
+                    return Err(BorsaError::Data(format!(
+                        "Mixed currencies across merged series at {}: expected {:?}, got {:?}",
+                        c.ts, cur, open_cur_ref
+                    )));
+                }
             } else if map.is_empty() {
                 series_currency = Some(open_cur_ref.clone());
             }
@@ -137,7 +143,7 @@ where
             map.entry(c.ts).or_insert(c);
         }
     }
-    map.into_values().collect()
+    Ok(map.into_values().collect())
 }
 
 /// Helper to write bytes into a hasher using `fmt::Write` without allocating.

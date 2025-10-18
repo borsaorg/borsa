@@ -102,6 +102,165 @@ fn choose_effective_interval(
 }
 
 impl Borsa {
+    async fn fetch_joined_history(
+        &self,
+        eligible: &[(usize, std::sync::Arc<dyn BorsaConnector>)],
+        inst: &borsa_core::Instrument,
+        req_copy: HistoryRequest,
+    ) -> Result<Vec<HistoryTaskResult>, BorsaError> {
+        let make_future = || async {
+            match self.cfg.merge_history_strategy {
+                MergeStrategy::Deep => {
+                    Self::parallel_history(eligible, inst, &req_copy, self.cfg.provider_timeout)
+                        .await
+                }
+                MergeStrategy::Fallback => {
+                    Self::sequential_history(
+                        eligible.to_vec(),
+                        inst,
+                        req_copy,
+                        self.cfg.provider_timeout,
+                    )
+                    .await
+                }
+            }
+        };
+        if let Some(deadline) = self.cfg.request_timeout {
+            (tokio::time::timeout(deadline, make_future()).await)
+                .map_or_else(|_| Err(BorsaError::request_timeout("history")), Ok)
+        } else {
+            Ok(make_future().await)
+        }
+    }
+
+    fn finalize_history_results(
+        &self,
+        joined: Vec<HistoryTaskResult>,
+        symbol: &str,
+    ) -> Result<(HistoryResponse, Attribution), BorsaError> {
+        let attempts = joined.len();
+        let (mut results_ord, errors) = Self::collect_successes(joined);
+        if results_ord.is_empty() {
+            if errors.is_empty() {
+                return Err(BorsaError::not_found(format!("history for {symbol}")));
+            }
+            if errors.len() == attempts
+                && errors
+                    .iter()
+                    .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
+            {
+                return Err(BorsaError::AllProvidersTimedOut {
+                    capability: "history",
+                });
+            }
+            return Err(BorsaError::AllProvidersFailed(errors));
+        }
+
+        self.order_results(&mut results_ord);
+        let filtered_ord: Vec<HistoryOk> = self.filter_adjustedness(results_ord);
+        let results: Vec<(&'static str, HistoryResponse)> =
+            filtered_ord.into_iter().map(|(_, n, hr)| (n, hr)).collect();
+        let attr = Self::build_attribution(&results, symbol);
+        let mut merged = Self::merge_history_or_tag_connector_error(&results)?;
+        self.apply_final_resample(&mut merged)?;
+        Ok((merged, attr))
+    }
+
+    fn filter_adjustedness(&self, results_ord: Vec<HistoryOk>) -> Vec<HistoryOk> {
+        if results_ord.is_empty() {
+            return Vec::new();
+        }
+        if self.cfg.prefer_adjusted_history && results_ord.iter().any(|(_, _, hr)| hr.adjusted) {
+            return results_ord
+                .into_iter()
+                .filter(|(_, _, hr)| hr.adjusted)
+                .collect();
+        }
+        let target_adjusted = results_ord.first().is_some_and(|(_, _, hr)| hr.adjusted);
+        results_ord
+            .into_iter()
+            .filter(|(_, _, hr)| hr.adjusted == target_adjusted)
+            .collect()
+    }
+
+    fn merge_history_or_tag_connector_error(
+        results: &[(&'static str, HistoryResponse)],
+    ) -> Result<HistoryResponse, BorsaError> {
+        if results.len() == 1 {
+            return Ok(results.first().unwrap().1.clone());
+        }
+        match borsa_core::timeseries::merge::merge_history(results.iter().cloned().map(|(_, r)| r))
+        {
+            Ok(mut m) => {
+                for c in &mut m.candles {
+                    c.close_unadj = None;
+                }
+                Ok(m)
+            }
+            Err(borsa_core::BorsaError::Data(msg))
+                if msg == "Connector provided mixed-currency history" =>
+            {
+                Err(Self::identify_faulty_provider(results))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn identify_faulty_provider(
+        results: &[(&'static str, HistoryResponse)],
+    ) -> borsa_core::BorsaError {
+        use std::collections::HashMap;
+        let mut per_provider_currency: HashMap<&'static str, Option<borsa_core::Currency>> =
+            HashMap::new();
+        for (name, hr) in results {
+            let mut cur: Option<borsa_core::Currency> = None;
+            let mut consistent = true;
+            for c in &hr.candles {
+                let oc = c.open.currency().clone();
+                if let Some(prev) = &cur {
+                    if prev != &oc
+                        || oc != *c.high.currency()
+                        || oc != *c.low.currency()
+                        || oc != *c.close.currency()
+                    {
+                        consistent = false;
+                        break;
+                    }
+                } else {
+                    cur = Some(oc);
+                }
+            }
+            per_provider_currency.insert(*name, if consistent { cur } else { None });
+        }
+        if let Some((bad_name, _)) = per_provider_currency.iter().find(|(_, v)| v.is_none()) {
+            return borsa_core::BorsaError::Connector {
+                connector: (*bad_name).to_string(),
+                msg: "Provider returned inconsistent currency data".to_string(),
+            };
+        }
+        let mut counts: HashMap<borsa_core::Currency, usize> = HashMap::new();
+        for v in per_provider_currency.values() {
+            if let Some(cur) = v.clone() {
+                *counts.entry(cur).or_insert(0) += 1;
+            }
+        }
+        let majority = counts.into_iter().max_by_key(|(_, c)| *c).map(|(k, _)| k);
+        if let Some(maj) = majority
+            && let Some((bad_name, _)) = per_provider_currency
+                .into_iter()
+                .find(|(_, v)| v.as_ref() != Some(&maj))
+        {
+            return borsa_core::BorsaError::Connector {
+                connector: bad_name.to_string(),
+                msg: "Provider returned inconsistent currency data".to_string(),
+            };
+        }
+        let fallback = results.last().map_or("unknown", |(n, _)| *n);
+        borsa_core::BorsaError::Connector {
+            connector: fallback.to_string(),
+            msg: "Provider returned inconsistent currency data".to_string(),
+        }
+    }
     /// Fetch historical OHLCV and actions for an instrument.
     ///
     /// Behavior and trade-offs:
@@ -159,163 +318,9 @@ impl Borsa {
     ) -> Result<(HistoryResponse, Attribution), BorsaError> {
         // Request types validate on construction
         let eligible = self.eligible_history_connectors(inst)?;
-
         let req_copy = req;
-
-        let make_future = || async {
-            match self.cfg.merge_history_strategy {
-                MergeStrategy::Deep => {
-                    Self::parallel_history(&eligible, inst, &req_copy, self.cfg.provider_timeout)
-                        .await
-                }
-                MergeStrategy::Fallback => {
-                    Self::sequential_history(eligible, inst, req_copy, self.cfg.provider_timeout)
-                        .await
-                }
-            }
-        };
-
-        let joined = if let Some(deadline) = self.cfg.request_timeout {
-            match tokio::time::timeout(deadline, make_future()).await {
-                Ok(v) => v,
-                Err(_) => return Err(BorsaError::request_timeout("history")),
-            }
-        } else {
-            make_future().await
-        };
-
-        let attempts = joined.len();
-        let (mut results_ord, errors) = Self::collect_successes(joined);
-        if results_ord.is_empty() {
-            if errors.is_empty() {
-                return Err(BorsaError::not_found(format!(
-                    "history for {}",
-                    inst.symbol()
-                )));
-            }
-            if errors.len() == attempts
-                && errors
-                    .iter()
-                    .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
-            {
-                return Err(BorsaError::AllProvidersTimedOut {
-                    capability: "history",
-                });
-            }
-            return Err(BorsaError::AllProvidersFailed(errors));
-        }
-
-        self.order_results(&mut results_ord);
-
-        // Enforce consistent adjusted/unadjusted semantics across merged sources.
-        // If preference for adjusted is enabled and any adjusted source exists, drop unadjusted.
-        // Otherwise, keep only sources matching the first source's adjustedness.
-        let filtered_ord: Vec<HistoryOk> = if results_ord.is_empty() {
-            Vec::new()
-        } else if self.cfg.prefer_adjusted_history
-            && results_ord.iter().any(|(_, _, hr)| hr.adjusted)
-        {
-            results_ord
-                .into_iter()
-                .filter(|(_, _, hr)| hr.adjusted)
-                .collect()
-        } else {
-            let target_adjusted = results_ord.first().is_some_and(|(_, _, hr)| hr.adjusted);
-            results_ord
-                .into_iter()
-                .filter(|(_, _, hr)| hr.adjusted == target_adjusted)
-                .collect()
-        };
-
-        let results: Vec<(&'static str, HistoryResponse)> =
-            filtered_ord.into_iter().map(|(_, n, hr)| (n, hr)).collect();
-        let attr = Self::build_attribution(&results, inst.symbol_str());
-
-        let mut merged = if results.len() == 1 {
-            results.into_iter().next().unwrap().1
-        } else {
-            match borsa_core::timeseries::merge::merge_history(
-                results.iter().cloned().map(|(_, r)| r),
-            ) {
-                Ok(mut m) => {
-                    // Mixed-source merge: drop per-candle close_unadj to avoid ambiguity
-                    for c in &mut m.candles {
-                        c.close_unadj = None;
-                    }
-                    m
-                }
-                Err(borsa_core::BorsaError::Data(msg))
-                    if msg == "Connector provided mixed-currency history" =>
-                {
-                    // Identify the faulty provider and surface a connector-scoped error
-                    // Strategy: determine per-provider currency and pick the outlier
-                    use std::collections::HashMap;
-                    let mut per_provider_currency: HashMap<
-                        &'static str,
-                        Option<borsa_core::Currency>,
-                    > = HashMap::new();
-                    for (name, hr) in &results {
-                        let mut cur: Option<borsa_core::Currency> = None;
-                        let mut consistent = true;
-                        for c in &hr.candles {
-                            let oc = c.open.currency().clone();
-                            if let Some(prev) = &cur {
-                                if prev != &oc
-                                    || oc != *c.high.currency()
-                                    || oc != *c.low.currency()
-                                    || oc != *c.close.currency()
-                                {
-                                    consistent = false;
-                                    break;
-                                }
-                            } else {
-                                cur = Some(oc);
-                            }
-                        }
-                        per_provider_currency.insert(*name, if consistent { cur } else { None });
-                    }
-
-                    // If any provider has intra-series inconsistency (None), blame it
-                    if let Some((bad_name, _)) =
-                        per_provider_currency.iter().find(|(_, v)| v.is_none())
-                    {
-                        return Err(borsa_core::BorsaError::Connector {
-                            connector: (*bad_name).to_string(),
-                            msg: "Provider returned inconsistent currency data".to_string(),
-                        });
-                    }
-
-                    // Otherwise, select the currency majority and blame the deviating provider
-                    let mut counts: HashMap<borsa_core::Currency, usize> = HashMap::new();
-                    for v in per_provider_currency.values() {
-                        if let Some(cur) = v.clone() {
-                            *counts.entry(cur).or_insert(0) += 1;
-                        }
-                    }
-                    let majority = counts.into_iter().max_by_key(|(_, c)| *c).map(|(k, _)| k);
-                    if let Some(maj) = majority
-                        && let Some((bad_name, _)) = per_provider_currency
-                            .into_iter()
-                            .find(|(_, v)| v.as_ref() != Some(&maj))
-                        {
-                            return Err(borsa_core::BorsaError::Connector {
-                                connector: bad_name.to_string(),
-                                msg: "Provider returned inconsistent currency data".to_string(),
-                            });
-                        }
-
-                    // Fallback: if we cannot determine, blame the last provider for visibility
-                    let fallback = results.last().map_or("unknown", |(n, _)| *n);
-                    return Err(borsa_core::BorsaError::Connector {
-                        connector: fallback.to_string(),
-                        msg: "Provider returned inconsistent currency data".to_string(),
-                    });
-                }
-                Err(e) => return Err(e),
-            }
-        };
-        self.apply_final_resample(&mut merged);
-        Ok((merged, attr))
+        let joined = self.fetch_joined_history(&eligible, inst, req_copy).await?;
+        self.finalize_history_results(joined, inst.symbol_str())
     }
 }
 
@@ -453,32 +458,47 @@ impl Borsa {
                     if let Some(plan) = resample_target_min {
                         match plan {
                             ResamplePlan::Minutes(mins) => {
-                                hr.candles =
-                                    borsa_core::timeseries::resample::resample_to_minutes_with_meta(
-                                        std::mem::take(&mut hr.candles),
-                                        mins,
-                                        hr.meta.as_ref(),
-                                    );
+                                match borsa_core::timeseries::resample::resample_to_minutes_with_meta(
+                                    std::mem::take(&mut hr.candles),
+                                    mins,
+                                    hr.meta.as_ref(),
+                                ) {
+                                    Ok(c) => hr.candles = c,
+                                    Err(e) => {
+                                        errors.push(crate::core::tag_err(name, e));
+                                        continue;
+                                    }
+                                }
                                 for c in &mut hr.candles {
                                     c.close_unadj = None;
                                 }
                             }
                             ResamplePlan::Daily => {
-                                hr.candles =
-                                    borsa_core::timeseries::resample::resample_to_daily_with_meta(
-                                        std::mem::take(&mut hr.candles),
-                                        hr.meta.as_ref(),
-                                    );
+                                match borsa_core::timeseries::resample::resample_to_daily_with_meta(
+                                    std::mem::take(&mut hr.candles),
+                                    hr.meta.as_ref(),
+                                ) {
+                                    Ok(c) => hr.candles = c,
+                                    Err(e) => {
+                                        errors.push(crate::core::tag_err(name, e));
+                                        continue;
+                                    }
+                                }
                                 for c in &mut hr.candles {
                                     c.close_unadj = None;
                                 }
                             }
                             ResamplePlan::Weekly => {
-                                hr.candles =
-                                    borsa_core::timeseries::resample::resample_to_weekly_with_meta(
-                                        std::mem::take(&mut hr.candles),
-                                        hr.meta.as_ref(),
-                                    );
+                                match borsa_core::timeseries::resample::resample_to_weekly_with_meta(
+                                    std::mem::take(&mut hr.candles),
+                                    hr.meta.as_ref(),
+                                ) {
+                                    Ok(c) => hr.candles = c,
+                                    Err(e) => {
+                                        errors.push(crate::core::tag_err(name, e));
+                                        continue;
+                                    }
+                                }
                                 for c in &mut hr.candles {
                                     c.close_unadj = None;
                                 }
@@ -552,7 +572,7 @@ impl Borsa {
         attr
     }
 
-    fn apply_final_resample(&self, merged: &mut HistoryResponse) {
+    fn apply_final_resample(&self, merged: &mut HistoryResponse) -> Result<(), BorsaError> {
         let will_resample = if !matches!(self.cfg.resampling, Resampling::None) {
             true
         } else if self.cfg.auto_resample_subdaily_to_daily {
@@ -570,7 +590,7 @@ impl Borsa {
             let new_candles = borsa_core::timeseries::resample::resample_to_weekly_with_meta(
                 std::mem::take(&mut merged.candles),
                 merged.meta.as_ref(),
-            );
+            )?;
             merged.candles = new_candles;
         } else if matches!(self.cfg.resampling, Resampling::Daily)
             || (self.cfg.auto_resample_subdaily_to_daily
@@ -579,8 +599,9 @@ impl Borsa {
             let new_candles = borsa_core::timeseries::resample::resample_to_daily_with_meta(
                 std::mem::take(&mut merged.candles),
                 merged.meta.as_ref(),
-            );
+            )?;
             merged.candles = new_candles;
         }
+        Ok(())
     }
 }

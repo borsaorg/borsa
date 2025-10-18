@@ -106,7 +106,7 @@ use borsa_core::timeseries::{merge::merge_history, resample::resample_to_daily};
 let merged = merge_history(vec![resp_a, resp_b, resp_c]);
 
 // Resample arbitrary candles to daily bars
-let daily_candles = resample_to_daily(candles);
+let daily_candles = resample_to_daily(candles)?;
 ```
 
 ## Architecture

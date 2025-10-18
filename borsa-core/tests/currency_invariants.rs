@@ -50,7 +50,7 @@ proptest! {
         let same_currency = usd1 == usd2 || s1.is_empty() || s2.is_empty();
 
         // merge_candles_by_priority behavior
-        let mc = std::panic::catch_unwind(|| merge_candles_by_priority([s1.clone(), s2.clone()]));
+        let mc = merge_candles_by_priority([s1.clone(), s2.clone()]);
         if same_currency {
             prop_assert!(mc.is_ok());
         } else {
@@ -119,14 +119,14 @@ proptest! {
         }
 
         // Run selected resampler
-        let res = std::panic::catch_unwind(|| match mode {
+        let res = match mode {
             "daily" => resample_to_daily(candles.clone()),
             "weekly" => resample_to_weekly(candles.clone()),
             _ => {
                 let mins: i64 = match mode { "m5" => 5, "m15" => 15, "m60" => 60, _ => 1 };
                 _borsa_core::resample_to_minutes(candles.clone(), mins)
             }
-        });
+        };
 
         if spans_currency || cross_bucket_currency_change {
             prop_assert!(res.is_err());

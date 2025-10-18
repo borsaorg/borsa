@@ -20,12 +20,14 @@ const fn week_start_ts(ts: DateTime<Utc>) -> Option<DateTime<Utc>> {
 
 /// Generic resampler that groups sorted candles by a bucket function and
 /// aggregates OHLCV within each bucket.
-fn resample_by<F>(mut candles: Vec<Candle>, bucket_of: F) -> Vec<Candle>
+use crate::BorsaError;
+
+fn resample_by<F>(mut candles: Vec<Candle>, bucket_of: F) -> Result<Vec<Candle>, BorsaError>
 where
     F: Fn(DateTime<Utc>) -> Option<DateTime<Utc>>,
 {
     if candles.is_empty() {
-        return candles;
+        return Ok(candles);
     }
 
     candles.sort_by_key(|c| c.ts);
@@ -35,7 +37,7 @@ where
 
     let mut iter = candles.into_iter();
     let Some(first) = iter.find(|c| bucket_of(c.ts).is_some()) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
     let mut cur_bucket = bucket_of(first.ts).unwrap();
     let mut open = first.open;
@@ -49,12 +51,19 @@ where
             continue;
         };
         if bucket == cur_bucket {
-            assert!(
-                c.open.currency() == high.currency()
-                    && c.open.currency() == low.currency()
-                    && c.open.currency() == close.currency(),
-                "Mixed currencies in resample bucket at {cur_bucket}"
-            );
+            if !(c.open.currency() == high.currency()
+                && c.open.currency() == low.currency()
+                && c.open.currency() == close.currency())
+            {
+                return Err(BorsaError::Data(format!(
+                    "Mixed currencies in resample bucket at {}: open={:?} high={:?} low={:?} close={:?}",
+                    cur_bucket,
+                    c.open.currency(),
+                    high.currency(),
+                    low.currency(),
+                    close.currency()
+                )));
+            }
             if c.high.amount() > high.amount() {
                 high = c.high;
             }
@@ -77,7 +86,7 @@ where
                     close,
                     vol_sum,
                 },
-            );
+            )?;
             cur_bucket = bucket;
             open = c.open;
             high = c.high;
@@ -98,9 +107,9 @@ where
             close,
             vol_sum,
         },
-    );
+    )?;
 
-    out
+    Ok(out)
 }
 
 struct BucketAgg {
@@ -116,21 +125,29 @@ fn finalize_bucket(
     series_currency: &mut Option<paft::money::Currency>,
     cur_bucket: DateTime<Utc>,
     agg: BucketAgg,
-) {
-    assert!(
-        agg.open.currency() == agg.high.currency()
-            && agg.open.currency() == agg.low.currency()
-            && agg.open.currency() == agg.close.currency(),
-        "Mixed currencies in resample bucket (finalize) at {cur_bucket}"
-    );
-    if let Some(cur) = series_currency {
-        assert!(
-            cur == agg.open.currency(),
-            "Mixed currencies across resampled series at {}: expected {:?}, got {:?}",
+) -> Result<(), BorsaError> {
+    if !(agg.open.currency() == agg.high.currency()
+        && agg.open.currency() == agg.low.currency()
+        && agg.open.currency() == agg.close.currency())
+    {
+        return Err(BorsaError::Data(format!(
+            "Mixed currencies in resample bucket (finalize) at {}: open={:?} high={:?} low={:?} close={:?}",
             cur_bucket,
-            cur,
-            agg.open.currency()
-        );
+            agg.open.currency(),
+            agg.high.currency(),
+            agg.low.currency(),
+            agg.close.currency()
+        )));
+    }
+    if let Some(cur) = series_currency {
+        if cur != agg.open.currency() {
+            return Err(BorsaError::Data(format!(
+                "Mixed currencies across resampled series at {}: expected {:?}, got {:?}",
+                cur_bucket,
+                cur,
+                agg.open.currency()
+            )));
+        }
     } else if out.is_empty() {
         *series_currency = Some(agg.open.currency().clone());
     }
@@ -145,6 +162,7 @@ fn finalize_bucket(
             .vol_sum
             .and_then(|v| u64::try_from(v.min(u128::from(u64::MAX))).ok()),
     });
+    Ok(())
 }
 
 const fn bucket_day_with_offset(ts: DateTime<Utc>, offset_seconds: i64) -> Option<DateTime<Utc>> {
@@ -296,12 +314,13 @@ fn choose_bucket_minutes(
 /// - Volume = sum of volumes (ignores `None`; if all `None`, result is `None`)
 /// - Output candles have `ts` at the **day start** (00:00:00 UTC).
 ///
-/// # Panics
-/// Panics if mixed currencies are detected within a bucket or across the
-/// resampled output series. All OHLC in every bucket must share the same
-/// currency, and all buckets in the output series must share a single currency.
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
+/// bucket or across the resampled output series. All OHLC in every bucket must
+/// share the same currency, and all buckets in the output series must share a
+/// single currency.
 ///
-/// ```should_panic
+/// ```
 /// use borsa_core::{resample_to_daily, Candle, Money, Currency, IsoCurrency};
 /// use chrono::{DateTime, Utc};
 /// use rust_decimal::Decimal;
@@ -309,10 +328,10 @@ fn choose_bucket_minutes(
 /// fn m(v: f64, usd: bool) -> Money { Money::new(Decimal::from_f64_retain(v).unwrap(), if usd { Currency::Iso(IsoCurrency::USD) } else { Currency::Iso(IsoCurrency::EUR) }).unwrap() }
 /// let c = |ts: i64, usd: bool| Candle { ts: t(ts), open: m(1.0, usd), high: m(1.0, usd), low: m(1.0, usd), close: m(1.0, usd), close_unadj: None, volume: None };
 /// // Two different days with different currencies → panic on finalize of second bucket
-/// let _ = resample_to_daily(vec![c(0, true), c(86_400, false)]);
+/// let res = resample_to_daily(vec![c(0, true), c(86_400, false)]);
+/// assert!(res.is_err());
 /// ```
-#[must_use]
-pub fn resample_to_daily(candles: Vec<Candle>) -> Vec<Candle> {
+pub fn resample_to_daily(candles: Vec<Candle>) -> Result<Vec<Candle>, BorsaError> {
     resample_by(candles, |ts| {
         let day = ts.timestamp().div_euclid(DAY);
         DateTime::from_timestamp(day * DAY, 0)
@@ -320,11 +339,14 @@ pub fn resample_to_daily(candles: Vec<Candle>) -> Vec<Candle> {
 }
 
 /// Resample to daily buckets using `HistoryMeta` timezone/offset when provided.
-#[must_use]
+///
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
+/// bucket or across the resampled output series.
 pub fn resample_to_daily_with_meta(
     candles: Vec<Candle>,
     meta: Option<&HistoryMeta>,
-) -> Vec<Candle> {
+) -> Result<Vec<Candle>, BorsaError> {
     resample_by(candles, move |ts| choose_bucket_day(ts, meta))
 }
 
@@ -340,11 +362,11 @@ pub fn resample_to_daily_with_meta(
 /// - Low   = min low
 /// - Close = last close of the week (latest ts)
 /// - Volume = sum of volumes (ignores `None`; if all `None`, result is `None`)
-/// # Panics
-/// Panics if mixed currencies are detected within a bucket or across the
-/// resampled output series.
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
+/// bucket or across the resampled output series.
 ///
-/// ```should_panic
+/// ```
 /// use borsa_core::{resample_to_weekly, Candle, Money, Currency, IsoCurrency};
 /// use chrono::{DateTime, Utc};
 /// use rust_decimal::Decimal;
@@ -352,19 +374,22 @@ pub fn resample_to_daily_with_meta(
 /// fn m(v: f64, usd: bool) -> Money { Money::new(Decimal::from_f64_retain(v).unwrap(), if usd { Currency::Iso(IsoCurrency::USD) } else { Currency::Iso(IsoCurrency::EUR) }).unwrap() }
 /// let c = |ts: i64, usd: bool| Candle { ts: t(ts), open: m(1.0, usd), high: m(1.0, usd), low: m(1.0, usd), close: m(1.0, usd), close_unadj: None, volume: None };
 /// // Different weeks and currencies → panic
-/// let _ = resample_to_weekly(vec![c(0, true), c(7*86_400, false)]);
+/// let res = resample_to_weekly(vec![c(0, true), c(7*86_400, false)]);
+/// assert!(res.is_err());
 /// ```
-#[must_use]
-pub fn resample_to_weekly(candles: Vec<Candle>) -> Vec<Candle> {
+pub fn resample_to_weekly(candles: Vec<Candle>) -> Result<Vec<Candle>, BorsaError> {
     resample_by(candles, week_start_ts)
 }
 
 /// Resample to weekly buckets (Monday start) in market local time using `HistoryMeta` when provided.
-#[must_use]
+///
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
+/// bucket or across the resampled output series.
 pub fn resample_to_weekly_with_meta(
     candles: Vec<Candle>,
     meta: Option<&HistoryMeta>,
-) -> Vec<Candle> {
+) -> Result<Vec<Candle>, BorsaError> {
     resample_by(candles, move |ts| choose_bucket_week(ts, meta))
 }
 
@@ -372,11 +397,11 @@ pub fn resample_to_weekly_with_meta(
 ///
 /// Assumes input is subdaily. Candles are grouped by `floor(ts / (minutes*60))`.
 ///
-/// # Panics
-/// Panics if mixed currencies are detected within a bucket or across the
-/// resampled output series.
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
+/// bucket or across the resampled output series.
 ///
-/// ```should_panic
+/// ```
 /// use borsa_core::{resample_to_minutes, Candle, Money, Currency, IsoCurrency};
 /// use chrono::{DateTime, Utc};
 /// use rust_decimal::Decimal;
@@ -384,12 +409,12 @@ pub fn resample_to_weekly_with_meta(
 /// fn m(v: f64, usd: bool) -> Money { Money::new(Decimal::from_f64_retain(v).unwrap(), if usd { Currency::Iso(IsoCurrency::USD) } else { Currency::Iso(IsoCurrency::EUR) }).unwrap() }
 /// let c = |ts: i64, usd: bool| Candle { ts: t(ts), open: m(1.0, usd), high: m(1.0, usd), low: m(1.0, usd), close: m(1.0, usd), close_unadj: None, volume: None };
 /// // Two minute buckets, different currencies → panic
-/// let _ = resample_to_minutes(vec![c(0, true), c(120, false)], 1);
+/// let res = resample_to_minutes(vec![c(0, true), c(120, false)], 1);
+/// assert!(res.is_err());
 /// ```
-#[must_use]
-pub fn resample_to_minutes(candles: Vec<Candle>, minutes: i64) -> Vec<Candle> {
+pub fn resample_to_minutes(candles: Vec<Candle>, minutes: i64) -> Result<Vec<Candle>, BorsaError> {
     if candles.is_empty() || minutes <= 0 {
-        return candles;
+        return Ok(candles);
     }
     let step = minutes * 60;
     resample_by(candles, move |ts| {
@@ -399,14 +424,17 @@ pub fn resample_to_minutes(candles: Vec<Candle>, minutes: i64) -> Vec<Candle> {
 }
 
 /// Resample to minute buckets using market local time when `HistoryMeta` is provided.
-#[must_use]
+///
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
+/// bucket or across the resampled output series.
 pub fn resample_to_minutes_with_meta(
     candles: Vec<Candle>,
     minutes: i64,
     meta: Option<&HistoryMeta>,
-) -> Vec<Candle> {
+) -> Result<Vec<Candle>, BorsaError> {
     if candles.is_empty() || minutes <= 0 {
-        return candles;
+        return Ok(candles);
     }
     resample_by(candles, move |ts| choose_bucket_minutes(ts, minutes, meta))
 }

@@ -117,7 +117,7 @@ proptest! {
             let px = money_usd_cents(*v + 1);
             Candle { ts: *t, open: px.clone(), high: px.clone(), low: px.clone(), close: px, close_unadj: None, volume: None }
         }).collect();
-        let merged = merge_candles_by_priority([s1.clone(), s2]);
+        let merged = merge_candles_by_priority([s1.clone(), s2]).unwrap();
         // Expect the first series values
         for (i, c) in merged.iter().enumerate() {
             let exp = &s1[i];

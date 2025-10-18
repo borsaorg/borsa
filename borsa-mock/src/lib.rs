@@ -156,7 +156,7 @@ impl SearchProvider for MockConnector {
 impl ProfileProvider for MockConnector {
     async fn profile(&self, instrument: &Instrument) -> Result<Profile, BorsaError> {
         let s = instrument.symbol_str();
-        fixtures::profile::by_symbol(s).ok_or_else(|| Self::not_found(&format!("profile for {s}")))
+        Ok(fixtures::profile::by_symbol(s))
     }
 }
 
@@ -164,8 +164,7 @@ impl ProfileProvider for MockConnector {
 impl EarningsProvider for MockConnector {
     async fn earnings(&self, instrument: &Instrument) -> Result<Earnings, BorsaError> {
         let s = instrument.symbol_str();
-        fixtures::fundamentals::earnings_by_symbol(s)
-            .ok_or_else(|| Self::not_found(&format!("earnings for {s}")))
+        Ok(fixtures::fundamentals::earnings_by_symbol(s))
     }
 }
 
@@ -209,8 +208,7 @@ impl CashflowProvider for MockConnector {
 impl CalendarProvider for MockConnector {
     async fn calendar(&self, instrument: &Instrument) -> Result<Calendar, BorsaError> {
         let s = instrument.symbol_str();
-        fixtures::calendar::by_symbol(s)
-            .ok_or_else(|| Self::not_found(&format!("calendar for {s}")))
+        Ok(fixtures::calendar::by_symbol(s))
     }
 }
 
@@ -230,8 +228,7 @@ impl OptionChainProvider for MockConnector {
         date: Option<i64>,
     ) -> Result<OptionChain, BorsaError> {
         let s = instrument.symbol_str();
-        fixtures::options::chain_by_symbol_and_date(s, date)
-            .ok_or_else(|| Self::not_found(&format!("option chain for {s}")))
+        Ok(fixtures::options::chain_by_symbol_and_date(s, date))
     }
 }
 
@@ -253,8 +250,7 @@ impl RecommendationsSummaryProvider for MockConnector {
         instrument: &Instrument,
     ) -> Result<RecommendationSummary, BorsaError> {
         let s = instrument.symbol_str();
-        fixtures::analysis::recommendations_summary_by_symbol(s)
-            .ok_or_else(|| Self::not_found(&format!("recommendations summary for {s}")))
+        Ok(fixtures::analysis::recommendations_summary_by_symbol(s))
     }
 }
 
@@ -284,8 +280,7 @@ impl UpgradesDowngradesProvider for MockConnector {
 impl EsgProvider for MockConnector {
     async fn sustainability(&self, instrument: &Instrument) -> Result<EsgScores, BorsaError> {
         let s = instrument.symbol_str();
-        fixtures::esg::by_symbol(s)
-            .ok_or_else(|| Self::not_found(&format!("sustainability for {s}")))
+        Ok(fixtures::esg::by_symbol(s))
     }
 }
 
@@ -297,6 +292,6 @@ impl NewsProvider for MockConnector {
         req: NewsRequest,
     ) -> Result<Vec<types::NewsArticle>, BorsaError> {
         let s = instrument.symbol_str();
-        Ok(fixtures::news::by_symbol(s, &req))
+        Ok(fixtures::news::by_symbol(s, req))
     }
 }

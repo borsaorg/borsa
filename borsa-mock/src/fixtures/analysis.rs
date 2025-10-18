@@ -7,8 +7,8 @@ pub const fn recommendations_by_symbol(_s: &str) -> Vec<RecommendationRow> {
     vec![]
 }
 
-pub fn recommendations_summary_by_symbol(_s: &str) -> Option<RecommendationSummary> {
-    Some(RecommendationSummary {
+pub fn recommendations_summary_by_symbol(_s: &str) -> RecommendationSummary {
+    RecommendationSummary {
         latest_period: Some("2024-08".parse().unwrap()),
         strong_buy: Some(5),
         buy: Some(10),
@@ -17,7 +17,7 @@ pub fn recommendations_summary_by_symbol(_s: &str) -> Option<RecommendationSumma
         strong_sell: Some(1),
         mean: Some(2.0),
         mean_rating_text: Some("Buy".to_string()),
-    })
+    }
 }
 
 pub const fn upgrades_downgrades_by_symbol(_s: &str) -> Vec<UpgradeDowngradeRow> {

@@ -40,7 +40,7 @@ fn build(rows: Vec<(&str, &str, &str, &str, &str, i64)>) -> HistoryResponse {
             low: usd(l),
             close: usd(c),
             close_unadj: None,
-            volume: Some(v as u64),
+            volume: u64::try_from(v).ok(),
         })
         .collect();
     HistoryResponse {

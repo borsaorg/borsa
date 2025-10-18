@@ -68,19 +68,19 @@ proptest! {
         mode in prop::sample::select(vec!["daily", "weekly", "m1", "m5", "m15", "m60"])
     ) {
         let once: Vec<Candle> = match mode {
-            "daily" => resample_to_daily(candles),
-            "weekly" => resample_to_weekly(candles),
+            "daily" => resample_to_daily(candles).unwrap(),
+            "weekly" => resample_to_weekly(candles).unwrap(),
             _ => {
                 let mins: i64 = match mode { "m5" => 5, "m15" => 15, "m60" => 60, _ => 1 };
-                borsa_core::resample_to_minutes(candles, mins)
+                borsa_core::resample_to_minutes(candles, mins).unwrap()
             }
         };
         let twice: Vec<Candle> = match mode {
-            "daily" => resample_to_daily(once.clone()),
-            "weekly" => resample_to_weekly(once.clone()),
+            "daily" => resample_to_daily(once.clone()).unwrap(),
+            "weekly" => resample_to_weekly(once.clone()).unwrap(),
             _ => {
                 let mins: i64 = match mode { "m5" => 5, "m15" => 15, "m60" => 60, _ => 1 };
-                borsa_core::resample_to_minutes(once.clone(), mins)
+                borsa_core::resample_to_minutes(once.clone(), mins).unwrap()
             }
         };
         prop_assert_eq!(once, twice);
@@ -105,9 +105,9 @@ proptest! {
         for c in &candles { groups.entry(bucket_key(c.ts)).or_default().push(c.clone()); }
 
         let out: Vec<Candle> = if mode == "daily" {
-            resample_to_daily(std::mem::take(&mut candles))
+            resample_to_daily(std::mem::take(&mut candles)).unwrap()
         } else {
-            resample_to_weekly(std::mem::take(&mut candles))
+            resample_to_weekly(std::mem::take(&mut candles)).unwrap()
         };
         let mut out_map = std::collections::BTreeMap::new();
         for c in out { out_map.insert(c.ts.timestamp(), c); }
@@ -148,7 +148,7 @@ proptest! {
             let b = c.ts.timestamp() - c.ts.timestamp().rem_euclid(step);
             groups.entry(b).or_default().push(c.clone());
         }
-        let out = borsa_core::resample_to_minutes(candles, mins);
+        let out = borsa_core::resample_to_minutes(candles, mins).unwrap();
         let mut out_map = std::collections::BTreeMap::new();
         for c in out { out_map.insert(c.ts.timestamp(), c); }
         for (b, group) in groups {
@@ -202,7 +202,7 @@ proptest! {
         // For daily/weekly: assert local alignment properties rather than exact UTC ts equality
         // minutes handled separately below to match ambiguity resolution in implementation
 
-        let o_daily = resample_to_daily_with_meta(candles.clone(), meta.as_ref());
+        let o_daily = resample_to_daily_with_meta(candles.clone(), meta.as_ref()).unwrap();
         for c in &o_daily {
             let l = c.ts.with_timezone(&rome);
             prop_assert_eq!(l.hour(), 0);
@@ -210,7 +210,7 @@ proptest! {
             prop_assert_eq!(l.second(), 0);
         }
 
-        let o_weekly = resample_to_weekly_with_meta(candles.clone(), meta.as_ref());
+        let o_weekly = resample_to_weekly_with_meta(candles.clone(), meta.as_ref()).unwrap();
         for c in &o_weekly {
             let l = c.ts.with_timezone(&rome);
             prop_assert_eq!(l.weekday().num_days_from_monday(), 0);
@@ -243,7 +243,7 @@ proptest! {
             groups.entry(mapped.timestamp()).or_default().push(c);
         }
 
-        let out = resample_to_minutes_with_meta(candles, minutes, meta.as_ref());
+        let out = resample_to_minutes_with_meta(candles, minutes, meta.as_ref()).unwrap();
         let mut out_map = std::collections::BTreeMap::new();
         for c in out { out_map.insert(c.ts.timestamp(), c); }
 
@@ -272,7 +272,7 @@ proptest! {
         step in prop::sample::select(vec![0i64, -1, -5, -60])
     ) {
         let input = candles.clone();
-        let out = borsa_core::resample_to_minutes(std::mem::take(&mut candles), step);
+        let out = borsa_core::resample_to_minutes(std::mem::take(&mut candles), step).unwrap();
         prop_assert_eq!(out, input);
     }
 }
@@ -286,18 +286,18 @@ proptest! {
         let meta_utc = Some(HistoryMeta { timezone: Some(chrono_tz::UTC), utc_offset_seconds: Some(0) });
 
         // daily
-        let plain_d = resample_to_daily(candles.clone());
-        let meta_d = resample_to_daily_with_meta(candles.clone(), meta_utc.as_ref());
+        let plain_d = resample_to_daily(candles.clone()).unwrap();
+        let meta_d = resample_to_daily_with_meta(candles.clone(), meta_utc.as_ref()).unwrap();
         prop_assert_eq!(plain_d, meta_d);
 
         // weekly
-        let plain_w = resample_to_weekly(candles.clone());
-        let meta_w = resample_to_weekly_with_meta(candles.clone(), meta_utc.as_ref());
+        let plain_w = resample_to_weekly(candles.clone()).unwrap();
+        let meta_w = resample_to_weekly_with_meta(candles.clone(), meta_utc.as_ref()).unwrap();
         prop_assert_eq!(plain_w, meta_w);
 
         // minutes
-        let plain_m = borsa_core::resample_to_minutes(candles.clone(), mins);
-        let meta_m = resample_to_minutes_with_meta(candles, mins, meta_utc.as_ref());
+        let plain_m = borsa_core::resample_to_minutes(candles.clone(), mins).unwrap();
+        let meta_m = resample_to_minutes_with_meta(candles, mins, meta_utc.as_ref()).unwrap();
         prop_assert_eq!(plain_m, meta_m);
     }
 }
