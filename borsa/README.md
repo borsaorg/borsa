@@ -325,44 +325,52 @@ if !failures.is_empty() {
 
 ### Building Custom Connectors
 
-Create your own connector by implementing capability role traits and advertising them via `BorsaConnector`:
+Create your own connector by implementing role traits and advertising them via the `BorsaConnector` capability accessors. A minimal, current skeleton:
 
 ```rust
-use borsa_core::{BorsaConnector, Instrument, Quote, BorsaError, Interval, AssetKind};
 use async_trait::async_trait;
+use borsa_core::{
+    connector::{BorsaConnector, QuoteProvider, HistoryProvider},
+    types::{AssetKind, Instrument, Interval, HistoryRequest, HistoryResponse, Quote},
+    BorsaError,
+};
 
 pub struct MyConnector;
 
 #[async_trait]
-impl borsa_core::connector::QuoteProvider for MyConnector {
+impl QuoteProvider for MyConnector {
     async fn quote(&self, inst: &Instrument) -> Result<Quote, BorsaError> {
-        // Fetch quote from your backend
-        let price = borsa_core::Money::from_canonical_str(
-            "123.45",
-            borsa_core::Currency::Iso(borsa_core::IsoCurrency::USD),
-        )
-        .expect("static demo price");
-        Ok(Quote {
-            symbol: inst.symbol().clone(),
-            shortname: None,
-            price: Some(price),
-            previous_close: None,
-            exchange: None,
-            market_state: None,
-        })
+        // fetch + map to Quote
+        Err(BorsaError::unsupported("quote"))
     }
 }
 
-impl borsa_core::connector::BorsaConnector for MyConnector {
+#[async_trait]
+impl HistoryProvider for MyConnector {
+    async fn history(
+        &self,
+        _inst: &Instrument,
+        _req: HistoryRequest,
+    ) -> Result<HistoryResponse, BorsaError> {
+        Err(BorsaError::unsupported("history"))
+    }
+
+    fn supported_history_intervals(&self, _kind: AssetKind) -> &'static [Interval] { &[] }
+}
+
+impl BorsaConnector for MyConnector {
     fn name(&self) -> &'static str { "my-connector" }
-    fn as_quote_provider(&self) -> Option<&dyn borsa_core::connector::QuoteProvider> { Some(self) }
-    fn as_history_provider(&self) -> Option<&dyn borsa_core::connector::HistoryProvider> { Some(self) }
+    fn vendor(&self) -> &'static str { "My Vendor" }
+    fn supports_kind(&self, kind: AssetKind) -> bool { matches!(kind, AssetKind::Equity) }
+
+    fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> { Some(self) }
+    fn as_history_provider(&self) -> Option<&dyn HistoryProvider> { Some(self) }
 }
 ```
 
 ## Examples
 
-Check out the [examples package](../examples/examples/) for comprehensive usage examples:
+Check out the [examples package](https://github.com/borsaorg/borsa/blob/main/examples/examples/) for comprehensive usage examples:
 
 - `01_simple_quote.rs` - Basic quote fetching
 - `02_history_merge.rs` - Historical data with multiple sources
@@ -414,3 +422,4 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 ---
 
 **Ready to build something amazing with financial data?** Start with `borsa` today!
+

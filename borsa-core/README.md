@@ -113,7 +113,7 @@ let daily_candles = resample_to_daily(candles)?;
 
 ### Connector Trait and Capabilities
 
-`BorsaConnector` is a capability hub: providers implement granular role traits and advertise them via `as_*_provider` accessors on the connector. This keeps the core stable and enables mix-and-match features.
+`BorsaConnector` is a capability hub: providers implement granular role traits and advertise them via `as_*_provider` accessors on the connector. This keeps the core stable and enables mix-and-match features. Use `supports_kind(&AssetKind)` to declare which asset classes the connector can serve.
 
 ```rust
 use borsa_core::connector::{BorsaConnector, QuoteProvider, HistoryProvider};
@@ -137,6 +137,7 @@ impl HistoryProvider for MyConnector {
 
 impl BorsaConnector for MyConnector {
     fn name(&self) -> &'static str { "my-connector" }
+    fn supports_kind(&self, kind: AssetKind) -> bool { matches!(kind, AssetKind::Equity) }
     fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> { Some(self) }
     fn as_history_provider(&self) -> Option<&dyn HistoryProvider> { Some(self) }
 }

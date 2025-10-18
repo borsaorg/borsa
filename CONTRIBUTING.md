@@ -36,7 +36,7 @@ Please review and follow our [Code of Conduct](https://github.com/borsaorg/borsa
 
 ## Implementing a new connector
 
-New connectors live as their own crate at the workspace root (e.g., `borsa-somprovider/`). A connector implements the `BorsaConnector` trait from `borsa-core` and exposes a small, ergonomic constructor.
+New connectors live as their own crate at the workspace root (e.g., `borsa-someprovider/`). A connector implements the `BorsaConnector` trait from `borsa-core` and exposes a small, ergonomic constructor.
 
 Key steps:
 
@@ -44,23 +44,24 @@ Key steps:
 2. Add dependencies (in crate `Cargo.toml`):
    - `borsa-core = { workspace = true }`
    - Other client libs for the vendor API
-3. Implement the trait in `src/lib.rs`:
+3. Implement the connector in `src/lib.rs` using capability accessors:
    - `fn name(&self) -> &'static str` returns a stable identifier (e.g., `"borsa-someprovider"`)
    - `fn vendor(&self) -> &'static str` returns a human-friendly vendor name
-   - `fn capabilities(&self) -> Capabilities` advertises implemented features
-   - `fn supported_history_intervals(&self, kind: AssetKind) -> &'static [Interval]` lists native history granularities
-   - Implement async methods for supported capabilities (e.g., `quote`, `history`, `search`, `profile`, `options_*`, `recommendations_*`, `holders`, `sustainability`, `news`)
-4. Map vendor-specific models to `borsa-core` types
-5. Add tests (unit + integration) validating:
+   - `fn supports_kind(&self, kind: AssetKind) -> bool` declares supported asset kinds (e.g., equities, crypto)
+   - Advertise capabilities via `as_*_provider` accessors on `BorsaConnector` (e.g., `as_quote_provider`, `as_history_provider`, `as_search_provider`, ...)
+   - Implement async methods on the corresponding role traits you support (e.g., `QuoteProvider::quote`, `HistoryProvider::history`, `SearchProvider::search`, ...)
+4. For history, implement `HistoryProvider` and declare native intervals via `fn supported_history_intervals(&self, kind: AssetKind) -> &'static [Interval]` on the provider implementation (not on the connector trait).
+5. Map vendor-specific models to `borsa-core` types
+6. Add tests (unit + integration) validating:
    - Interval mapping and errors for unsupported intervals
    - Data kind support (e.g., equities, crypto, forex)
    - Error handling: `NotFound` vs `Unsupported` vs `Other`
-6. Document crate usage in `README.md` and note any required environment variables (e.g., API keys)
+7. Document crate usage in `README.md` and note any required environment variables (e.g., API keys)
 
 Reference implementations:
 
-- `borsa-yfinance/src/lib.rs`
-- Trait: `borsa-core/src/connector.rs`
+ - `borsa-yfinance/src/lib.rs`
+ - Trait: `borsa-core/src/connector.rs`
 
 ## Data model and routing
 
