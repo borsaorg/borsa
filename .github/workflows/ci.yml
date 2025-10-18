@@ -131,21 +131,6 @@ jobs:
             BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa-examples --example "$name" || exit 1; \
           done
 
-  # Security audit
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
-      - name: Run security audit
-        run: cargo audit
 
   # Documentation
   docs:
