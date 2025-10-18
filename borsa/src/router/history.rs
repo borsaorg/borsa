@@ -234,13 +234,85 @@ impl Borsa {
         let mut merged = if results.len() == 1 {
             results.into_iter().next().unwrap().1
         } else {
-            let mut m =
-                borsa_core::timeseries::merge::merge_history(results.into_iter().map(|(_, r)| r));
-            // Mixed-source merge: drop per-candle close_unadj to avoid ambiguity
-            for c in &mut m.candles {
-                c.close_unadj = None;
+            match borsa_core::timeseries::merge::merge_history(
+                results.iter().cloned().map(|(_, r)| r),
+            ) {
+                Ok(mut m) => {
+                    // Mixed-source merge: drop per-candle close_unadj to avoid ambiguity
+                    for c in &mut m.candles {
+                        c.close_unadj = None;
+                    }
+                    m
+                }
+                Err(borsa_core::BorsaError::Data(msg))
+                    if msg == "Connector provided mixed-currency history" =>
+                {
+                    // Identify the faulty provider and surface a connector-scoped error
+                    // Strategy: determine per-provider currency and pick the outlier
+                    use std::collections::HashMap;
+                    let mut per_provider_currency: HashMap<
+                        &'static str,
+                        Option<borsa_core::Currency>,
+                    > = HashMap::new();
+                    for (name, hr) in &results {
+                        let mut cur: Option<borsa_core::Currency> = None;
+                        let mut consistent = true;
+                        for c in &hr.candles {
+                            let oc = c.open.currency().clone();
+                            if let Some(prev) = &cur {
+                                if prev != &oc
+                                    || oc != *c.high.currency()
+                                    || oc != *c.low.currency()
+                                    || oc != *c.close.currency()
+                                {
+                                    consistent = false;
+                                    break;
+                                }
+                            } else {
+                                cur = Some(oc);
+                            }
+                        }
+                        per_provider_currency.insert(*name, if consistent { cur } else { None });
+                    }
+
+                    // If any provider has intra-series inconsistency (None), blame it
+                    if let Some((bad_name, _)) =
+                        per_provider_currency.iter().find(|(_, v)| v.is_none())
+                    {
+                        return Err(borsa_core::BorsaError::Connector {
+                            connector: (*bad_name).to_string(),
+                            msg: "Provider returned inconsistent currency data".to_string(),
+                        });
+                    }
+
+                    // Otherwise, select the currency majority and blame the deviating provider
+                    let mut counts: HashMap<borsa_core::Currency, usize> = HashMap::new();
+                    for v in per_provider_currency.values() {
+                        if let Some(cur) = v.clone() {
+                            *counts.entry(cur).or_insert(0) += 1;
+                        }
+                    }
+                    let majority = counts.into_iter().max_by_key(|(_, c)| *c).map(|(k, _)| k);
+                    if let Some(maj) = majority
+                        && let Some((bad_name, _)) = per_provider_currency
+                            .into_iter()
+                            .find(|(_, v)| v.as_ref() != Some(&maj))
+                        {
+                            return Err(borsa_core::BorsaError::Connector {
+                                connector: bad_name.to_string(),
+                                msg: "Provider returned inconsistent currency data".to_string(),
+                            });
+                        }
+
+                    // Fallback: if we cannot determine, blame the last provider for visibility
+                    let fallback = results.last().map_or("unknown", |(n, _)| *n);
+                    return Err(borsa_core::BorsaError::Connector {
+                        connector: fallback.to_string(),
+                        msg: "Provider returned inconsistent currency data".to_string(),
+                    });
+                }
+                Err(e) => return Err(e),
             }
-            m
         };
         self.apply_final_resample(&mut merged);
         Ok((merged, attr))

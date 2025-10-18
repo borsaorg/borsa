@@ -60,7 +60,7 @@ proptest! {
         // merge_history behavior (wrap the series into HistoryResponse)
         let r1 = HistoryResponse { candles: s1, actions: vec![], adjusted: false, meta: Some(HistoryMeta { timezone: None, utc_offset_seconds: None }) };
         let r2 = HistoryResponse { candles: s2, actions: vec![], adjusted: false, meta: None };
-        let mh = std::panic::catch_unwind(|| merge_history([r1, r2]));
+        let mh = merge_history([r1, r2]);
         if same_currency {
             prop_assert!(mh.is_ok());
         } else {

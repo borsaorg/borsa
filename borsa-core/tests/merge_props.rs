@@ -55,7 +55,7 @@ proptest! {
                 first_by_ts.entry(c.ts.timestamp()).or_insert_with(|| c.clone());
             }
         }
-        let merged = merge_history(responses);
+        let merged = merge_history(responses).unwrap();
         // Sorted order and first-wins at collisions
         let mut prev = None;
         for c in &merged.candles {
@@ -84,7 +84,7 @@ proptest! {
                     bc.ts = DateTime::from_timestamp(ts0 + i64_i, 0).unwrap();
                 }
             }
-        let merged = merge_history([a.clone(), b.clone(), c.clone()]);
+        let merged = merge_history([a.clone(), b.clone(), c.clone()]).unwrap();
 
         // Recompute adjusted across only contributing responses
         let a_ts: BTreeSet<i64> = a.candles.iter().map(|x| x.ts.timestamp()).collect();
@@ -145,7 +145,7 @@ proptest! {
         let perms: [[usize;3];6] = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
         let order = perms[perm_idx];
         let ordered = [all[order[0]].clone(), all[order[1]].clone(), all[order[2]].clone()];
-        let merged = merge_history(ordered);
+        let merged = merge_history(ordered).unwrap();
 
         // Find expected meta as first in order with Some
         let expected = [all[order[0]].meta.clone(), all[order[1]].meta.clone(), all[order[2]].meta.clone()]
@@ -173,7 +173,7 @@ proptest! {
         let r2 = HistoryResponse { candles: vec![], actions: actions.clone(), adjusted: true, meta: None };
         let r3 = HistoryResponse { candles: vec![], actions, adjusted: true, meta: None };
 
-        let merged = merge_history([r1.clone(), r2.clone(), r3.clone()]);
+        let merged = merge_history([r1.clone(), r2.clone(), r3.clone()]).unwrap();
         let expected = borsa_core::dedup_actions([r1.actions, r2.actions, r3.actions].into_iter().flatten().collect());
         prop_assert_eq!(merged.actions, expected);
     }
@@ -182,7 +182,7 @@ proptest! {
 proptest! {
     #[test]
     fn merge_identity_no_op(r in arb_response()) {
-        let merged = merge_history([r.clone()]);
+        let merged = merge_history([r.clone()]).unwrap();
 
         // Build expected by applying merge semantics to a single response:
         // - first-wins on duplicate timestamps (preserve first occurrence by original order)

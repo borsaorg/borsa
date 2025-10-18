@@ -2,6 +2,7 @@ use core::fmt::{self, Write as _};
 use std::collections::{BTreeMap, HashSet, btree_map::Entry};
 use std::hash::{Hash, Hasher};
 
+use crate::BorsaError;
 use chrono::{DateTime, Utc};
 use paft::market::action::Action;
 use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
@@ -15,11 +16,11 @@ use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
 /// - Actions are concatenated and de-duplicated by full action identity
 ///   (same kind, timestamp, and payload), keeping the first identical one.
 ///
-/// # Panics
-/// Panics if mixed currencies are detected either within a single candle or
-/// across the merged output series. Currency consistency is a required
-/// invariant for all merged candles.
-pub fn merge_history<I>(responses: I) -> HistoryResponse
+/// # Errors
+/// Returns `Err(BorsaError::Data)` if mixed currencies are detected either
+/// within a single candle or across the merged output series. Currency
+/// consistency is a required invariant for all merged candles.
+pub fn merge_history<I>(responses: I) -> Result<HistoryResponse, BorsaError>
 where
     I: IntoIterator<Item = HistoryResponse>,
 {
@@ -47,22 +48,21 @@ where
                 Entry::Vacant(v) => {
                     // Enforce per-candle internal currency consistency and series-wide currency invariants
                     let open_cur_ref = c.open.currency();
-                    assert!(
-                        open_cur_ref == c.high.currency()
-                            && open_cur_ref == c.low.currency()
-                            && open_cur_ref == c.close.currency(),
-                        "Mixed currencies within candle at {}",
-                        c.ts
-                    );
+                    if !(open_cur_ref == c.high.currency()
+                        && open_cur_ref == c.low.currency()
+                        && open_cur_ref == c.close.currency())
+                    {
+                        return Err(BorsaError::Data(
+                            "Connector provided mixed-currency history".into(),
+                        ));
+                    }
 
                     if let Some(cur) = &series_currency {
-                        assert!(
-                            cur == open_cur_ref,
-                            "Mixed currencies across merged series at {}: expected {:?}, got {:?}",
-                            c.ts,
-                            cur,
-                            open_cur_ref
-                        );
+                        if cur != open_cur_ref {
+                            return Err(BorsaError::Data(
+                                "Connector provided mixed-currency history".into(),
+                            ));
+                        }
                     } else {
                         series_currency = Some(open_cur_ref.clone());
                     }
@@ -87,12 +87,12 @@ where
 
     let actions = dedup_actions(actions);
 
-    HistoryResponse {
+    Ok(HistoryResponse {
         candles,
         actions,
         adjusted: first_adjusted && adjusted_all.unwrap_or(false),
         meta,
-    }
+    })
 }
 
 /// Merge only candles from multiple series (first series has higher priority).
