@@ -28,7 +28,7 @@ impl Borsa {
         backoff_override: Option<BackoffConfig>,
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         borsa_core::BorsaError,
@@ -119,7 +119,10 @@ impl Borsa {
             }
         });
 
-        Ok((borsa_core::StreamHandle::new(supervisor, stop_tx), rx))
+        Ok((
+            borsa_core::stream::StreamHandle::new(supervisor, stop_tx),
+            rx,
+        ))
     }
 
     /// Start streaming quotes using the configured backoff settings.
@@ -134,7 +137,7 @@ impl Borsa {
         instruments: &[Instrument],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         borsa_core::BorsaError,

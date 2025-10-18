@@ -189,7 +189,7 @@ pub trait YfStream: Send + Sync {
         symbols: &[String],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
@@ -280,7 +280,7 @@ impl YfStream for RealAdapter {
         symbols: &[String],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
@@ -298,7 +298,7 @@ impl YfStream for RealAdapter {
             handle.stop().await;
         });
 
-        Ok((borsa_core::StreamHandle::new(join, stop_tx), rx))
+        Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
     }
 }
 
@@ -1171,7 +1171,7 @@ pub trait CloneArcAdapters {
                 _symbols: &[String],
             ) -> Result<
                 (
-                    borsa_core::StreamHandle,
+                    borsa_core::stream::StreamHandle,
                     tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
                 ),
                 BorsaError,

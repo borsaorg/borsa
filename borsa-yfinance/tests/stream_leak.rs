@@ -23,7 +23,7 @@ impl YfStream for SpyYfStream {
         _symbols: &[String],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         borsa_core::BorsaError,
@@ -60,7 +60,7 @@ impl YfStream for SpyYfStream {
             let _ = join.await;
         });
 
-        Ok((borsa_core::StreamHandle::new(wrapper, stop_tx), rx))
+        Ok((borsa_core::stream::StreamHandle::new(wrapper, stop_tx), rx))
     }
 }
 

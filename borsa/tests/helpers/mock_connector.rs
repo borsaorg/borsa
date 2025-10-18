@@ -283,7 +283,7 @@ impl StreamProvider for MockConnector {
         instruments: &[Instrument],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
@@ -313,7 +313,7 @@ impl StreamProvider for MockConnector {
             let _ = tokio::time::timeout(Duration::from_millis(50), &mut stop_rx).await;
         });
 
-        Ok((borsa_core::StreamHandle::new(join, stop_tx), rx))
+        Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
     }
 }
 

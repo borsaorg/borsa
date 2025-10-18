@@ -17,7 +17,7 @@ impl borsa_core::connector::StreamProvider for CountingFailStreamConnector {
         _instruments: &[Instrument],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
@@ -33,7 +33,7 @@ impl borsa_core::connector::StreamProvider for CountingFailStreamConnector {
             let join = tokio::spawn(async move {
                 let _ = stop_rx.await;
             });
-            Ok((borsa_core::StreamHandle::new(join, stop_tx), rx))
+            Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
         } else {
             Err(BorsaError::Other("start failed".into()))
         }

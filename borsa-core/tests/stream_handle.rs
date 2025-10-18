@@ -1,4 +1,4 @@
-use borsa_core::StreamHandle;
+use borsa_core::stream::StreamHandle;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn streamhandle_stop_graceful() {

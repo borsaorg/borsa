@@ -522,7 +522,7 @@ impl borsa_core::connector::StreamProvider for YfConnector {
         instruments: &[Instrument],
     ) -> Result<
         (
-            borsa_core::StreamHandle,
+            borsa_core::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
@@ -546,7 +546,10 @@ impl borsa_core::connector::StreamProvider for YfConnector {
             upstream_handle.stop().await;
             forward.abort();
         });
-        Ok((borsa_core::StreamHandle::new(join, stop_tx), rx_core))
+        Ok((
+            borsa_core::stream::StreamHandle::new(join, stop_tx),
+            rx_core,
+        ))
     }
 }
 

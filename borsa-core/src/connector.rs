@@ -266,7 +266,7 @@ pub trait StreamProvider: Send + Sync {
         instruments: &[Instrument],
     ) -> Result<
         (
-            crate::StreamHandle,
+            crate::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<QuoteUpdate>,
         ),
         BorsaError,
