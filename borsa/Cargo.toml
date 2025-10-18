@@ -12,6 +12,10 @@ documentation = "https://docs.rs/borsa"
 keywords = ["finance", "stocks", "trading", "api", "market-data", "yfinance", "alphavantage", "financial-data"]
 categories = ["api-bindings", "finance", "web-programming::http-client"]
 
+[features]
+default = []
+dataframe = ["borsa-core/dataframe"]
+
 [dependencies]
 borsa-core = { workspace = true }
 async-trait = { workspace = true }
@@ -24,3 +28,4 @@ chrono = { workspace = true }
 [dev-dependencies]
 rust_decimal = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }
+borsa-mock = { workspace = true }

@@ -69,6 +69,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## DataFrames
+
+`borsa` builds on [`paft`](https://github.com/paft-rs/paft). Enabling the `dataframe` feature on `borsa` activates paft's Polars integration, allowing you to call `.to_dataframe()` on returned types.
+
+To enable it:
+
+```toml
+[dependencies]
+borsa = { version = "0.1", features = ["dataframe"] }
+```
+
+Usage:
+
+```rust
+use borsa_core::ToDataFrame; // same as paft::dataframe::ToDataFrame; 
+let quote = borsa.quote(&aapl).await?;
+let df = quote.to_dataframe()?; // polars::DataFrame
+```
+
 ## Router configuration highlights
 
 - Prefer adjusted history when merging overlaps:

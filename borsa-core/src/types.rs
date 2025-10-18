@@ -38,3 +38,7 @@ pub use paft::market::responses::search::{SearchResponse, SearchResult};
 
 // Aggregates and reports from paft-aggregates (enabled via `paft/aggregates` feature)
 pub use paft::aggregates::{DownloadReport, FastInfo, Info, InfoReport, SearchReport};
+
+// Optional: re-export DataFrame conversion trait when the feature is enabled
+#[cfg(feature = "dataframe")]
+pub use paft_utils::dataframe::{ToDataFrame, ToDataFrameVec};

@@ -226,6 +226,26 @@ for ts in calendar.earnings_dates.iter().take(3) {
 }
 ```
 
+## DataFrames (PAFT integration)
+
+`borsa` builds on [`paft`](https://github.com/paft-rs/paft). Enabling the `dataframe` feature on `borsa` activates paft's Polars integration, allowing you to call `.to_dataframe()` on returned types.
+
+Enable it in your `Cargo.toml`:
+
+```toml
+[dependencies]
+borsa = { version = "0.1", features = ["dataframe"] }
+```
+
+Example:
+
+```rust
+use borsa_core::ToDataFrame; // bring the extension trait into scope
+
+let quote = borsa.quote(&aapl).await?;
+let df = quote.to_dataframe()?; // -> polars::DataFrame
+```
+
 ## Advanced Features
 
 ### Bulk Operations
@@ -422,4 +442,3 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 ---
 
 **Ready to build something amazing with financial data?** Start with `borsa` today!
-
