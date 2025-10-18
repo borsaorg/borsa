@@ -5,6 +5,7 @@ use borsa_core::{AssetKind, Quote, Symbol};
 use rust_decimal::Decimal;
 
 use crate::helpers::MockConnector;
+use tokio::time::{Duration, advance};
 
 #[tokio::test]
 async fn strategy_latency_returns_fastest_success() {
@@ -84,7 +85,7 @@ async fn strategy_latency_ignores_faster_failure_and_returns_first_success() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
     // First connector times out beyond configured threshold; second succeeds
     let very_slow = MockConnector::builder()
@@ -121,7 +122,17 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
-    let q = borsa.quote(&inst).await.unwrap();
+    let handle = tokio::spawn({
+        let inst = inst.clone();
+        async move { borsa.quote(&inst).await }
+    });
+
+    tokio::task::yield_now().await;
+    advance(Duration::from_millis(50)).await; // first provider times out
+    tokio::task::yield_now().await;
+    advance(Duration::from_millis(10)).await; // second provider completes
+
+    let q = handle.await.unwrap().unwrap();
     assert_eq!(
         q.price.as_ref().map(borsa_core::Money::amount),
         Some(Decimal::from(42u8))
