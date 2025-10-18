@@ -49,9 +49,6 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
-      - name: Build all crates
-        run: cargo build --workspace --release
-
 
   # Publish to crates.io
   publish:
