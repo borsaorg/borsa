@@ -82,6 +82,8 @@ jobs:
   create-release:
     needs: pre-release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: github.event.inputs.dry_run != 'true'
     steps:
       - name: Checkout code
