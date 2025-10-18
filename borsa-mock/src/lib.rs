@@ -1,6 +1,17 @@
 use async_trait::async_trait;
-use borsa_core::connector::{BorsaConnector, QuoteProvider, HistoryProvider, SearchProvider, ProfileProvider, EarningsProvider, IncomeStatementProvider, BalanceSheetProvider, CashflowProvider, CalendarProvider, OptionsExpirationsProvider, OptionChainProvider, RecommendationsProvider, RecommendationsSummaryProvider, UpgradesDowngradesProvider, AnalystPriceTargetProvider, EsgProvider, NewsProvider};
-use borsa_core::{BorsaError, AssetKind, Instrument, Quote, HistoryRequest, HistoryResponse, Interval, SearchRequest, SearchResponse, Profile, Earnings, IncomeStatementRow, BalanceSheetRow, CashflowRow, Calendar, OptionChain, RecommendationRow, RecommendationSummary, UpgradeDowngradeRow, EsgScores, NewsRequest, types};
+use borsa_core::connector::{
+    AnalystPriceTargetProvider, BalanceSheetProvider, BorsaConnector, CalendarProvider,
+    CashflowProvider, EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
+    NewsProvider, OptionChainProvider, OptionsExpirationsProvider, ProfileProvider, QuoteProvider,
+    RecommendationsProvider, RecommendationsSummaryProvider, SearchProvider,
+    UpgradesDowngradesProvider,
+};
+use borsa_core::{
+    AssetKind, BalanceSheetRow, BorsaError, Calendar, CashflowRow, Earnings, EsgScores,
+    HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument, Interval, NewsRequest,
+    OptionChain, Profile, Quote, RecommendationRow, RecommendationSummary, SearchRequest,
+    SearchResponse, UpgradeDowngradeRow, types,
+};
 
 mod fixtures;
 
@@ -137,7 +148,7 @@ impl HistoryProvider for MockConnector {
 #[async_trait]
 impl SearchProvider for MockConnector {
     async fn search(&self, req: SearchRequest) -> Result<SearchResponse, BorsaError> {
-        fixtures::search::search(&req)
+        Ok(fixtures::search::search(&req))
     }
 }
 
@@ -249,7 +260,10 @@ impl RecommendationsSummaryProvider for MockConnector {
 
 #[async_trait]
 impl AnalystPriceTargetProvider for MockConnector {
-    async fn analyst_price_target(&self, instrument: &Instrument) -> Result<borsa_core::PriceTarget, BorsaError> {
+    async fn analyst_price_target(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<borsa_core::PriceTarget, BorsaError> {
         let _s = instrument.symbol_str();
         Ok(fixtures::analysis::price_target_by_symbol(_s))
     }

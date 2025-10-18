@@ -11,7 +11,7 @@ fn is_numbered_rs(entry: &fs::DirEntry) -> bool {
         && path
             .file_name()
             .and_then(OsStr::to_str)
-            .map_or(false, |n| n.chars().next().map_or(false, |c| c.is_ascii_digit()))
+            .is_some_and(|n| n.chars().next().is_some_and(|c| c.is_ascii_digit()))
 }
 
 #[test]

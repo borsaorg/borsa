@@ -1,4 +1,4 @@
-use borsa_core::{Quote, Exchange, Symbol, Money, Currency, IsoCurrency};
+use borsa_core::{Currency, Exchange, IsoCurrency, Money, Quote, Symbol};
 
 pub fn by_symbol(s: &str) -> Option<Quote> {
     match s {

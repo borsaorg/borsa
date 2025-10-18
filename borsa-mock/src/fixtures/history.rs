@@ -1,4 +1,4 @@
-use borsa_core::{HistoryResponse, Money, Currency, IsoCurrency, Candle};
+use borsa_core::{Candle, Currency, HistoryResponse, IsoCurrency, Money};
 
 pub fn by_symbol(s: &str) -> Option<HistoryResponse> {
     match s {

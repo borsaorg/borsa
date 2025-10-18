@@ -1,4 +1,7 @@
-use borsa_core::{RecommendationRow, RecommendationSummary, UpgradeDowngradeRow, PriceTarget, Money, Currency, IsoCurrency};
+use borsa_core::{
+    Currency, IsoCurrency, Money, PriceTarget, RecommendationRow, RecommendationSummary,
+    UpgradeDowngradeRow,
+};
 
 pub const fn recommendations_by_symbol(_s: &str) -> Vec<RecommendationRow> {
     vec![]

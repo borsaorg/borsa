@@ -1,4 +1,4 @@
-use borsa_core::{Earnings, IncomeStatementRow, BalanceSheetRow, CashflowRow};
+use borsa_core::{BalanceSheetRow, CashflowRow, Earnings, IncomeStatementRow};
 
 pub const fn earnings_by_symbol(_s: &str) -> Option<Earnings> {
     Some(Earnings {

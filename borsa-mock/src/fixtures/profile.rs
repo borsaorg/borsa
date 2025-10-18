@@ -1,4 +1,4 @@
-use borsa_core::{Profile, CompanyProfile};
+use borsa_core::{CompanyProfile, Profile};
 
 pub fn by_symbol(s: &str) -> Option<Profile> {
     let (name, sector, industry) = if s == "META" {

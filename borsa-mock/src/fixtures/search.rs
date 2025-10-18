@@ -1,6 +1,6 @@
-use borsa_core::{SearchRequest, SearchResponse, BorsaError, SearchResult, Symbol, Exchange, AssetKind};
+use borsa_core::{AssetKind, Exchange, SearchRequest, SearchResponse, SearchResult, Symbol};
 
-pub fn search(req: &SearchRequest) -> Result<SearchResponse, BorsaError> {
+pub fn search(req: &SearchRequest) -> SearchResponse {
     let q = req.query().to_ascii_lowercase();
     let mut results = Vec::new();
     if q.contains("tesla") {
@@ -11,5 +11,5 @@ pub fn search(req: &SearchRequest) -> Result<SearchResponse, BorsaError> {
             kind: AssetKind::Equity,
         });
     }
-    Ok(SearchResponse { results })
+    SearchResponse { results }
 }
