@@ -1,15 +1,14 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, Instrument};
-use borsa_yfinance::YfConnector;
-use std::sync::Arc;
+use borsa_examples::common::get_connector;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Create connectors. We'll use both Yahoo Finance and Alpha Vantage.
-    let yf_connector = Arc::new(YfConnector::new_default());
+    // 1. Create connector (mock in CI when BORSA_EXAMPLES_USE_MOCK is set).
+    let connector = get_connector();
 
-    // 2. Build the Borsa router and register the connectors.
-    let borsa = Borsa::builder().with_connector(yf_connector).build()?;
+    // 2. Build the Borsa router and register the connector.
+    let borsa = Borsa::builder().with_connector(connector).build()?;
 
     // 3. Define the instrument we want to query.
     let instrument =

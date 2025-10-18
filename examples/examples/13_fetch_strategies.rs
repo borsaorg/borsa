@@ -1,13 +1,12 @@
-use std::sync::Arc;
 
 use borsa::Borsa;
 use borsa::FetchStrategy;
 use borsa_core::{AssetKind, Instrument};
-use borsa_yfinance::YfConnector;
+use borsa_examples::common::get_connector;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let yf = Arc::new(YfConnector::new_default());
+    let yf = get_connector();
 
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid instrument symbol");
 

@@ -4,7 +4,7 @@ use borsa_core::{
     AssetKind, BorsaError, Candle, Currency, HistoryRequest, HistoryResponse, Instrument, Money,
     connector::{BorsaConnector, HistoryProvider},
 };
-use borsa_yfinance::YfConnector;
+use borsa_examples::common::get_connector;
 use chrono::TimeZone;
 use std::sync::Arc;
 
@@ -98,7 +98,7 @@ impl HistoryProvider for MockConnector {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Create instances of our connectors.
-    let yf_connector = Arc::new(YfConnector::new_default());
+    let yf_connector = get_connector();
     let mock_connector = Arc::new(MockConnector);
 
     // 2. Build Borsa and set a priority order for history.

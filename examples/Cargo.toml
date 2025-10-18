@@ -11,7 +11,12 @@ publish = false
 borsa = { workspace = true }
 borsa-core = { workspace = true }
 borsa-yfinance = { workspace = true }
+borsa-mock = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true, optional = false }
+predicates = { workspace = true, optional = false }

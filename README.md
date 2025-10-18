@@ -86,6 +86,37 @@ let borsa = Borsa::builder()
 
 Browse `examples/examples/` for end-to-end samples (quotes, history, fundamentals, options, news, ESG, analysis). These are small, copyable programs you can adapt in your own project.
 
+### Running examples locally (CI-safe)
+
+Examples dynamically select the connector at runtime via the `BORSA_EXAMPLES_USE_MOCK` environment variable:
+
+- When set, examples use the deterministic `borsa-mock::MockConnector` (no network access)
+- When unset, examples use the live `borsa-yfinance::YfConnector`
+
+Run all examples against the live API (prints example outputs):
+
+```bash
+just examples
+```
+
+Run all example checks locally using the mock (CI-safe):
+
+```bash
+just examples-mock
+```
+
+Run a specific example with the mock:
+
+```bash
+BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa-examples --example 01_simple_quote
+```
+
+Run a specific example against live Yahoo Finance:
+
+```bash
+cargo run -p borsa-examples --example 01_simple_quote
+```
+
 ## Developing locally
 
 - Build everything: `cargo build --workspace`

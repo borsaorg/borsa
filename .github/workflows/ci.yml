@@ -167,14 +167,15 @@ jobs:
       - name: Build workspace
         run: cargo build --workspace
 
-      # This is disabled because CI is flaky. Will be addressed in future versions.
-      # - name: Run examples
-      #  run: |
-      #    cd examples
-      #    for example in examples/*.rs; do
-      #      echo "Running example: $example"
-      #      cargo run --example "$(basename "$example" .rs)"
-      #    done
+      - name: Run mock examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in examples/examples/[0-9][0-9]_*.rs; do \
+            name=$(basename "$f" .rs); \
+            echo "==> Running example: $name (mock)"; \
+            BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa-examples --example "$name" || exit 1; \
+          done
 
   # Security audit
   security:

@@ -1,12 +1,11 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, HistoryRequest, Instrument, Interval, Range};
-use borsa_yfinance::YfConnector;
-use std::sync::Arc;
+use borsa_examples::common::get_connector;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Setup Borsa with a special configuration to resample history to weekly.
-    let yf_connector = Arc::new(YfConnector::new_default());
+    let yf_connector = get_connector();
     let borsa = Borsa::builder()
         .with_connector(yf_connector)
         .resampling(borsa::Resampling::Weekly) // Enable weekly resampling!

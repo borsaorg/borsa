@@ -18,6 +18,10 @@ impl BorsaConnector for FastConnector {
     fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> {
         Some(self as &dyn QuoteProvider)
     }
+
+    fn supports_kind(&self, _kind: AssetKind) -> bool {
+        true
+    }
 }
 
 // A slow connector that provides a "more accurate" price.
@@ -30,6 +34,10 @@ impl BorsaConnector for SlowConnector {
 
     fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> {
         Some(self as &dyn QuoteProvider)
+    }
+
+    fn supports_kind(&self, _kind: AssetKind) -> bool {
+        true
     }
 }
 

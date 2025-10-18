@@ -20,6 +20,10 @@ impl BorsaConnector for FastLimitedConnector {
     fn as_history_provider(&self) -> Option<&dyn HistoryProvider> {
         Some(self as &dyn HistoryProvider)
     }
+
+    fn supports_kind(&self, _kind: AssetKind) -> bool {
+        true
+    }
 }
 
 #[async_trait]
@@ -131,6 +135,10 @@ impl BorsaConnector for SlowComprehensiveConnector {
 
     fn as_history_provider(&self) -> Option<&dyn HistoryProvider> {
         Some(self as &dyn HistoryProvider)
+    }
+
+    fn supports_kind(&self, _kind: AssetKind) -> bool {
+        true
     }
 }
 

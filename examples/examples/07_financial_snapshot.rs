@@ -1,14 +1,13 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, Instrument, Profile};
-use borsa_yfinance::YfConnector;
+use borsa_examples::common::get_connector;
 use rust_decimal::Decimal;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Setup Borsa.
-    let yf_connector = Arc::new(YfConnector::new_default());
-    let borsa = Borsa::builder().with_connector(yf_connector).build()?;
+    // 1. Setup Borsa with selected connector (mock in CI when BORSA_EXAMPLES_USE_MOCK is set).
+    let connector = get_connector();
+    let borsa = Borsa::builder().with_connector(connector).build()?;
 
     // 2. Define the instrument.
     let instrument =

@@ -5,6 +5,7 @@ members = [
     "borsa-core",
     "borsa-yfinance",  
     "examples",
+    "borsa-mock",
 ]
 
 [workspace.package]
@@ -48,7 +49,10 @@ cmc = "0.4.4"
 borsa-yfinance = { path = "borsa-yfinance" }
 borsa-core = { path = "borsa-core" }
 borsa = { path = "borsa" }
+borsa-mock = { path = "borsa-mock" }
 
 trybuild = "1.0.112"
 tokio-test = "0.4.4"
 httpmock = "0.8.2"
+assert_cmd = "2.0.16"
+predicates = "3.1.2"
