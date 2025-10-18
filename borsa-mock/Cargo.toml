@@ -5,6 +5,7 @@ edition = "2024"
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+description = "Mock Borsa connector with deterministic fixture data for tests and examples"
 
 [dependencies]
 borsa-core = { workspace = true }
