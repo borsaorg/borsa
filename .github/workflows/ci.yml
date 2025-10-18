@@ -121,19 +121,6 @@ jobs:
           cd ${{ matrix.crate }}
           cargo test --all-features --verbose
 
-      - name: Build crate
-        shell: bash
-        run: |
-          cd ${{ matrix.crate }}
-          cargo build --verbose
-
-      - name: Build crate with all features
-        if: matrix.crate != 'examples'
-        shell: bash
-        run: |
-          cd ${{ matrix.crate }}
-          cargo build --all-features --verbose
-
   # Workspace validation and examples
   workspace-validation:
     needs: [lint]
