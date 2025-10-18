@@ -46,10 +46,10 @@ tokio-tungstenite = "0.27"
 url = "2.5"
 cmc = "0.4.4"
 
-borsa-yfinance = { path = "borsa-yfinance" }
-borsa-core = { path = "borsa-core" }
-borsa = { path = "borsa" }
-borsa-mock = { path = "borsa-mock" }
+borsa-yfinance = { path = "borsa-yfinance", version = "0.1.0" }
+borsa-core = { path = "borsa-core", version = "0.1.0" }
+borsa = { path = "borsa", version = "0.1.0" }
+borsa-mock = { path = "borsa-mock", version = "0.1.0" }
 
 trybuild = "1.0.112"
 tokio-test = "0.4.4"
