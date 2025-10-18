@@ -1,5 +1,11 @@
 # borsa
 
+[![Crates.io](https://img.shields.io/crates/v/borsa)](https://crates.io/crates/borsa)
+[![Docs.rs](https://docs.rs/borsa/badge.svg)](https://docs.rs/borsa)
+[![CI](https://github.com/borsaorg/borsa/actions/workflows/ci.yml/badge.svg)](https://github.com/borsaorg/borsa/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/crates/d/borsa)](https://crates.io/crates/borsa)
+[![License](https://img.shields.io/crates/l/borsa)](https://crates.io/crates/borsa)
+
 High-level, pluggable market data API for Rust. This monorepo contains the core types and traits, the router/orchestrator, and the officially supported provider connector.
 
 ## Workspace layout
@@ -10,6 +16,21 @@ High-level, pluggable market data API for Rust. This monorepo contains the core 
 - `examples/`: self-contained example programs demonstrating common workflows
 
 For crate-specific usage of the high-level client, see [borsa/README.md](https://github.com/borsaorg/borsa/blob/main/borsa/README.md).
+
+### Community connectors
+
+Note: The connectors below are experimental, require API keys, and are maintained on a best‑effort basis. They may lag behind breaking changes in `borsa`. PRs are welcome.
+
+- [`borsa-alphavantage`](https://github.com/borsaorg/borsa-alphavantage): Alpha Vantage connector (API key required)
+- `borsa-cmc`: CoinMarketCap connector (coming soon!) (API key required)
+
+## Versioning and compatibility contract
+
+- **Official crates move in lockstep**: `borsa`, `borsa-core`, and `borsa-yfinance` always share the same version.
+- **Minor series is the compatibility boundary**: Within a given series `v0.X.*`, breaking changes are avoided. All `v0.X.*` releases of the official crates are mutually compatible.
+- **Connector contract**: A community connector released as `v0.X.Y` must be compatible with any `borsa` release in `v0.X.*`, and vice‑versa.
+- **Out of range**: Combinations across different minor series (e.g. `v0.1.*` with `v0.2.*`) are unsupported.
+- **Breaking changes**: We may bump the minor series (e.g. `0.1 → 0.2`) at any time to introduce breaking changes, which can render older connectors outdated.
 
 ## Install (as a user of the library)
 
