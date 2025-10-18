@@ -9,7 +9,7 @@ readme = "README.md"
 repository.workspace = true
 homepage = "https://github.com/borsaorg/borsa"
 documentation = "https://docs.rs/borsa"
-keywords = ["finance", "stocks", "trading", "api", "market-data", "yfinance", "alphavantage", "financial-data"]
+keywords = ["finance", "stocks", "trading", "api", "market-data"]
 categories = ["api-bindings", "finance", "web-programming::http-client"]
 
 [features]
