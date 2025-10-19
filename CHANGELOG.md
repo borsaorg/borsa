@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Automated release changelog generation in GitHub Actions using `mikepenz/release-changelog-builder-action`.
+- Automated release changelog generation in GitHub Actions using `taiki-e/create-gh-release-action`.
 
 ### Fixed
 
