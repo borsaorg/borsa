@@ -314,7 +314,6 @@ dependencies = [
  "chrono-tz",
  "loom",
  "paft",
- "paft-utils",
  "proptest",
  "rust_decimal",
  "serde",

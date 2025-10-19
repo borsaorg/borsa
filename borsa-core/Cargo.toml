@@ -14,7 +14,7 @@ categories = ["api-bindings", "finance", "data-structures"]
 
 [features]
 default = []
-dataframe = ["paft/dataframe", "dep:paft-utils"]
+dataframe = ["paft/dataframe"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -26,10 +26,9 @@ tokio = { workspace = true, features = ["rt", "macros", "sync"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 rust_decimal = { workspace = true }
-paft-utils = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 rust_decimal = { workspace = true }
-proptest = "1"
-loom = { version = "0.7", default-features = false }
+proptest = { workspace = true }
+loom = { workspace = true }
