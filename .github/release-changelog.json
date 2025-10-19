@@ -1,0 +1,21 @@
+{
+  "categories": [
+    { "title": "### Added", "labels": ["feature", "enhancement", "feat", "new"] },
+    { "title": "### Changed", "labels": ["change", "changed", "refactor", "improvement", "deps", "build", "ci", "docs", "chore"] },
+    { "title": "### Fixed", "labels": ["bug", "fix", "bugfix", "regression"] },
+    { "title": "### Deprecated", "labels": ["deprecated"] },
+    { "title": "### Removed", "labels": ["removed", "breaking-change", "breaking"] },
+    { "title": "### Security", "labels": ["security"] }
+  ],
+  "ignore_labels": ["skip-changelog", "no-changelog"],
+  "pr_template": "- #{{TITLE}} (#{{NUMBER}}) by @#{{AUTHOR}}",
+  "template": "## [#{{TO_TAG}}] - #{{RELEASE_DATE}}\n\n#{{CHANGELOG}}\n",
+  "empty_template": "## [#{{TO_TAG}}] - #{{RELEASE_DATE}}\n\n- No changes.\n",
+  "max_pull_requests": 300,
+  "sort": "merged_at",
+  "transformers": [
+    { "pattern": "Co-authored-by:.*", "target": "" },
+    { "pattern": "\\r?\\n{3,}", "target": "\n\n" }
+  ]
+}
+
