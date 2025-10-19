@@ -10,19 +10,41 @@ High-level, pluggable market data API for Rust. This monorepo contains the core 
 
 ## Workspace layout
 
-- `borsa-core`: shared types, errors, and the `BorsaConnector` trait
-- `borsa`: high-level router that merges/prioritizes multiple connectors
-- `borsa-yfinance`: Yahoo Finance connector (no API key required)
-- `examples/`: self-contained example programs demonstrating common workflows
+### Core Infrastructure
 
-For crate-specific usage of the high-level client, see [borsa/README.md](https://github.com/borsaorg/borsa/blob/main/borsa/README.md).
+- **`borsa-core`**: Shared types, errors, and the `BorsaConnector` trait - the foundation for all connectors
+- **`borsa`**: High-level router that merges/prioritizes multiple connectors with fallback support
+- **`borsa-mock`**: Mock connector with deterministic fixture data for testing and examples
 
-### Community connectors
+### Official Connectors (Tier 1)
 
-Note: The connectors below are experimental, require API keys, and are maintained on a best‑effort basis. They may lag behind breaking changes in `borsa`. PRs are welcome.
+These connectors are fully supported, comprehensively tested, and maintained by the core team:
+
+- **`borsa-yfinance`**: Yahoo Finance connector (no API key required) - **Reference implementation**
+
+### Best-Effort Connectors (Tier 2)
+
+These connectors are maintained on a best-effort basis and may lag behind breaking changes in `borsa-core`. Community contributions and PRs are welcome:
 
 - [`borsa-alphavantage`](https://github.com/borsaorg/borsa-alphavantage): Alpha Vantage connector (API key required)
-- `borsa-cmc`: CoinMarketCap connector (coming soon!) (API key required)
+- `borsa-cmc`: CoinMarketCap connector (coming soon - API key required)
+
+### Community Connectors (Tier 3)
+
+Want to add a connector for your preferred data provider? We provide:
+
+- Complete connector SDK documentation
+- Reference implementations (`borsa-yfinance` and `borsa-mock`)
+- CI templates and testing utilities
+- We'll list your connector here and help review PRs
+
+**For data providers**: Want official Tier 1 support and priority maintenance for your API? [Contact us](mailto:contact@borsa.rs) about sponsorship opportunities.
+
+### Examples
+
+- **`examples/`**: Self-contained example programs demonstrating common workflows
+
+For crate-specific usage of the high-level client, see [borsa/README.md](https://github.com/borsaorg/borsa/blob/main/borsa/README.md).
 
 ## Versioning and compatibility contract
 
