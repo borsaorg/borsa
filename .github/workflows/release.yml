@@ -90,21 +90,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Build changelog
-        id: changelog
-        uses: mikepenz/release-changelog-builder-action@v5
+      - name: Create GitHub Releases based on changelog
+        uses: taiki-e/create-gh-release-action@v1.9.1
         with:
-          configuration: .github/release-changelog.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          body: ${{ steps.changelog.outputs.changelog }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          changelog: CHANGELOG.md
+          token: ${{ secrets.GITHUB_TOKEN }}
