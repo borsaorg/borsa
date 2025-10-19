@@ -27,4 +27,5 @@ fn yf_connector_advertises_all_capabilities() {
     assert!(yf.as_net_share_purchase_activity_provider().is_some());
     assert!(yf.as_esg_provider().is_some());
     assert!(yf.as_news_provider().is_some());
+    assert!(yf.as_isin_provider().is_some());
 }

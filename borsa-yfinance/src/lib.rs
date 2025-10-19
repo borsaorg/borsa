@@ -24,10 +24,11 @@ use borsa_core::{
         AnalystPriceTargetProvider, BalanceSheetProvider, BorsaConnector, CalendarProvider,
         CashflowProvider, ConnectorKey, EarningsProvider, EsgProvider, HistoryProvider,
         IncomeStatementProvider, InsiderRosterHoldersProvider, InsiderTransactionsProvider,
-        InstitutionalHoldersProvider, MajorHoldersProvider, MutualFundHoldersProvider,
-        NetSharePurchaseActivityProvider, NewsProvider, OptionChainProvider,
-        OptionsExpirationsProvider, ProfileProvider, QuoteProvider, RecommendationsProvider,
-        RecommendationsSummaryProvider, SearchProvider, UpgradesDowngradesProvider,
+        InstitutionalHoldersProvider, IsinProvider, MajorHoldersProvider,
+        MutualFundHoldersProvider, NetSharePurchaseActivityProvider, NewsProvider,
+        OptionChainProvider, OptionsExpirationsProvider, ProfileProvider, QuoteProvider,
+        RecommendationsProvider, RecommendationsSummaryProvider, SearchProvider,
+        UpgradesDowngradesProvider,
     },
 };
 
@@ -263,6 +264,23 @@ impl ProfileProvider for YfConnector {
         let symbol = instrument.symbol_str();
         let raw = self.profile.load(symbol).await?;
         Ok(raw)
+    }
+}
+
+#[async_trait]
+impl IsinProvider for YfConnector {
+    async fn isin(&self, instrument: &Instrument) -> Result<Option<borsa_core::Isin>, BorsaError> {
+        let symbol = instrument.symbol_str();
+        match self.profile.isin(symbol).await {
+            Ok(Some(isin_str)) => match borsa_core::Isin::new(&isin_str) {
+                Ok(isin) => Ok(Some(isin)),
+                Err(e) => Err(BorsaError::Data(format!(
+                    "Provider returned invalid ISIN '{isin_str}': {e}"
+                ))),
+            },
+            Ok(None) => Ok(None),
+            Err(e) => Err(Self::normalize_error(e, &format!("isin for {symbol}"))),
+        }
     }
 }
 
@@ -578,6 +596,10 @@ impl BorsaConnector for YfConnector {
 
     fn as_profile_provider(&self) -> Option<&dyn borsa_core::connector::ProfileProvider> {
         Some(self as &dyn ProfileProvider)
+    }
+
+    fn as_isin_provider(&self) -> Option<&dyn borsa_core::connector::IsinProvider> {
+        Some(self as &dyn IsinProvider)
     }
 
     fn as_search_provider(&self) -> Option<&dyn borsa_core::connector::SearchProvider> {
