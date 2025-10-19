@@ -24,8 +24,8 @@ alpha_vantage = "0.11.0"
 async-trait = "0.1"
 bitflags = "2"
 
-paft = { version = "0.5.1", features = ["market", "fundamentals", "aggregates"] }
-yfinance-rs = { version = "0.5.1" }
+paft = { version = "0.5.2", features = ["market", "fundamentals", "aggregates"] }
+yfinance-rs = { version = "0.5.2" }
 chrono = "0.4.42"
 chrono-tz = "0.10"
 rust_decimal = "1.36"
@@ -35,7 +35,7 @@ proc-macro-crate = "3.4.0"
 proc-macro2 = "1.0"
 quote = "1.0.41"
 reqwest = "0.12.24"
-syn = "2.0"
+syn = "2.0.107"
 base64 = "0.22"
 futures-util = "0.3"
 prost = "0.14"

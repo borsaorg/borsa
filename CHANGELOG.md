@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.2] - Unreleased
 
+### Dependencies
+
+- Bump `paft` to `v0.5.2`.
+- Bump `yfinance-rs` to `v0.5.2`.
+- Bump `syn` to `v2.0.107`.
+
 ## [0.1.1] - 2025-10-19
 
 ### Fixed
