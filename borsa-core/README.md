@@ -51,7 +51,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-borsa-core = "0.1.1"
+borsa-core = "0.1.2"
 ```
 
 ## Usage

@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "borsa"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "borsa-core",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "borsa-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "bitflags",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "borsa-examples"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "assert_cmd",
  "async-trait",
@@ -339,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "borsa-mock"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "borsa-core",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "borsa-yfinance"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "borsa-core",
