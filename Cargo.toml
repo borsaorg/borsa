@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Giovanni Ramistella <contact@borsa.rs>"]
 edition = "2024"
 license = "MIT"
@@ -46,10 +46,10 @@ tokio-tungstenite = "0.27"
 url = "2.5"
 cmc = "0.4.4"
 
-borsa-yfinance = { path = "borsa-yfinance", version = "0.1.0" }
-borsa-core = { path = "borsa-core", version = "0.1.0" }
-borsa = { path = "borsa", version = "0.1.0" }
-borsa-mock = { path = "borsa-mock", version = "0.1.0" }
+borsa-yfinance = { path = "borsa-yfinance", version = "0.1.1" }
+borsa-core = { path = "borsa-core", version = "0.1.1" }
+borsa = { path = "borsa", version = "0.1.1" }
+borsa-mock = { path = "borsa-mock", version = "0.1.1" }
 
 trybuild = "1.0.112"
 tokio-test = "0.4.4"

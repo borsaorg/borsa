@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - Unreleased
+
 ### Added
 
 - Automated release changelog generation in GitHub Actions using `mikepenz/release-changelog-builder-action`.
@@ -14,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - borsa-yfinance: Expose ISIN capability via `IsinProvider` and `as_isin_provider` so `borsa::Borsa::isin` routes correctly.
+
+### Changed
+
+- Bump workspace package version to `0.1.1` and align member crate versions.
+- Update README dependency snippets to reference `0.1.1`.
+
+### Removed
+
+- Remove crate-level `Cargo.lock` files in favor of the workspace `Cargo.lock`.
 
 ## [0.1.0] - 2025-10-18
 

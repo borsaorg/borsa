@@ -38,8 +38,8 @@ Add the crates you need to your project:
 
 ```toml
 [dependencies]
-borsa = "0.1.0"
-borsa-yfinance = "0.1.0"
+borsa = "0.1.1"
+borsa-yfinance = "0.1.1"
 
 ```
 
