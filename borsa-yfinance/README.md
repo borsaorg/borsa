@@ -17,8 +17,8 @@ Use it directly, or follow its patterns to build your own connector.
 
 ```toml
 [dependencies]
-borsa-yfinance = "0.1.0"
-borsa-core = "0.1.0"
+borsa-yfinance = "0.1.1"
+borsa-core = "0.1.1"
 ```
 
 ## Quick start

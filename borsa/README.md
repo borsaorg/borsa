@@ -27,8 +27,8 @@ Add `borsa` and a connector to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-borsa = "0.1.0"
-borsa-yfinance = "0.1.0"
+borsa = "0.1.1"
+borsa-yfinance = "0.1.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
