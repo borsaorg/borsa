@@ -7,15 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- README: Restructure workspace layout; clarify connector tiers and support levels; add `borsa-mock`; reorganize examples section; include sponsorship contact information.
-
 ## [0.1.1] - 2025-10-19
-
-### Added
-
-- Automated release changelog generation in GitHub Actions using `taiki-e/create-gh-release-action`.
 
 ### Fixed
 
@@ -23,16 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bump workspace package version to `0.1.1` and align member crate versions.
-- Update README dependency snippets to reference `0.1.1`.
-- borsa-mock: Add crate metadata (`readme`, `keywords`, `categories`).
 - borsa-core: Re-export dataframe traits from `paft::core::dataframe` (replacing `paft-utils` path).
-- workspace: Move `proptest` and `loom` into workspace dev-dependencies for consistency.
-
-### Removed
-
-- Remove crate-level `Cargo.lock` files in favor of the workspace `Cargo.lock`.
-- borsa-core: Remove optional dependency on `paft-utils`.
 
 ## [0.1.0] - 2025-10-18
 
