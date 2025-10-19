@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - README: Restructure workspace layout; clarify connector tiers and support levels; add `borsa-mock`; reorganize examples section; include sponsorship contact information.
 
-## [0.1.1] - 2025-10-18
+## [0.1.1] - 2025-10-19
 
 ### Added
 
