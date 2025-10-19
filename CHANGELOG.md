@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump workspace package version to `0.1.1` and align member crate versions.
 - Update README dependency snippets to reference `0.1.1`.
+- borsa-mock: Add crate metadata (`readme`, `keywords`, `categories`).
 
 ### Removed
 

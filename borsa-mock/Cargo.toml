@@ -6,10 +6,12 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Mock Borsa connector with deterministic fixture data for tests and examples"
+readme = "README.md"
+keywords = ["finance", "market-data", "mock", "testing", "borsa"]
+categories = ["development-tools::testing"]
 
 [dependencies]
 borsa-core = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
-
