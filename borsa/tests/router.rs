@@ -100,6 +100,8 @@ mod router_search_kind_filter;
 mod router_search_limit;
 #[path = "router/search/router_search_priority.rs"]
 mod router_search_priority;
+#[path = "router/search/router_search_unsupported.rs"]
+mod router_search_unsupported;
 
 #[path = "router/stream/router_stream_backoff.rs"]
 mod router_stream_backoff;

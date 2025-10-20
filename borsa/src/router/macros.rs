@@ -104,7 +104,7 @@ macro_rules! borsa_router_search {
                 async move {
                     let name = c.name();
                     if r.kind().is_some_and(|k| !c.supports_kind(k)) {
-                        return (name, Ok(borsa_core::SearchResponse { results: vec![] }));
+                        return (name, false, Ok(borsa_core::SearchResponse { results: vec![] }));
                     }
                     if let Some(p) = c.$accessor() {
                         let res = $crate::Borsa::provider_call_with_timeout(
@@ -114,9 +114,9 @@ macro_rules! borsa_router_search {
                             p.$call_name(r),
                         )
                         .await;
-                        (name, res)
+                        (name, true, res)
                     } else {
-                        (name, Ok(borsa_core::SearchResponse { results: vec![] }))
+                        (name, false, Ok(borsa_core::SearchResponse { results: vec![] }))
                     }
                 }
             });
@@ -134,23 +134,35 @@ macro_rules! borsa_router_search {
             let mut merged: Vec<borsa_core::SearchResult> = Vec::new();
             let mut seen = std::collections::BTreeSet::<String>::new();
             let mut errors: Vec<borsa_core::BorsaError> = Vec::new();
-            for (name, res) in joined {
+            let mut attempted_any = false;
+            for (name, attempted, res) in joined {
+                if attempted {
+                    attempted_any = true;
+                }
                 match res {
                     Ok(sr) => {
-                        for item in sr.results.into_iter() {
-                            if seen.insert(item.symbol.as_str().to_string()) {
-                                merged.push(item);
+                        if attempted {
+                            for item in sr.results.into_iter() {
+                                if seen.insert(item.symbol.as_str().to_string()) {
+                                    merged.push(item);
+                                }
                             }
                         }
                     }
                     Err(e) => {
-                        if let borsa_core::BorsaError::AllProvidersFailed(v) = e {
-                            errors.extend(v);
-                        } else {
-                            errors.push($crate::core::tag_err(name, e));
+                        if attempted {
+                            if let borsa_core::BorsaError::AllProvidersFailed(v) = e {
+                                errors.extend(v);
+                            } else {
+                                errors.push($crate::core::tag_err(name, e));
+                            }
                         }
                     }
                 }
+            }
+
+            if !attempted_any {
+                return Err(borsa_core::BorsaError::unsupported($capability));
             }
 
             if let Some(limit) = $req_ident.limit()
