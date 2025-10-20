@@ -42,6 +42,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Using YfConnector in the router
 
+## Observability
+
+Enable the `tracing` feature to emit spans for all public provider endpoints (quotes, history, search, profile, fundamentals, options, analysis, holders, ESG, news, streaming):
+
+```toml
+[dependencies]
+borsa-yfinance = { version = "0.1", features = ["tracing"] }
+```
+
+Run with the example subscriber setup:
+
+```bash
+RUST_LOG=info,borsa=trace,borsa_yfinance=trace \
+  cargo run -p borsa-examples --example 00_tracing \
+  --features "borsa/tracing borsa-yfinance/tracing"
+```
+
 ```rust
 use borsa::{Borsa};
 use borsa_yfinance::YfConnector;

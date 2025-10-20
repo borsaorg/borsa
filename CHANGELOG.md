@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.2] - Unreleased
 
+### Added
+
+- Optional tracing feature across the workspace:
+  - `borsa`, `borsa-core`, and `borsa-yfinance` expose a `tracing` feature flag
+  - Router entry points and core orchestration in `borsa` emit spans when enabled
+  - `borsa-yfinance` instruments all public provider endpoints (quotes, history, search, profile, fundamentals, options, analysis, holders, ESG, news, streaming)
+- New example `examples/examples/00_tracing.rs` showing how to initialize `tracing_subscriber` and view spans
+- Documentation updates in `README.md`, `borsa/README.md`, and `borsa-yfinance/README.md` describing observability usage and run commands
+
 ### Dependencies
 
 - Bump `paft` to `v0.5.2`.

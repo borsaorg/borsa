@@ -179,6 +179,27 @@ Run a specific example against live Yahoo Finance:
 cargo run -p borsa-examples --example 01_simple_quote
 ```
 
+## Observability (tracing)
+
+The workspace provides optional, feature-gated tracing spans across the router (`borsa`), core orchestration, and the Yahoo Finance connector (`borsa-yfinance`).
+
+- Enable features: `borsa/tracing` and `borsa-yfinance/tracing`
+- Initialize a subscriber in your binary using `tracing-subscriber`
+- See `examples/examples/00_tracing.rs` for a minimal setup
+
+Quickstart:
+
+```bash
+RUST_LOG=info,borsa=trace,borsa_yfinance=trace \
+  cargo run -p borsa-examples --example 00_tracing \
+  --features "borsa/tracing borsa-yfinance/tracing"
+```
+
+Notes:
+
+- Spans are attached to high-level router entry points and to core helpers that drive provider selection.
+- `borsa-yfinance` instruments all public provider endpoints so you can see per-capability timing.
+
 ## Developing locally
 
 - Build everything: `cargo build --workspace`

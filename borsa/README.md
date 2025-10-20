@@ -62,6 +62,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ## Concepts
+## Observability (optional)
+
+Enable the `tracing` feature to emit structured spans from router entry points and core orchestration helpers:
+
+```toml
+[dependencies]
+borsa = { version = "0.1", features = ["tracing"] }
+```
+
+Initialize a subscriber in your application:
+
+```rust
+tracing_subscriber::fmt()
+    .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+    .init();
+```
+
+See the top-level `examples/examples/00_tracing.rs` for a working end-to-end sample.
 
 ### Connectors
 
