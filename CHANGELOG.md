@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - router: stream startup now fails if any connector fails to initialize, aborting
   spawned tasks and returning a consolidated error instead of partially starting.
+- router/info: suppress warnings for optional data in info report by filtering
+  out `Unsupported` and `NotFound` errors; only actionable errors are retained.
 
 ### Dependencies
 

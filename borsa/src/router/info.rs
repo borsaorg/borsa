@@ -34,13 +34,18 @@ impl Borsa {
 
         // Collect errors with flattening of AllProvidersFailed for transparency
         let mut errors: Vec<BorsaError> = Vec::new();
-        let mut push_err = |e: BorsaError| {
-            if let BorsaError::AllProvidersFailed(v) = e {
-                errors.extend(v);
-            } else {
-                errors.push(e);
+        fn append_actionable(errors: &mut Vec<BorsaError>, err: BorsaError) {
+            match err {
+                BorsaError::AllProvidersFailed(list) => {
+                    for inner in list {
+                        append_actionable(errors, inner);
+                    }
+                }
+                BorsaError::Unsupported { .. } | BorsaError::NotFound { .. } => {}
+                other => errors.push(other),
             }
-        };
+        }
+        let mut push_err = |e: BorsaError| append_actionable(&mut errors, e);
 
         let profile = match profile_res {
             Ok(v) => Some(v),

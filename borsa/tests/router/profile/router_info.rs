@@ -356,3 +356,21 @@ async fn router_info_ignores_unused_capabilities() {
         Some(Decimal::from(42u8))
     );
 }
+
+#[tokio::test]
+async fn router_info_suppresses_optional_warnings() {
+    let borsa = Borsa::builder()
+        .with_connector(Arc::new(InfoConnector))
+        .build()
+        .unwrap();
+    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+
+    let report = borsa.info(&inst).await.unwrap();
+    assert!(
+        report.warnings.is_empty(),
+        "expected no warnings, got {:?}",
+        report.warnings
+    );
+    let info = report.info.unwrap();
+    assert_eq!(info.isin, Some(Isin::new("US0378331005").unwrap()));
+}
