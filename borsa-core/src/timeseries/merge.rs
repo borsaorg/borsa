@@ -24,11 +24,10 @@ pub fn merge_history<I>(responses: I) -> Result<HistoryResponse, BorsaError>
 where
     I: IntoIterator<Item = HistoryResponse>,
 {
-    // Track whether all inputs are adjusted; empty input yields `false`.
+    // Track whether all contributing inputs are adjusted; empty input yields `false`.
     let mut adjusted_all: Option<bool> = None;
-    // Gate overall adjustedness on the primary (first) response's adjusted flag,
-    // even if it ends up not contributing any candles.
-    let mut first_adjusted: bool = false;
+    // Remember the adjusted flag of the first response that actually contributes candles.
+    let mut first_contrib_adjusted: Option<bool> = None;
     let mut meta: Option<HistoryMeta> = None;
 
     let mut candle_map: BTreeMap<DateTime<Utc>, Candle> = BTreeMap::new();
@@ -37,7 +36,6 @@ where
 
     for (idx, mut r) in responses.into_iter().enumerate() {
         if idx == 0 {
-            first_adjusted = r.adjusted;
             meta = r.meta.take().or(meta);
         } else if meta.is_none() {
             meta = r.meta.take();
@@ -75,6 +73,9 @@ where
         }
         if contributed {
             adjusted_all = Some(adjusted_all.unwrap_or(true) & r.adjusted);
+            if first_contrib_adjusted.is_none() {
+                first_contrib_adjusted = Some(r.adjusted);
+            }
         }
         actions.extend(r.actions.into_iter());
     }
@@ -87,10 +88,15 @@ where
 
     let actions = dedup_actions(actions);
 
+    let adjusted = match (first_contrib_adjusted, adjusted_all) {
+        (Some(first), Some(all)) => first && all,
+        _ => false,
+    };
+
     Ok(HistoryResponse {
         candles,
         actions,
-        adjusted: first_adjusted && adjusted_all.unwrap_or(false),
+        adjusted,
         meta,
     })
 }

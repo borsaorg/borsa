@@ -86,17 +86,29 @@ proptest! {
             }
         let merged = merge_history([a.clone(), b.clone(), c.clone()]).unwrap();
 
-        // Recompute adjusted across only contributing responses
-        let a_ts: BTreeSet<i64> = a.candles.iter().map(|x| x.ts.timestamp()).collect();
-        let b_ts: BTreeSet<i64> = b.candles.iter().map(|x| x.ts.timestamp()).collect();
-        let c_ts: BTreeSet<i64> = c.candles.iter().map(|x| x.ts.timestamp()).collect();
-        let union: BTreeSet<i64> = a_ts.union(&c_ts).copied().collect();
-        let ab: BTreeSet<i64> = a_ts.union(&b_ts).copied().collect();
-        let contributed_b = ab.len() > a_ts.len();
-        let contributed_c = union.len() > a_ts.len();
-        let expected_adjusted = a.adjusted
-            && (b.adjusted || !contributed_b)
-            && (c.adjusted || !contributed_c);
+        // Recompute adjusted following merge semantics: first contributing response gates the flag,
+        // and every contributing response must also be adjusted.
+        let mut seen: BTreeSet<i64> = BTreeSet::new();
+        let mut first_contrib_adjusted: Option<bool> = None;
+        let mut adjusted_all: Option<bool> = None;
+        for resp in [&a, &b, &c] {
+            let mut contributed = false;
+            for candle in &resp.candles {
+                if seen.insert(candle.ts.timestamp()) {
+                    contributed = true;
+                }
+            }
+            if contributed {
+                adjusted_all = Some(adjusted_all.unwrap_or(true) & resp.adjusted);
+                if first_contrib_adjusted.is_none() {
+                    first_contrib_adjusted = Some(resp.adjusted);
+                }
+            }
+        }
+        let expected_adjusted = match (first_contrib_adjusted, adjusted_all) {
+            (Some(first), Some(all)) => first && all,
+            _ => false,
+        };
         prop_assert_eq!(merged.adjusted, expected_adjusted);
     }
 

@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Router entry points and core orchestration in `borsa` emit spans when enabled
   - `borsa-yfinance` instruments all public provider endpoints (quotes, history, search, profile, fundamentals, options, analysis, holders, ESG, news, streaming)
 - New example `examples/examples/00_tracing.rs` showing how to initialize `tracing_subscriber` and view spans
-- Documentation updates in `README.md`, `borsa/README.md`, and `borsa-yfinance/README.md` describing observability usage and run commands
+
+### Documentation
+
+- Updated `README.md`, `borsa/README.md`, and `borsa-yfinance/README.md` describing observability usage and run commands
 
 ### Fixed
 
@@ -26,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out `Unsupported` and `NotFound` errors; only actionable errors are retained.
 - core: avoid overflow in tracing span `timeout_ms` field by using fallible
    conversion and capping values at `u64::MAX` when necessary.
+- core: correct `merge_history` adjusted flag semantics to gate on the first
+  contributing response and require all contributing responses to be adjusted.
 
 ### Dependencies
 
