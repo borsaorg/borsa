@@ -17,6 +17,14 @@ macro_rules! borsa_router_method {
         call: $call_name:ident( $call_first:ident $(, $call_rest:ident )* )
     ) => {
         $(#[$meta])*
+        #[cfg_attr(
+            feature = "tracing",
+            tracing::instrument(
+                target = "borsa::router",
+                skip(self $(, $arg_ident)*),
+                fields(symbol = %$inst_ident.symbol()),
+            )
+        )]
         ///
         /// # Errors
         /// Returns an error if no eligible provider succeeds or none support the capability.
@@ -68,6 +76,14 @@ macro_rules! borsa_router_search {
         call: $call_name:ident( $call_arg:ident )
     ) => {
         $(#[$meta])*
+        #[cfg_attr(
+            feature = "tracing",
+            tracing::instrument(
+                target = "borsa::router",
+                skip(self, $req_ident),
+                fields(kind = ?$req_ident.kind(), limit = $req_ident.limit()),
+            )
+        )]
         ///
         /// # Errors
         /// Returns an error if no provider produced any results and at least one provider

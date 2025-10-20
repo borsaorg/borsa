@@ -358,6 +358,14 @@ pub fn tag_err(connector: &str, e: BorsaError) -> BorsaError {
 
 impl Borsa {
     /// Wrap a provider future with a timeout and standardized timeout error mapping.
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa::core::provider_call_with_timeout",
+            skip(fut),
+            fields(connector = connector_name, capability = capability, timeout_ms = timeout.as_millis() as u64),
+        )
+    )]
     pub(crate) async fn provider_call_with_timeout<T, Fut>(
         connector_name: &'static str,
         capability: &'static str,
@@ -463,6 +471,14 @@ impl Borsa {
     /// - In latency mode, returns the first success; if all attempted providers fail,
     ///   aggregates and returns `AllProvidersFailed`; if no providers support the
     ///   capability, returns a capability error
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa::core::fetch_single",
+            skip(self, call),
+            fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
+        )
+    )]
     pub(crate) async fn fetch_single<T, F, Fut>(
         &self,
         inst: &Instrument,
@@ -492,6 +508,14 @@ impl Borsa {
         }
     }
 
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa::core::fetch_single_priority_with_fallback",
+            skip(self, call),
+            fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
+        )
+    )]
     async fn fetch_single_priority_with_fallback<T, F, Fut>(
         &self,
         inst: &Instrument,
@@ -565,6 +589,14 @@ impl Borsa {
         }
     }
 
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa::core::fetch_single_latency",
+            skip(self, call),
+            fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
+        )
+    )]
     async fn fetch_single_latency<T, F, Fut>(
         &self,
         inst: &Instrument,

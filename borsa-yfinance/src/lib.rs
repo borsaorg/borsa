@@ -200,6 +200,14 @@ impl YfConnector {
 
 #[async_trait]
 impl QuoteProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::quote",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
         let raw = self
             .quotes
@@ -216,6 +224,14 @@ impl QuoteProvider for YfConnector {
 
 #[async_trait]
 impl HistoryProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::history",
+            skip(self, instrument, req),
+            fields(symbol = %instrument.symbol(), interval = ?req.interval(), range = ?req.range(), include_prepost = req.include_prepost(), include_actions = req.include_actions(), auto_adjust = req.auto_adjust(), keepna = req.keepna()),
+        )
+    )]
     async fn history(
         &self,
         instrument: &Instrument,
@@ -260,6 +276,14 @@ impl HistoryProvider for YfConnector {
 
 #[async_trait]
 impl ProfileProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::profile",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn profile(&self, instrument: &Instrument) -> Result<borsa_core::Profile, BorsaError> {
         let symbol = instrument.symbol_str();
         let raw = self.profile.load(symbol).await?;
@@ -269,6 +293,14 @@ impl ProfileProvider for YfConnector {
 
 #[async_trait]
 impl IsinProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::isin",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn isin(&self, instrument: &Instrument) -> Result<Option<borsa_core::Isin>, BorsaError> {
         let symbol = instrument.symbol_str();
         match self.profile.isin(symbol).await {
@@ -286,6 +318,14 @@ impl IsinProvider for YfConnector {
 
 #[async_trait]
 impl SearchProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::search",
+            skip(self, req),
+            fields(kind = ?req.kind(), limit = req.limit()),
+        )
+    )]
     async fn search(&self, req: SearchRequest) -> Result<SearchResponse, BorsaError> {
         self.search.search(&req).await
     }
@@ -293,6 +333,14 @@ impl SearchProvider for YfConnector {
 
 #[async_trait]
 impl EarningsProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::earnings",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn earnings(&self, instrument: &Instrument) -> Result<borsa_core::Earnings, BorsaError> {
         let symbol = instrument.symbol_str();
         let raw = self.fundamentals.earnings(symbol).await?;
@@ -302,6 +350,14 @@ impl EarningsProvider for YfConnector {
 
 #[async_trait]
 impl IncomeStatementProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::income_statement",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol(), quarterly = quarterly),
+        )
+    )]
     async fn income_statement(
         &self,
         instrument: &Instrument,
@@ -317,6 +373,14 @@ impl IncomeStatementProvider for YfConnector {
 
 #[async_trait]
 impl BalanceSheetProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::balance_sheet",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol(), quarterly = quarterly),
+        )
+    )]
     async fn balance_sheet(
         &self,
         instrument: &Instrument,
@@ -332,6 +396,14 @@ impl BalanceSheetProvider for YfConnector {
 
 #[async_trait]
 impl CashflowProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::cashflow",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol(), quarterly = quarterly),
+        )
+    )]
     async fn cashflow(
         &self,
         instrument: &Instrument,
@@ -347,6 +419,14 @@ impl CashflowProvider for YfConnector {
 
 #[async_trait]
 impl CalendarProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::calendar",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn calendar(&self, instrument: &Instrument) -> Result<borsa_core::Calendar, BorsaError> {
         let raw = self.fundamentals.calendar(instrument.symbol_str()).await?;
         Ok(raw)
@@ -355,6 +435,14 @@ impl CalendarProvider for YfConnector {
 
 #[async_trait]
 impl OptionsExpirationsProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::options_expirations",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn options_expirations(&self, instrument: &Instrument) -> Result<Vec<i64>, BorsaError> {
         self.options.expirations(instrument.symbol_str()).await
     }
@@ -362,6 +450,14 @@ impl OptionsExpirationsProvider for YfConnector {
 
 #[async_trait]
 impl OptionChainProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::option_chain",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol(), date = ?date),
+        )
+    )]
     async fn option_chain(
         &self,
         instrument: &Instrument,
@@ -374,6 +470,14 @@ impl OptionChainProvider for YfConnector {
 
 #[async_trait]
 impl RecommendationsProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::recommendations",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn recommendations(
         &self,
         instrument: &Instrument,
@@ -388,6 +492,14 @@ impl RecommendationsProvider for YfConnector {
 
 #[async_trait]
 impl RecommendationsSummaryProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::recommendations_summary",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn recommendations_summary(
         &self,
         instrument: &Instrument,
@@ -402,6 +514,14 @@ impl RecommendationsSummaryProvider for YfConnector {
 
 #[async_trait]
 impl UpgradesDowngradesProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::upgrades_downgrades",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn upgrades_downgrades(
         &self,
         instrument: &Instrument,
@@ -416,6 +536,14 @@ impl UpgradesDowngradesProvider for YfConnector {
 
 #[async_trait]
 impl AnalystPriceTargetProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::analyst_price_target",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn analyst_price_target(
         &self,
         instrument: &Instrument,
@@ -430,6 +558,14 @@ impl AnalystPriceTargetProvider for YfConnector {
 
 #[async_trait]
 impl MajorHoldersProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::major_holders",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn major_holders(
         &self,
         instrument: &Instrument,
@@ -442,6 +578,14 @@ impl MajorHoldersProvider for YfConnector {
 
 #[async_trait]
 impl InstitutionalHoldersProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::institutional_holders",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn institutional_holders(
         &self,
         instrument: &Instrument,
@@ -456,6 +600,14 @@ impl InstitutionalHoldersProvider for YfConnector {
 
 #[async_trait]
 impl MutualFundHoldersProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::mutual_fund_holders",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn mutual_fund_holders(
         &self,
         instrument: &Instrument,
@@ -470,6 +622,14 @@ impl MutualFundHoldersProvider for YfConnector {
 
 #[async_trait]
 impl InsiderTransactionsProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::insider_transactions",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn insider_transactions(
         &self,
         instrument: &Instrument,
@@ -484,6 +644,14 @@ impl InsiderTransactionsProvider for YfConnector {
 
 #[async_trait]
 impl InsiderRosterHoldersProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::insider_roster_holders",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn insider_roster_holders(
         &self,
         instrument: &Instrument,
@@ -498,6 +666,14 @@ impl InsiderRosterHoldersProvider for YfConnector {
 
 #[async_trait]
 impl NetSharePurchaseActivityProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::net_share_purchase_activity",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn net_share_purchase_activity(
         &self,
         instrument: &Instrument,
@@ -512,6 +688,14 @@ impl NetSharePurchaseActivityProvider for YfConnector {
 
 #[async_trait]
 impl EsgProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::sustainability",
+            skip(self, instrument),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn sustainability(
         &self,
         instrument: &Instrument,
@@ -523,6 +707,14 @@ impl EsgProvider for YfConnector {
 
 #[async_trait]
 impl NewsProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::news",
+            skip(self, instrument, req),
+            fields(symbol = %instrument.symbol()),
+        )
+    )]
     async fn news(
         &self,
         instrument: &Instrument,
@@ -535,6 +727,14 @@ impl NewsProvider for YfConnector {
 
 #[async_trait]
 impl borsa_core::connector::StreamProvider for YfConnector {
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa_yfinance::stream_quotes",
+            skip(self, instruments),
+            fields(num_symbols = instruments.len()),
+        )
+    )]
     async fn stream_quotes(
         &self,
         instruments: &[Instrument],

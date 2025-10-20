@@ -302,6 +302,7 @@ dependencies = [
  "rust_decimal",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -319,6 +320,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -335,6 +337,8 @@ dependencies = [
  "predicates",
  "rust_decimal",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -358,6 +362,7 @@ dependencies = [
  "rust_decimal",
  "thiserror",
  "tokio",
+ "tracing",
  "yfinance-rs",
 ]
 

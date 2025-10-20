@@ -48,6 +48,10 @@ cmc = "0.4.4"
 proptest = "1.8.0"
 loom = { version = "0.7.2", default-features = false }
 
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
 
 borsa-yfinance = { path = "borsa-yfinance", version = "0.1.2" }
 borsa-core = { path = "borsa-core", version = "0.1.2" }
