@@ -29,16 +29,18 @@ where
     // Remember the adjusted flag of the first response that actually contributes candles.
     let mut first_contrib_adjusted: Option<bool> = None;
     let mut meta: Option<HistoryMeta> = None;
+    let mut fallback_meta: Option<HistoryMeta> = None;
 
     let mut candle_map: BTreeMap<DateTime<Utc>, Candle> = BTreeMap::new();
     let mut actions: Vec<Action> = vec![];
     let mut series_currency: Option<paft::money::Currency> = None;
 
-    for (idx, mut r) in responses.into_iter().enumerate() {
-        if idx == 0 {
-            meta = r.meta.take().or(meta);
-        } else if meta.is_none() {
-            meta = r.meta.take();
+    for mut r in responses.into_iter() {
+        let mut response_meta = r.meta.take();
+        if fallback_meta.is_none() {
+            if let Some(m) = &response_meta {
+                fallback_meta = Some(m.clone());
+            }
         }
         let mut contributed = false;
         for c in r.candles {
@@ -76,8 +78,16 @@ where
             if first_contrib_adjusted.is_none() {
                 first_contrib_adjusted = Some(r.adjusted);
             }
+            if meta.is_none() {
+                meta = response_meta.take();
+            }
         }
         actions.extend(r.actions.into_iter());
+    }
+
+    let empty_series = candle_map.is_empty();
+    if meta.is_none() && empty_series {
+        meta = fallback_meta;
     }
 
     let mut candles: Vec<Candle> = candle_map.into_values().collect();

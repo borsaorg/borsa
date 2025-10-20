@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.2] - Unreleased
+## [0.1.2] - 2025-10-20
 
 ### Added
 
@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    conversion and capping values at `u64::MAX` when necessary.
 - core: correct `merge_history` adjusted flag semantics to gate on the first
   contributing response and require all contributing responses to be adjusted.
+- core: ensure `merge_history.meta` falls back to the first available meta when
+  no candles contribute to the merged series, preserving timezone context.
 - borsa-mock: replace blocking `std::thread::sleep` with non-blocking
    `tokio::time::sleep` in TIMEOUT simulation to avoid blocking the async runtime.
 

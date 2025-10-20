@@ -157,11 +157,34 @@ proptest! {
         let perms: [[usize;3];6] = [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
         let order = perms[perm_idx];
         let ordered = [all[order[0]].clone(), all[order[1]].clone(), all[order[2]].clone()];
-        let merged = merge_history(ordered).unwrap();
+        let merged = merge_history(ordered.clone()).unwrap();
 
         // Find expected meta as first in order with Some
-        let expected = [all[order[0]].meta.clone(), all[order[1]].meta.clone(), all[order[2]].meta.clone()]
-            .into_iter().flatten().next();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut expected: Option<HistoryMeta> = None;
+        let mut any_contrib = false;
+        let mut fallback: Option<HistoryMeta> = None;
+        for resp in &ordered {
+            let mut contributed = false;
+            for candle in &resp.candles {
+                if seen.insert(candle.ts) {
+                    contributed = true;
+                }
+            }
+            if contributed {
+                any_contrib = true;
+                if expected.is_none() {
+                    expected = resp.meta.clone();
+                }
+            } else if fallback.is_none() {
+                if let Some(m) = &resp.meta {
+                    fallback = Some(m.clone());
+                }
+            }
+        }
+        if !any_contrib {
+            expected = fallback;
+        }
         prop_assert_eq!(merged.meta, expected);
     }
 
