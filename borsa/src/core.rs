@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+#[cfg(feature = "tracing")]
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use borsa_core::connector::ConnectorKey;
@@ -363,7 +365,11 @@ impl Borsa {
         tracing::instrument(
             name = "borsa::core::provider_call_with_timeout",
             skip(fut),
-            fields(connector = connector_name, capability = capability, timeout_ms = timeout.as_millis() as u64),
+            fields(
+                connector = connector_name,
+                capability = capability,
+                timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
+            ),
         )
     )]
     pub(crate) async fn provider_call_with_timeout<T, Fut>(
