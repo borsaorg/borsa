@@ -34,7 +34,10 @@ impl MockConnector {
         BorsaError::not_found(what.to_string())
     }
 
-    fn maybe_fail_or_timeout(symbol: &str, capability: &'static str) -> Result<(), BorsaError> {
+    async fn maybe_fail_or_timeout(
+        symbol: &str,
+        capability: &'static str,
+    ) -> Result<(), BorsaError> {
         match symbol {
             "FAIL" => Err(BorsaError::connector(
                 "borsa-mock",
@@ -43,7 +46,7 @@ impl MockConnector {
             "TIMEOUT" => {
                 // Simulate brief latency; orchestrator may time out depending on config
                 // Keep short to avoid slowing tests excessively
-                let () = std::thread::sleep(std::time::Duration::from_millis(200));
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 Ok(())
             }
             _ => Ok(()),
@@ -122,7 +125,7 @@ impl BorsaConnector for MockConnector {
 impl QuoteProvider for MockConnector {
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
         let s = instrument.symbol_str();
-        Self::maybe_fail_or_timeout(s, "quote")?;
+        Self::maybe_fail_or_timeout(s, "quote").await?;
         fixtures::quotes::by_symbol(s).ok_or_else(|| Self::not_found(&format!("quote for {s}")))
     }
 }
@@ -135,7 +138,7 @@ impl HistoryProvider for MockConnector {
         _req: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
         let s = instrument.symbol_str();
-        Self::maybe_fail_or_timeout(s, "history")?;
+        Self::maybe_fail_or_timeout(s, "history").await?;
         fixtures::history::by_symbol(s).ok_or_else(|| Self::not_found(&format!("history for {s}")))
     }
 
