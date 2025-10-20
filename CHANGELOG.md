@@ -29,8 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out `Unsupported` and `NotFound` errors; only actionable errors are retained.
 - router/history: validate per-provider candle currencies; error on inconsistent
    series; ignore providers with no currency data when determining majority currency.
-- core: avoid overflow in tracing span `timeout_ms` field by using fallible
-   conversion and capping values at `u64::MAX` when necessary.
 - core: correct `merge_history` adjusted flag semantics to gate on the first
   contributing response and require all contributing responses to be adjusted.
 - core: ensure `merge_history.meta` falls back to the first available meta when
