@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New example `examples/examples/00_tracing.rs` showing how to initialize `tracing_subscriber` and view spans
 - Documentation updates in `README.md`, `borsa/README.md`, and `borsa-yfinance/README.md` describing observability usage and run commands
 
+### Fixed
+
+- router: stream startup now fails if any connector fails to initialize, aborting
+  spawned tasks and returning a consolidated error instead of partially starting.
+
 ### Dependencies
 
 - Bump `paft` to `v0.5.2`.

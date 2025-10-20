@@ -89,11 +89,11 @@ impl Borsa {
 
         // Ensure at least one kind connected successfully before returning a handle.
         let mut init_errors: Vec<BorsaError> = Vec::new();
-        let mut any_success = false;
+        let mut success_kinds: usize = 0;
         for rx in init_receivers {
             match rx.await {
                 Ok(Ok(())) => {
-                    any_success = true;
+                    success_kinds += 1;
                 }
                 Ok(Err(e)) => init_errors.push(e),
                 Err(_) => init_errors.push(BorsaError::Other(
@@ -102,12 +102,13 @@ impl Borsa {
             }
         }
 
-        if !any_success {
-            for join in &joins {
+        if success_kinds == 0 || !init_errors.is_empty() {
+            let err = collapse_stream_errors(init_errors);
+            for join in joins {
                 join.abort();
             }
             let _ = stop_broadcast_tx.send(true);
-            return Err(collapse_stream_errors(init_errors));
+            return Err(err);
         }
 
         // Supervisor to await stop and then abort all children

@@ -1,7 +1,8 @@
 use borsa::Borsa;
-use borsa_core::{AssetKind, BorsaError};
+use borsa_core::{AssetKind, BorsaError, QuoteUpdate};
+use chrono::TimeZone;
 
-use crate::helpers::{AAPL, MockConnector};
+use crate::helpers::{AAPL, BTC_USD, MockConnector, usd};
 
 #[tokio::test]
 async fn stream_quotes_errors_when_all_providers_fail_to_start() {
@@ -37,5 +38,47 @@ async fn stream_quotes_errors_when_all_providers_fail_to_start() {
             }
         }
         other => panic!("expected AllProvidersFailed, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn stream_quotes_errors_when_one_kind_fails_to_start() {
+    let equity_updates = vec![QuoteUpdate {
+        symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+        price: Some(usd("120.0")),
+        previous_close: None,
+        ts: chrono::Utc.timestamp_opt(10, 0).unwrap(),
+    }];
+    let equities = MockConnector::builder()
+        .name("equity_ok")
+        .supports_kind(AssetKind::Equity)
+        .with_stream_updates(equity_updates)
+        .build();
+    let crypto = MockConnector::builder()
+        .name("crypto_fail")
+        .supports_kind(AssetKind::Crypto)
+        .will_fail_stream_start("crypto stream failed")
+        .build();
+
+    let borsa = Borsa::builder()
+        .with_connector(equities)
+        .with_connector(crypto)
+        .build()
+        .unwrap();
+
+    let equity = crate::helpers::instrument(AAPL, AssetKind::Equity);
+    let crypto = crate::helpers::instrument(BTC_USD, AssetKind::Crypto);
+
+    let err = borsa.stream_quotes(&[equity, crypto]).await.unwrap_err();
+
+    match err {
+        BorsaError::Connector { connector, msg } => {
+            assert_eq!(connector, "crypto_fail");
+            assert!(
+                msg.contains("crypto stream failed"),
+                "unexpected connector message: {msg}"
+            );
+        }
+        other => panic!("expected connector error, got {other:?}"),
     }
 }
