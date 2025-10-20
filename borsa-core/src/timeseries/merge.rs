@@ -35,12 +35,12 @@ where
     let mut actions: Vec<Action> = vec![];
     let mut series_currency: Option<paft::money::Currency> = None;
 
-    for mut r in responses.into_iter() {
+    for mut r in responses {
         let mut response_meta = r.meta.take();
-        if fallback_meta.is_none() {
-            if let Some(m) = &response_meta {
-                fallback_meta = Some(m.clone());
-            }
+        if fallback_meta.is_none()
+            && let Some(m) = &response_meta
+        {
+            fallback_meta = Some(m.clone());
         }
         let mut contributed = false;
         for c in r.candles {

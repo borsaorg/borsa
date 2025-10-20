@@ -176,11 +176,10 @@ proptest! {
                 if expected.is_none() {
                     expected = resp.meta.clone();
                 }
-            } else if fallback.is_none() {
-                if let Some(m) = &resp.meta {
+            } else if fallback.is_none()
+                && let Some(m) = &resp.meta {
                     fallback = Some(m.clone());
                 }
-            }
         }
         if !any_contrib {
             expected = fallback;

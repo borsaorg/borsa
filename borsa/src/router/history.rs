@@ -210,11 +210,15 @@ impl Borsa {
         results: &[(&'static str, HistoryResponse)],
     ) -> borsa_core::BorsaError {
         use std::collections::HashMap;
-        let mut per_provider_currency: HashMap<&'static str, Option<borsa_core::Currency>> =
-            HashMap::new();
+        enum CurrencyState {
+            NoData,
+            Consistent(borsa_core::Currency),
+            Inconsistent,
+        }
+        let mut per_provider_currency: HashMap<&'static str, CurrencyState> = HashMap::new();
         for (name, hr) in results {
             let mut cur: Option<borsa_core::Currency> = None;
-            let mut consistent = true;
+            let mut state = CurrencyState::NoData;
             for c in &hr.candles {
                 let oc = c.open.currency().clone();
                 if let Some(prev) = &cur {
@@ -223,16 +227,22 @@ impl Borsa {
                         || oc != *c.low.currency()
                         || oc != *c.close.currency()
                     {
-                        consistent = false;
+                        state = CurrencyState::Inconsistent;
                         break;
                     }
                 } else {
                     cur = Some(oc);
                 }
             }
-            per_provider_currency.insert(*name, if consistent { cur } else { None });
+            if !matches!(state, CurrencyState::Inconsistent) {
+                state = cur.map_or(CurrencyState::NoData, CurrencyState::Consistent);
+            }
+            per_provider_currency.insert(*name, state);
         }
-        if let Some((bad_name, _)) = per_provider_currency.iter().find(|(_, v)| v.is_none()) {
+        if let Some((bad_name, _)) = per_provider_currency
+            .iter()
+            .find(|(_, v)| matches!(v, CurrencyState::Inconsistent))
+        {
             return borsa_core::BorsaError::Connector {
                 connector: (*bad_name).to_string(),
                 msg: "Provider returned inconsistent currency data".to_string(),
@@ -240,15 +250,16 @@ impl Borsa {
         }
         let mut counts: HashMap<borsa_core::Currency, usize> = HashMap::new();
         for v in per_provider_currency.values() {
-            if let Some(cur) = v.clone() {
-                *counts.entry(cur).or_insert(0) += 1;
+            if let CurrencyState::Consistent(cur) = v {
+                *counts.entry(cur.clone()).or_insert(0) += 1;
             }
         }
         let majority = counts.into_iter().max_by_key(|(_, c)| *c).map(|(k, _)| k);
         if let Some(maj) = majority
-            && let Some((bad_name, _)) = per_provider_currency
-                .into_iter()
-                .find(|(_, v)| v.as_ref() != Some(&maj))
+            && let Some(bad_name) = per_provider_currency.iter().find_map(|(n, v)| match v {
+                CurrencyState::Consistent(cur) if cur != &maj => Some(*n),
+                _ => None,
+            })
         {
             return borsa_core::BorsaError::Connector {
                 connector: bad_name.to_string(),
