@@ -21,16 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `DownloadResponse.entries: Vec<DownloadEntry>` where each entry includes the
     `instrument` and its `history`.
   - Tests updated to assert over `entries` instead of map lookups.
+- Unified error moved to `borsa-types::BorsaError` and now derives `Serialize`/`Deserialize`.
+  - Capability fields on `BorsaError::{Unsupported,ProviderTimeout,RequestTimeout,AllProvidersTimedOut}`
+     are now `String` instead of `&'static str`.
+  - Report envelopes (`InfoReport`, `SearchReport`, `DownloadReport`) change `warnings`
+     from `Vec<String>` to `Vec<BorsaError>` and propagate structured errors instead of strings.
+- `borsa-core::error` module removed; import `BorsaError` via `borsa_core::types::BorsaError`.
 
 ### Changed
 
 - Moved configuration (`BorsaConfig`, `BackoffConfig`), fetch/merge strategies,
   connector key, and attribution/span types into `borsa-types` and re-exported
   them from `borsa`/`borsa-core`.
+- Routers now preserve connector-tagged errors in report `warnings`.
 
 ### Removed
 
 - Deleted `borsa/src/attrib.rs`; attribution types now live in `borsa-types`.
+- Deleted `borsa-core/src/error.rs`; error type lives in `borsa-types`.
 
 ### Dependencies
 
