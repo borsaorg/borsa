@@ -1,6 +1,6 @@
 use crate::helpers::m_hist;
 use borsa::Borsa;
-use borsa_core::{AssetKind, Instrument, Range, Symbol};
+use borsa_core::{AssetKind, Instrument, Range};
 
 // A mock that can respond differently based on symbol
 struct MultiSymbolHist;
@@ -65,17 +65,19 @@ async fn download_builder_fetches_for_multiple_instruments() {
         .unwrap();
 
     let response = result.response.expect("download response");
-    assert_eq!(response.history.len(), 3);
+    assert_eq!(response.entries.len(), 3);
 
-    let sym_a = Symbol::new("A").unwrap();
-    let sym_b = Symbol::new("B").unwrap();
-    let sym_c = Symbol::new("C").unwrap();
+    let entry_for = |sym: &str| {
+        response
+            .entries
+            .iter()
+            .find(|entry| entry.instrument.symbol_str() == sym)
+            .expect("entry for symbol")
+    };
 
     assert_eq!(
-        response
+        entry_for("A")
             .history
-            .get(&sym_a)
-            .unwrap()
             .candles
             .iter()
             .map(|c| c.ts.timestamp())
@@ -83,10 +85,8 @@ async fn download_builder_fetches_for_multiple_instruments() {
         vec![1, 2]
     );
     assert_eq!(
-        response
+        entry_for("B")
             .history
-            .get(&sym_b)
-            .unwrap()
             .candles
             .iter()
             .map(|c| c.ts.timestamp())
@@ -94,10 +94,8 @@ async fn download_builder_fetches_for_multiple_instruments() {
         vec![10, 20]
     );
     assert_eq!(
-        response
+        entry_for("C")
             .history
-            .get(&sym_c)
-            .unwrap()
             .candles
             .iter()
             .map(|c| c.ts.timestamp())
@@ -174,7 +172,7 @@ async fn download_builder_allows_different_symbols() {
     assert!(result.is_ok());
     let report = result.unwrap();
     let response = report.response.expect("download response");
-    assert!(response.history.len() >= 2);
+    assert!(response.entries.len() >= 2);
 }
 
 #[tokio::test]

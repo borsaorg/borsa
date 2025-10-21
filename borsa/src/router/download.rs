@@ -1,7 +1,8 @@
 use crate::Borsa;
-use borsa_core::DownloadReport;
-use borsa_core::{BorsaError, HistoryRequest, Instrument};
-use std::collections::HashMap;
+use borsa_core::{
+    BorsaError, DownloadEntry, DownloadReport, DownloadResponse, HistoryRequest, Instrument,
+};
+use std::collections::HashSet;
 
 /// Builder to orchestrate bulk history downloads for multiple symbols.
 pub struct DownloadBuilder<'a> {
@@ -39,7 +40,7 @@ impl<'a> DownloadBuilder<'a> {
     /// Returns an error if duplicate symbols are detected in the provided instruments.
     pub fn instruments(mut self, insts: &[Instrument]) -> Result<Self, BorsaError> {
         // Check for duplicate symbols
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = HashSet::new();
         for inst in insts {
             let symbol = inst.symbol().to_string();
             if !seen.insert(symbol.clone()) {
@@ -124,7 +125,7 @@ impl<'a> DownloadBuilder<'a> {
         }
 
         // Defensive check for duplicates (should not happen if using the builder correctly)
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = HashSet::new();
         for inst in &self.instruments {
             let symbol = inst.symbol().to_string();
             if !seen.insert(symbol.clone()) {
@@ -150,56 +151,51 @@ impl<'a> DownloadBuilder<'a> {
         let tasks = self.instruments.iter().map(|inst| {
             let borsa = self.borsa;
             let req = req.clone();
-            let symbol = inst.symbol().clone();
+            let inst = inst.clone();
             async move {
-                match borsa.history_with_attribution(inst, req).await {
-                    Ok((hr, _attr)) => (symbol.clone(), Ok(hr)),
-                    Err(e) => (symbol, Err(e)),
+                match borsa.history_with_attribution(&inst, req).await {
+                    Ok((hr, _attr)) => (inst, Ok(hr)),
+                    Err(e) => (inst, Err(e)),
                 }
             }
         });
 
         // Apply optional request-level deadline across the fan-out
-        let joined: Vec<(
-            borsa_core::Symbol,
-            Result<borsa_core::HistoryResponse, BorsaError>,
-        )> = if let Some(deadline) = self.borsa.cfg.request_timeout {
-            match tokio::time::timeout(deadline, futures::future::join_all(tasks)).await {
-                Ok(v) => v,
-                Err(_) => return Err(BorsaError::request_timeout("download:history")),
-            }
-        } else {
-            futures::future::join_all(tasks).await
-        };
+        let joined: Vec<(Instrument, Result<borsa_core::HistoryResponse, BorsaError>)> =
+            if let Some(deadline) = self.borsa.cfg.request_timeout {
+                match tokio::time::timeout(deadline, futures::future::join_all(tasks)).await {
+                    Ok(v) => v,
+                    Err(_) => return Err(BorsaError::request_timeout("download:history")),
+                }
+            } else {
+                futures::future::join_all(tasks).await
+            };
 
-        let mut history: HashMap<borsa_core::Symbol, borsa_core::HistoryResponse> = HashMap::new();
+        let mut entries: Vec<DownloadEntry> = Vec::new();
         let mut had_success = false;
-        let mut warnings: HashMap<String, BorsaError> = HashMap::new();
-        for (symbol, result) in joined {
+        let mut warnings: Vec<String> = Vec::new();
+        for (instrument, result) in joined {
             match result {
                 Ok(resp) => {
                     had_success = true;
-                    history.insert(symbol.clone(), resp);
+                    entries.push(DownloadEntry {
+                        instrument,
+                        history: resp,
+                    });
                 }
                 Err(e) => {
-                    warnings.insert(symbol.to_string(), e);
+                    warnings.push(format!("{}: {e}", instrument.symbol()));
                 }
             }
         }
 
         let response = if had_success {
-            Some(borsa_core::DownloadResponse { history })
+            Some(DownloadResponse { entries })
         } else {
             None
         };
 
-        Ok(DownloadReport {
-            response,
-            warnings: warnings
-                .into_iter()
-                .map(|(symbol, e)| format!("{symbol}: {e}"))
-                .collect(),
-        })
+        Ok(DownloadReport { response, warnings })
     }
 }
 
