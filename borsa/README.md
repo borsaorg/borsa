@@ -27,8 +27,8 @@ Add `borsa` and a connector to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-borsa = "0.1.2"
-borsa-yfinance = "0.1.2"
+borsa = "0.2.0"
+borsa-yfinance = "0.2.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -68,7 +68,7 @@ Enable the `tracing` feature to emit structured spans from router entry points a
 
 ```toml
 [dependencies]
-borsa = { version = "0.1", features = ["tracing"] }
+borsa = { version = "0.2", features = ["tracing"] }
 ```
 
 Initialize a subscriber in your application:
@@ -252,7 +252,7 @@ Enable it in your `Cargo.toml`:
 
 ```toml
 [dependencies]
-borsa = { version = "0.1", features = ["dataframe"] }
+borsa = { version = "0.2", features = ["dataframe"] }
 ```
 
 Example:
@@ -284,9 +284,9 @@ let summary = borsa.download()
     .run()
     .await?;
 
-if let Some(report) = summary.response {
-    for (symbol, history) in report.history {
-        println!("{}: {} candles", symbol.as_str(), history.candles.len());
+if let Some(resp) = summary.response {
+    for entry in resp.entries {
+        println!("{}: {} candles", entry.instrument.symbol().as_str(), entry.history.candles.len());
     }
 }
 ```

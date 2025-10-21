@@ -33,7 +33,7 @@ impl<'a> DownloadBuilder<'a> {
 
     /// Replace the instruments list.
     ///
-    /// Trade-offs: Replaces any previously added instruments; use [`add_instrument`]
+    /// Trade-offs: Replaces any previously added instruments; use `add_instrument`
     /// if you need to append.
     ///
     /// # Errors
@@ -108,7 +108,7 @@ impl<'a> DownloadBuilder<'a> {
     ///
     /// Behavior and trade-offs:
     /// - Validates the request and then concurrently fetches per-symbol history using
-    ///   the same merge/resample rules as [`Borsa::history_with_attribution`].
+    ///   the same merge/resample rules as `Borsa::history_with_attribution`.
     /// - Populates the returned [`DownloadReport`] with a [`borsa_core::DownloadResponse`]
     ///   containing per-symbol candles, actions, and metadata keyed by symbol when at
     ///   least one instrument succeeds.

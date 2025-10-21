@@ -129,7 +129,7 @@ impl Borsa {
     /// Start streaming quotes using the configured backoff settings.
     ///
     /// Notes:
-    /// - Convenience wrapper around [`stream_quotes_with_backoff`] using the builder
+    /// - Convenience wrapper around `stream_quotes_with_backoff` using the builder
     ///   configuration (or defaults) for backoff.
     /// # Errors
     /// Returns an error if streaming initialization fails for all providers.

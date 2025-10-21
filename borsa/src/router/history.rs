@@ -123,6 +123,11 @@ impl Borsa {
                     )
                     .await
                 }
+                _ => {
+                    // Safe default: treat unknown variants as Deep to preserve completeness.
+                    Self::parallel_history(eligible, inst, &req_copy, self.cfg.provider_timeout)
+                        .await
+                }
             }
         };
         if let Some(deadline) = self.cfg.request_timeout {

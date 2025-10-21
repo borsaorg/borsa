@@ -17,8 +17,8 @@ Use it directly, or follow its patterns to build your own connector.
 
 ```toml
 [dependencies]
-borsa-yfinance = "0.1.2"
-borsa-core = "0.1.2"
+borsa-yfinance = "0.2.0"
+borsa-core = "0.2.0"
 ```
 
 ## Quick start
@@ -48,7 +48,7 @@ Enable the `tracing` feature to emit spans for all public provider endpoints (qu
 
 ```toml
 [dependencies]
-borsa-yfinance = { version = "0.1", features = ["tracing"] }
+borsa-yfinance = { version = "0.2", features = ["tracing"] }
 ```
 
 Run with the example subscriber setup:

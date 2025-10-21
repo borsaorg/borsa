@@ -29,7 +29,7 @@ impl BorsaBuilder {
     /// Create a new builder with sensible defaults.
     ///
     /// Behavior and trade-offs:
-    /// - Starts with no connectors; you must register at least one via [`with_connector`].
+    /// - Starts with no connectors; you must register at least one via `with_connector`.
     /// - Defaults are conservative: no resampling, no adjusted-history preference,
     ///   priority-with-fallback fetches, deep merge for history, 5s provider timeout.
     /// - Use the builder modifiers below to steer provider selection, merging,
@@ -61,7 +61,7 @@ impl BorsaBuilder {
     /// Behavior and trade-offs:
     /// - Influences ordering among eligible providers for the given kind; it does not
     ///   filter out non-listed connectors (they remain after the listed ones).
-    /// - Per-symbol preferences (see [`prefer_symbol`]) take precedence over
+    /// - Per-symbol preferences (see `prefer_symbol`) take precedence over
     ///   kind-level preferences when both are specified.
     /// - Type-safe and ergonomic: eliminates the possibility of typos and makes refactoring safer.
     #[must_use]
@@ -204,7 +204,7 @@ impl BorsaBuilder {
     /// Build the `Borsa` orchestrator.
     ///
     /// # Errors
-    /// Returns `InvalidArg` if no connectors have been registered via [`with_connector`].
+    /// Returns `InvalidArg` if no connectors have been registered via `with_connector`.
     pub fn build(mut self) -> Result<Borsa, BorsaError> {
         // Validate connector keys against registered connectors; drop unknowns and dedup.
         let known: std::collections::HashSet<&'static str> =
@@ -411,6 +411,9 @@ impl Borsa {
                 self.fetch_single_latency(inst, capability_label, not_found_label, call)
                     .await
             }
+            _ => Err(BorsaError::InvalidArg(
+                "unknown fetch strategy (upgrade borsa to support this variant)".into(),
+            )),
         }
     }
 

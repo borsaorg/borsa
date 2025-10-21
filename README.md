@@ -6,13 +6,14 @@
 [![Downloads](https://img.shields.io/crates/d/borsa)](https://crates.io/crates/borsa)
 [![License](https://img.shields.io/crates/l/borsa)](https://crates.io/crates/borsa)
 
-High-level, pluggable market data API for Rust. This monorepo contains the core types and traits, the router/orchestrator, and the officially supported provider connector.
+High-level, pluggable market data API for Rust. This monorepo contains the shared domain types, the core traits, the router/orchestrator, and the officially supported provider connector.
 
 ## Workspace layout
 
 ### Core Infrastructure
 
-- **`borsa-core`**: Shared types, errors, and the `BorsaConnector` trait - the foundation for all connectors
+- **`borsa-types`**: Shared domain types (error, reports, configuration, attribution)
+- **`borsa-core`**: Connector traits, time-series utilities, and re-exports from `paft` and `borsa-types`
 - **`borsa`**: High-level router that merges/prioritizes multiple connectors with fallback support
 - **`borsa-mock`**: Mock connector with deterministic fixture data for testing and examples
 
@@ -60,9 +61,10 @@ Add the crates you need to your project:
 
 ```toml
 [dependencies]
-borsa = "0.1.2"
-borsa-yfinance = "0.1.2"
-
+borsa = "0.2.0"
+borsa-yfinance = "0.2.0"
+# Optional: only needed directly for advanced usage
+# borsa-types = "0.2.0"
 ```
 
 ## Quickstart
@@ -99,7 +101,7 @@ To enable it:
 
 ```toml
 [dependencies]
-borsa = { version = "0.1", features = ["dataframe"] }
+borsa = { version = "0.2", features = ["dataframe"] }
 ```
 
 Usage:

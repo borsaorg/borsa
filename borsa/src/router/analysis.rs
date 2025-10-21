@@ -19,7 +19,7 @@ impl Borsa {
         /// Fetch the summarized recommendation snapshot for an instrument.
         ///
         /// Trade-offs: a compact summary suitable for dashboards; for full detail,
-        /// use [`recommendations`].
+        /// use `recommendations`.
         method: recommendations_summary(inst: &borsa_core::Instrument) -> borsa_core::RecommendationSummary,
         provider: RecommendationsSummaryProvider,
         accessor: as_recommendations_summary_provider,
