@@ -110,19 +110,20 @@ impl Borsa {
     ) -> Result<Vec<HistoryTaskResult>, BorsaError> {
         let make_future = || async {
             match self.cfg.merge_history_strategy {
-                MergeStrategy::Deep => Ok(
-                    Self::parallel_history(eligible, inst, &req_copy, self.cfg.provider_timeout)
-                        .await,
-                ),
-                MergeStrategy::Fallback => Ok(
-                    Self::sequential_history(
-                        eligible.to_vec(),
-                        inst,
-                        req_copy,
-                        self.cfg.provider_timeout,
-                    )
-                    .await,
-                ),
+                MergeStrategy::Deep => Ok(Self::parallel_history(
+                    eligible,
+                    inst,
+                    &req_copy,
+                    self.cfg.provider_timeout,
+                )
+                .await),
+                MergeStrategy::Fallback => Ok(Self::sequential_history(
+                    eligible.to_vec(),
+                    inst,
+                    req_copy,
+                    self.cfg.provider_timeout,
+                )
+                .await),
                 _ => Err(BorsaError::InvalidArg(
                     "unknown merge strategy (upgrade borsa to support this variant)".into(),
                 )),
@@ -130,7 +131,8 @@ impl Borsa {
         };
         if let Some(deadline) = self.cfg.request_timeout {
             tokio::time::timeout(deadline, make_future())
-                .await.unwrap_or_else(|_| Err(BorsaError::request_timeout("history")))
+                .await
+                .unwrap_or_else(|_| Err(BorsaError::request_timeout("history")))
         } else {
             make_future().await
         }
