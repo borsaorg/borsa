@@ -1,3 +1,5 @@
+//! Attribution types for merged history spans.
+
 /// A continuous span of timestamps [start..=end] that a connector contributed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
@@ -10,7 +12,7 @@ pub struct Span {
 /// Attribution of merged history: which connector supplied which timestamp spans.
 ///
 /// Behavior:
-/// - Built during `history_with_attribution` by tracking de-duplicated candle timestamps
+/// - Built during history aggregation by tracking de-duplicated candle timestamps
 ///   and emitting spans whenever a provider contributes a contiguous range.
 /// - Useful for debugging merge decisions and provider coverage over time.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +32,7 @@ impl Attribution {
             spans: vec![],
         }
     }
+
     /// Record a provider span contribution.
     pub fn push(&mut self, item: (&'static str, Span)) {
         self.spans.push(item);

@@ -19,6 +19,7 @@ tracing = ["dep:tracing", "borsa-core/tracing"]
 
 [dependencies]
 borsa-core = { workspace = true }
+borsa-types = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 thiserror = { workspace = true }

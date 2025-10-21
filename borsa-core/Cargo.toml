@@ -28,6 +28,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 rust_decimal = { workspace = true }
 tracing = { workspace = true, optional = true }
+borsa-types = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

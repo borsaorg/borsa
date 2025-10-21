@@ -88,12 +88,11 @@
 //! See the `examples/` package for runnable end-to-end demonstrations.
 #![warn(missing_docs)]
 
-mod attrib;
 pub(crate) mod core;
 mod router;
 
-pub use attrib::{Attribution, Span};
-pub use core::{
-    BackoffConfig, Borsa, BorsaBuilder, BorsaConfig, FetchStrategy, MergeStrategy, Resampling,
+pub use borsa_core::{
+    Attribution, BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling, Span,
 };
+pub use core::{Borsa, BorsaBuilder};
 pub use router::download::DownloadBuilder;

@@ -1,0 +1,22 @@
+[package]
+name = "borsa-types"
+version.workspace = true
+edition = "2024"
+license.workspace = true
+authors.workspace = true
+description = "Shared Borsa-specific data transfer objects built on top of paft."
+repository.workspace = true
+homepage = "https://github.com/borsaorg/borsa"
+documentation = "https://docs.rs/borsa-types"
+readme = "README.md"
+keywords = ["finance", "types", "borsa", "api", "data"]
+categories = ["api-bindings", "finance", "data-structures"]
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+paft = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }

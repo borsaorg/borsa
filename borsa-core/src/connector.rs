@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 
 use crate::BorsaError;
+pub use borsa_types::ConnectorKey;
 use paft::domain::{AssetKind, Instrument, Isin};
 use paft::fundamentals::analysis::{
     Earnings, PriceTarget, RecommendationRow, RecommendationSummary, UpgradeDowngradeRow,
@@ -20,32 +21,6 @@ use paft::market::requests::news::NewsRequest;
 use paft::market::requests::search::SearchRequest;
 use paft::market::responses::history::HistoryResponse;
 use paft::market::responses::search::SearchResponse;
-
-/// Typed key for identifying connectors in priority configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ConnectorKey(pub &'static str);
-
-impl ConnectorKey {
-    /// Construct a new typed connector key from a static name.
-    ///
-    /// This is useful when configuring per-kind or per-symbol priorities.
-    #[must_use]
-    pub const fn new(name: &'static str) -> Self {
-        Self(name)
-    }
-
-    /// Returns the inner static string.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        self.0
-    }
-}
-
-impl From<ConnectorKey> for &'static str {
-    fn from(k: ConnectorKey) -> Self {
-        k.0
-    }
-}
 
 /// Focused role trait for connectors that provide OHLCV history.
 #[async_trait]

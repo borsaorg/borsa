@@ -32,12 +32,16 @@ pub use paft::market::quote::{Quote, QuoteUpdate};
 pub use paft::market::requests::history::{HistoryRequest, HistoryRequestBuilder, Interval, Range};
 pub use paft::market::requests::news::{NewsRequest, NewsTab};
 pub use paft::market::requests::search::SearchRequest;
-pub use paft::market::responses::download::DownloadResponse;
+pub use paft::market::responses::download::{DownloadEntry, DownloadResponse};
 pub use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
 pub use paft::market::responses::search::{SearchResponse, SearchResult};
 
-// Aggregates and reports from paft-aggregates (enabled via `paft/aggregates` feature)
-pub use paft::aggregates::{DownloadReport, FastInfo, Info, InfoReport, SearchReport};
+// Aggregates, config, and reports (FastInfo/Info from `paft`, report envelopes from `borsa-types`)
+pub use borsa_types::{
+    Attribution, BackoffConfig, BorsaConfig, DownloadReport, FetchStrategy, InfoReport,
+    MergeStrategy, Resampling, SearchReport, Span,
+};
+pub use paft::aggregates::{FastInfo, Info};
 
 // Optional: re-export DataFrame conversion trait when the feature is enabled
 #[cfg(feature = "dataframe")]
