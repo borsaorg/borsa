@@ -8,6 +8,7 @@ use paft::domain::AssetKind;
 
 /// Strategy for selecting among eligible data providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum FetchStrategy {
     /// Use priority order and fall back to the next provider on failure.
     #[default]
@@ -18,6 +19,7 @@ pub enum FetchStrategy {
 
 /// Strategy for merging history data from multiple providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum MergeStrategy {
     /// Fetch from all eligible providers concurrently and merge their data.
     /// This produces the most complete dataset by backfilling gaps from lower-priority providers.
@@ -30,6 +32,7 @@ pub enum MergeStrategy {
 
 /// Forced resampling mode for merged history series.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Resampling {
     /// Do not force resampling; preserve the effective interval unless auto-subdaily triggers.
     #[default]
