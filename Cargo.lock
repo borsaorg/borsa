@@ -4638,6 +4638,8 @@ checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 [[package]]
 name = "yfinance-rs"
 version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfd71084dd7eda78726dfccbc598ee3396189179d3751bae949e39df1ef46992"
 dependencies = [
  "base64",
  "chrono",
