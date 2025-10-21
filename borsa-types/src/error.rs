@@ -6,6 +6,7 @@ use thiserror::Error;
 /// This wraps capability mismatches, argument validation errors, provider-tagged
 /// failures, not-found conditions, and an aggregate for multi-provider attempts.
 #[derive(Debug, Error, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BorsaError {
     /// The requested capability is not implemented by the target connector.
     #[error("unsupported capability: {capability}")]
