@@ -129,10 +129,8 @@ impl Borsa {
             }
         };
         if let Some(deadline) = self.cfg.request_timeout {
-            match tokio::time::timeout(deadline, make_future()).await {
-                Ok(r) => r,
-                Err(_) => Err(BorsaError::request_timeout("history")),
-            }
+            tokio::time::timeout(deadline, make_future())
+                .await.unwrap_or_else(|_| Err(BorsaError::request_timeout("history")))
         } else {
             make_future().await
         }
