@@ -541,49 +541,52 @@ impl Borsa {
     }
 
     fn build_attribution(results: &[(&'static str, HistoryResponse)], symbol: &str) -> Attribution {
-        let mut attr = Attribution::new(symbol.to_string());
-        let mut seen = std::collections::BTreeSet::<chrono::DateTime<chrono::Utc>>::new();
-        for (name, hr) in results {
-            // Determine contiguity based on the provider's effective cadence.
-            let step_opt = borsa_core::timeseries::infer::estimate_step_seconds(hr.candles.clone());
-            let mut by_ts = hr.candles.iter().collect::<Vec<_>>();
-            by_ts.sort_by_key(|c| c.ts);
+        use std::collections::BTreeMap;
 
-            let mut run_start: Option<i64> = None;
-            let mut last_kept_ts: Option<i64> = None;
-            for c in by_ts {
-                if !seen.insert(c.ts) {
-                    // First-wins: skip timestamps already attributed to earlier providers.
-                    continue;
-                }
-                let ts_sec = c.ts.timestamp();
-                match (run_start, last_kept_ts, step_opt) {
-                    (None, _, _) => {
-                        run_start = Some(ts_sec);
-                        last_kept_ts = Some(ts_sec);
-                    }
-                    (Some(_), Some(last), Some(step)) if ts_sec - last == step => {
-                        // Continues the current run
-                        last_kept_ts = Some(ts_sec);
-                    }
-                    (Some(start), Some(last), Some(_)) => {
-                        // Gap detected: close previous run and start a new one
-                        attr.push((*name, Span { start, end: last }));
-                        run_start = Some(ts_sec);
-                        last_kept_ts = Some(ts_sec);
-                    }
-                    (Some(start), Some(last), None) => {
-                        // Unknown cadence: treat every kept point as its own run boundary
-                        attr.push((*name, Span { start, end: last }));
-                        run_start = Some(ts_sec);
-                        last_kept_ts = Some(ts_sec);
-                    }
-                    _ => {}
+        // 1) Determine provider attribution per timestamp using first-wins semantics
+        //    based on the ordered list of provider results.
+        let mut ts_to_provider: BTreeMap<chrono::DateTime<chrono::Utc>, &'static str> =
+            BTreeMap::new();
+        for (name, hr) in results {
+            for c in &hr.candles {
+                ts_to_provider.entry(c.ts).or_insert(*name);
+            }
+        }
+
+        // 2) Build the merged timeline (sorted timestamps) and group into contiguous
+        //    runs where the provider doesn't change between successive candles.
+        let mut attr = Attribution::new(symbol.to_string());
+        let mut iter = ts_to_provider.into_iter();
+        if let Some((first_ts, mut current_provider)) = iter.next() {
+            let mut run_start = first_ts.timestamp();
+            let mut last_ts = first_ts.timestamp();
+            for (ts, provider) in iter {
+                let ts_sec = ts.timestamp();
+                if provider == current_provider {
+                    // Continue current provider run regardless of time gap.
+                    last_ts = ts_sec;
+                } else {
+                    // Provider changed: close the previous run and start a new one.
+                    attr.push((
+                        current_provider,
+                        Span {
+                            start: run_start,
+                            end: last_ts,
+                        },
+                    ));
+                    current_provider = provider;
+                    run_start = ts_sec;
+                    last_ts = ts_sec;
                 }
             }
-            if let (Some(start), Some(end)) = (run_start, last_kept_ts) {
-                attr.push((*name, Span { start, end }));
-            }
+            // Close final run
+            attr.push((
+                current_provider,
+                Span {
+                    start: run_start,
+                    end: last_ts,
+                },
+            ));
         }
         attr
     }

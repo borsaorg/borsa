@@ -5,7 +5,7 @@ use borsa_core::{
     connector::{BorsaConnector, HistoryProvider},
 };
 use borsa_examples::common::get_connector;
-use chrono::TimeZone;
+
 use std::sync::Arc;
 
 /// A simple mock connector to demonstrate merging.
@@ -16,6 +16,10 @@ struct MockConnector;
 impl BorsaConnector for MockConnector {
     fn name(&self) -> &'static str {
         "mock-connector"
+    }
+
+    fn supports_kind(&self, _kind: AssetKind) -> bool {
+        true
     }
 
     fn as_history_provider(&self) -> Option<&dyn HistoryProvider> {
@@ -32,60 +36,77 @@ impl HistoryProvider for MockConnector {
     ) -> Result<HistoryResponse, BorsaError> {
         println!("-> MockConnector providing its historical data...");
         Ok(HistoryResponse {
-            candles: vec![
-                Candle {
-                    ts: chrono::Utc.timestamp_opt(1_723_507_200, 0).unwrap(),
-                    open: Money::from_canonical_str(
-                        "10.0",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    high: Money::from_canonical_str(
-                        "12.0",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    low: Money::from_canonical_str(
-                        "9.0",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    close: Money::from_canonical_str(
-                        "11.5",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    close_unadj: None,
-                    volume: Some(1000),
-                }, // 2024-08-13
-                Candle {
-                    ts: chrono::Utc.timestamp_opt(1_723_593_600, 0).unwrap(),
-                    open: Money::from_canonical_str(
-                        "11.5",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    high: Money::from_canonical_str(
-                        "14.0",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    low: Money::from_canonical_str(
-                        "11.0",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    close: Money::from_canonical_str(
-                        "13.5",
-                        Currency::Iso(borsa_core::IsoCurrency::USD),
-                    )
-                    .unwrap(),
-                    close_unadj: None,
-                    volume: Some(1200),
-                }, // 2024-08-14
-            ],
+            candles: {
+                // Generate two daily candles within the last 5 days (aligned to 00:00 UTC)
+                let today = chrono::Utc::now().date_naive();
+                let ts_a = today
+                    .checked_sub_days(chrono::Days::new(4))
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+                    .and_utc();
+                let ts_b = today
+                    .checked_sub_days(chrono::Days::new(2))
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap()
+                    .and_utc();
+
+                vec![
+                    Candle {
+                        ts: ts_a,
+                        open: Money::from_canonical_str(
+                            "10.0",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        high: Money::from_canonical_str(
+                            "12.0",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        low: Money::from_canonical_str(
+                            "9.0",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        close: Money::from_canonical_str(
+                            "11.5",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        close_unadj: None,
+                        volume: Some(1000),
+                    },
+                    Candle {
+                        ts: ts_b,
+                        open: Money::from_canonical_str(
+                            "11.5",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        high: Money::from_canonical_str(
+                            "14.0",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        low: Money::from_canonical_str(
+                            "11.0",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        close: Money::from_canonical_str(
+                            "13.5",
+                            Currency::Iso(borsa_core::IsoCurrency::USD),
+                        )
+                        .unwrap(),
+                        close_unadj: None,
+                        volume: Some(1200),
+                    },
+                ]
+            },
             actions: vec![],
-            adjusted: false,
+            adjusted: true,
             meta: None,
         })
     }

@@ -4,7 +4,7 @@ use borsa_core::{
     AssetKind, BorsaError, Candle, Currency, HistoryRequest, HistoryResponse, Instrument, Money,
     connector::{BorsaConnector, HistoryProvider},
 };
-use chrono::TimeZone;
+
 use std::sync::Arc;
 
 /// A mock connector that simulates a fast, limited data provider.
@@ -35,9 +35,25 @@ impl borsa_core::connector::HistoryProvider for FastLimitedConnector {
         _r: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
         // Simulate a fast provider that only has data for the first 3 days
+        let base = chrono::Utc::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let d0 = base
+            .checked_sub_days(chrono::Days::new(5))
+            .unwrap()
+            .and_utc();
+        let d1 = base
+            .checked_sub_days(chrono::Days::new(4))
+            .unwrap()
+            .and_utc();
+        let d2 = base
+            .checked_sub_days(chrono::Days::new(3))
+            .unwrap()
+            .and_utc();
         let candles = vec![
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_640_995_200, 0).unwrap(),
+                ts: d0,
                 open: Money::from_canonical_str(
                     "100.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -59,7 +75,7 @@ impl borsa_core::connector::HistoryProvider for FastLimitedConnector {
                 volume: Some(1_000_000),
             },
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_641_081_600, 0).unwrap(),
+                ts: d1,
                 open: Money::from_canonical_str(
                     "102.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -84,7 +100,7 @@ impl borsa_core::connector::HistoryProvider for FastLimitedConnector {
                 volume: Some(1_200_000),
             },
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_641_168_000, 0).unwrap(),
+                ts: d2,
                 open: Money::from_canonical_str(
                     "106.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -151,9 +167,33 @@ impl HistoryProvider for SlowComprehensiveConnector {
         _r: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
         // Simulate a slower provider that has comprehensive data
+        let base = chrono::Utc::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let d0 = base
+            .checked_sub_days(chrono::Days::new(5))
+            .unwrap()
+            .and_utc();
+        let d1 = base
+            .checked_sub_days(chrono::Days::new(4))
+            .unwrap()
+            .and_utc();
+        let d2 = base
+            .checked_sub_days(chrono::Days::new(3))
+            .unwrap()
+            .and_utc();
+        let d3 = base
+            .checked_sub_days(chrono::Days::new(2))
+            .unwrap()
+            .and_utc();
+        let d4 = base
+            .checked_sub_days(chrono::Days::new(1))
+            .unwrap()
+            .and_utc();
         let candles = vec![
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_640_995_200, 0).unwrap(),
+                ts: d0,
                 open: Money::from_canonical_str(
                     "100.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -175,7 +215,7 @@ impl HistoryProvider for SlowComprehensiveConnector {
                 volume: Some(1_000_000),
             },
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_641_081_600, 0).unwrap(),
+                ts: d1,
                 open: Money::from_canonical_str(
                     "102.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -200,7 +240,7 @@ impl HistoryProvider for SlowComprehensiveConnector {
                 volume: Some(1_200_000),
             },
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_641_168_000, 0).unwrap(),
+                ts: d2,
                 open: Money::from_canonical_str(
                     "106.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -225,7 +265,7 @@ impl HistoryProvider for SlowComprehensiveConnector {
                 volume: Some(1_100_000),
             },
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_641_254_400, 0).unwrap(),
+                ts: d3,
                 open: Money::from_canonical_str(
                     "108.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -250,7 +290,7 @@ impl HistoryProvider for SlowComprehensiveConnector {
                 volume: Some(1_300_000),
             },
             Candle {
-                ts: chrono::Utc.timestamp_opt(1_641_340_800, 0).unwrap(),
+                ts: d4,
                 open: Money::from_canonical_str(
                     "110.0",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -327,12 +367,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("  - Providers used: {}", attribution_deep.spans.len());
     for (provider, span) in &attribution_deep.spans {
+        let daily = 86_400_i64;
+        let count = 1 + (span.end - span.start) / daily;
         println!(
             "    * {}: {} candles (ts {} to {})",
-            provider,
-            (span.end - span.start) + 1,
-            span.start,
-            span.end
+            provider, count, span.start, span.end
         );
     }
     println!();
@@ -361,12 +400,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("  - Providers used: {}", attribution_fallback.spans.len());
     for (provider, span) in &attribution_fallback.spans {
+        let daily = 86_400_i64;
+        let count = 1 + (span.end - span.start) / daily;
         println!(
             "    * {}: {} candles (ts {} to {})",
-            provider,
-            (span.end - span.start) + 1,
-            span.start,
-            span.end
+            provider, count, span.start, span.end
         );
     }
     println!();

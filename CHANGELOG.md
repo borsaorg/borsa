@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connector key, and attribution/span types into `borsa-types` and re-exported
   them from `borsa`/`borsa-core`.
 - Routers now preserve connector-tagged errors in report `warnings`.
+- router/history: attribution is now derived from the merged timeline using
+  first-wins per timestamp; spans group contiguous provider segments regardless
+  of cadence gaps for clearer provenance.
+- examples: switch fixed epoch timestamps to recent 00:00 UTC dates for
+  readability and stability across runs; compute daily candle counts explicitly.
+- examples: implement `supports_kind` on mock connectors to match the current
+  connector trait.
+
+### Fixed
+
+- router/history: avoid fragmented or misleading attribution when providers have
+  gaps or differing cadences by building runs on the global merged sequence.
 
 ### Removed
 
