@@ -296,6 +296,7 @@ dependencies = [
  "async-trait",
  "borsa-core",
  "borsa-mock",
+ "borsa-types",
  "chrono",
  "futures",
  "rand 0.9.2",
@@ -311,6 +312,7 @@ version = "0.1.2"
 dependencies = [
  "async-trait",
  "bitflags",
+ "borsa-types",
  "chrono",
  "chrono-tz",
  "loom",
@@ -350,6 +352,17 @@ dependencies = [
  "chrono",
  "rust_decimal",
  "tokio",
+]
+
+[[package]]
+name = "borsa-types"
+version = "0.1.2"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "paft",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1817,9 +1830,9 @@ dependencies = [
 
 [[package]]
 name = "paft"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2c3c64cc22db4c630e7772b7575501e2974f52feaf7d2db202d155b01e2d548"
+checksum = "893af9b9418ce8aada7934de5a62c9f95472f234c1cc97a1b4e7774f097012c2"
 dependencies = [
  "iso_currency",
  "paft-aggregates",
@@ -1834,9 +1847,9 @@ dependencies = [
 
 [[package]]
 name = "paft-aggregates"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "988c78c1dd3b8ea576bdfda063dc0c1cc0086c7cc326ebaed470749812ddc3fb"
+checksum = "a35dccf852a6d31468706fc468165a10e2ac1a3ced4c1fae4a7a539bc6e1908c"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1850,9 +1863,9 @@ dependencies = [
 
 [[package]]
 name = "paft-core"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ae83cf9d0533e071e5fdb862085ec4ccc9b97c13ba060ec8ecc5696e6aa83d0"
+checksum = "f30fc2e740003fceb3cb43b34843d73709b4713a4a3fab23594433fc61c3ae4a"
 dependencies = [
  "chrono",
  "serde",
@@ -1861,9 +1874,9 @@ dependencies = [
 
 [[package]]
 name = "paft-domain"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "939571222f4a0ed72997f0172661bb2c551fc02eea2baaa173defab173ff5944"
+checksum = "85626f1f3d0c18da923918b5a40641ca1db28db8dd88a5352df053e3f3f9e7d8"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1878,9 +1891,9 @@ dependencies = [
 
 [[package]]
 name = "paft-fundamentals"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28bc07a1b9679391ca4540380f34a71ae89616ae3ec771bd8ad1994976edfba6"
+checksum = "c0bd250eee4bc4c89d8ea7f2bdc8f3969e8e6be0d4e4776c957ef604e98f6bf2"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1896,9 +1909,9 @@ dependencies = [
 
 [[package]]
 name = "paft-market"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cb228454544cfed5a9010dfc22e6be8c0c7594a4228d456e898a7669ff1927d"
+checksum = "c9943ca76d2c7732fca00607ec13ce3b651193c2cc7e7bc7bd6a57fa55343889"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1916,9 +1929,9 @@ dependencies = [
 
 [[package]]
 name = "paft-money"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d53f6f20812b1cb54af18220bb238f617c45e284a3e09597b559bf6120dd060b"
+checksum = "eb43cda7b1738b058393d3323e6a5c19c09c6d6a9f5c5057c093bd03d1fbe704"
 dependencies = [
  "df-derive",
  "iso_currency",
@@ -1931,9 +1944,9 @@ dependencies = [
 
 [[package]]
 name = "paft-utils"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d342f43a8219384038944a627a65e421cd5088e7070f4e2d8e16029a3451ebaa"
+checksum = "0ab33e1459810a6c67d807889ad35ef9957250ff25ddf35cee831d5cf959720d"
 dependencies = [
  "polars",
  "thiserror",
@@ -4623,9 +4636,7 @@ checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yfinance-rs"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9171c3120299f9f1eb5feb3b17c6261fd9d64fcf831431226ce5c5f7c2c7b0e9"
+version = "0.6.0"
 dependencies = [
  "base64",
  "chrono",

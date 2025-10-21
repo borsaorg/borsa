@@ -6,6 +6,7 @@ members = [
     "borsa-yfinance",  
     "examples",
     "borsa-mock",
+    "borsa-types",
 ]
 
 [workspace.package]
@@ -24,8 +25,8 @@ alpha_vantage = "0.11.0"
 async-trait = "0.1"
 bitflags = "2"
 
-paft = { version = "0.5.2", features = ["market", "fundamentals", "aggregates"] }
-yfinance-rs = { version = "0.5.2" }
+paft = { version = "0.6.0", features = ["market", "fundamentals", "aggregates"] }
+yfinance-rs = { version = "0.6.0", path = "../yfinance-rs" }
 chrono = "0.4.42"
 chrono-tz = "0.10"
 rust_decimal = "1.36"
@@ -57,6 +58,7 @@ borsa-yfinance = { path = "borsa-yfinance", version = "0.1.2" }
 borsa-core = { path = "borsa-core", version = "0.1.2" }
 borsa = { path = "borsa", version = "0.1.2" }
 borsa-mock = { path = "borsa-mock", version = "0.1.2" }
+borsa-types = { path = "borsa-types", version = "0.1.2" }
 
 trybuild = "1.0.112"
 tokio-test = "0.4.4"
