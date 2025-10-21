@@ -15,6 +15,7 @@ categories = ["api-bindings", "finance", "data-structures"]
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 paft = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

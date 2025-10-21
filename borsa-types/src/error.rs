@@ -1,16 +1,17 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Unified error type for the borsa workspace.
 ///
 /// This wraps capability mismatches, argument validation errors, provider-tagged
 /// failures, not-found conditions, and an aggregate for multi-provider attempts.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum BorsaError {
     /// The requested capability is not implemented by the target connector.
     #[error("unsupported capability: {capability}")]
     Unsupported {
         /// A capability string describing what was requested (e.g. "history/crypto").
-        capability: &'static str,
+        capability: String,
     },
 
     /// Issues with the returned or expected data (missing fields, etc.).
@@ -51,29 +52,31 @@ pub enum BorsaError {
         /// Connector name that timed out.
         connector: String,
         /// Capability label (e.g. "history", "search", "quote").
-        capability: &'static str,
+        capability: String,
     },
 
     /// The overall request exceeded the configured deadline.
     #[error("request timed out: {capability}")]
     RequestTimeout {
         /// Capability label for which the request timed out.
-        capability: &'static str,
+        capability: String,
     },
 
     /// All attempted providers timed out for the requested capability.
     #[error("all providers timed out: {capability}")]
     AllProvidersTimedOut {
         /// Capability label that timed out across all providers.
-        capability: &'static str,
+        capability: String,
     },
 }
 
 impl BorsaError {
     /// Helper: build an `Unsupported` error for a capability string.
     #[must_use]
-    pub const fn unsupported(cap: &'static str) -> Self {
-        Self::Unsupported { capability: cap }
+    pub fn unsupported(cap: impl Into<String>) -> Self {
+        Self::Unsupported {
+            capability: cap.into(),
+        }
     }
     /// Helper: build a `Connector` error with the connector name and message.
     pub fn connector(connector: impl Into<String>, msg: impl Into<String>) -> Self {
@@ -89,17 +92,19 @@ impl BorsaError {
     }
 
     /// Helper: build a `ProviderTimeout` error.
-    pub fn provider_timeout(connector: impl Into<String>, capability: &'static str) -> Self {
+    pub fn provider_timeout(connector: impl Into<String>, capability: impl Into<String>) -> Self {
         Self::ProviderTimeout {
             connector: connector.into(),
-            capability,
+            capability: capability.into(),
         }
     }
 
     /// Helper: build a `RequestTimeout` error.
     #[must_use]
-    pub const fn request_timeout(capability: &'static str) -> Self {
-        Self::RequestTimeout { capability }
+    pub fn request_timeout(capability: impl Into<String>) -> Self {
+        Self::RequestTimeout {
+            capability: capability.into(),
+        }
     }
 }
 

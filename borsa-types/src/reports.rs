@@ -6,6 +6,8 @@ use paft::market::responses::download::DownloadResponse;
 use paft::market::responses::search::SearchResponse;
 use serde::{Deserialize, Serialize};
 
+use crate::error::BorsaError;
+
 /// Summary of instrument information retrieval.
 ///
 /// Carries the requested `symbol`, the resolved [`Info`] snapshot if
@@ -17,7 +19,7 @@ pub struct InfoReport {
     /// Snapshot payload, if successfully resolved.
     pub info: Option<Info>,
     /// Non-fatal issues encountered while building the report.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<BorsaError>,
 }
 
 /// Summary of a symbol search operation.
@@ -29,7 +31,7 @@ pub struct SearchReport {
     /// Upstream search response payload.
     pub response: Option<SearchResponse>,
     /// Non-fatal issues encountered while building the report.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<BorsaError>,
 }
 
 /// Summary of historical data download.
@@ -41,12 +43,13 @@ pub struct DownloadReport {
     /// Aggregated download payload.
     pub response: Option<DownloadResponse>,
     /// Non-fatal issues encountered while building the report.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<BorsaError>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BorsaError;
     use chrono::{TimeZone, Utc};
     use paft::aggregates::Info;
     use paft::domain::{AssetKind, Exchange, Instrument};
@@ -85,7 +88,7 @@ mod tests {
                 ex_dividend_date: None,
                 as_of: None,
             }),
-            warnings: vec!["data stale".into()],
+            warnings: vec![BorsaError::Data("data stale".into())],
         };
 
         let json = serde_json::to_string(&report).unwrap();
@@ -104,7 +107,7 @@ mod tests {
                     kind: AssetKind::Equity,
                 }],
             }),
-            warnings: vec!["partial response".into()],
+            warnings: vec![BorsaError::Data("partial response".into())],
         };
 
         let json = serde_json::to_string(&report).unwrap();
@@ -144,7 +147,7 @@ mod tests {
 
         let report = DownloadReport {
             response: Some(DownloadResponse { entries }),
-            warnings: vec!["fallback provider used".into()],
+            warnings: vec![BorsaError::Data("fallback provider used".into())],
         };
 
         let json = serde_json::to_string(&report).unwrap();

@@ -4,9 +4,11 @@
 mod attribution;
 mod config;
 mod connector;
+mod error;
 mod reports;
 
 pub use attribution::{Attribution, Span};
 pub use config::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
 pub use connector::ConnectorKey;
+pub use error::BorsaError;
 pub use reports::{DownloadReport, InfoReport, SearchReport};

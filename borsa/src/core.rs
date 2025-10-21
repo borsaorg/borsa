@@ -3,10 +3,9 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use borsa_core::connector::ConnectorKey;
+use borsa_core::types::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
-use borsa_core::{
-    BackoffConfig, BorsaConfig, connector::ConnectorKey, FetchStrategy, MergeStrategy, Resampling,
-};
 
 /// Orchestrator that routes requests across registered providers.
 pub struct Borsa {
@@ -489,7 +488,7 @@ impl Borsa {
                 .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
         {
             Err(BorsaError::AllProvidersTimedOut {
-                capability: capability_label,
+                capability: capability_label.to_string(),
             })
         } else {
             Err(BorsaError::AllProvidersFailed(errors))
@@ -553,7 +552,7 @@ impl Borsa {
                     .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
             {
                 Err(BorsaError::AllProvidersTimedOut {
-                    capability: capability_label,
+                    capability: capability_label.to_string(),
                 })
             } else if !errors.is_empty()
                 && errors

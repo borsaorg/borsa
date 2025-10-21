@@ -150,7 +150,7 @@ impl Borsa {
                     .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
             {
                 return Err(BorsaError::AllProvidersTimedOut {
-                    capability: "history",
+                    capability: "history".to_string(),
                 });
             }
             return Err(BorsaError::AllProvidersFailed(errors));

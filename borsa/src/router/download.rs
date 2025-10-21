@@ -173,7 +173,7 @@ impl<'a> DownloadBuilder<'a> {
 
         let mut entries: Vec<DownloadEntry> = Vec::new();
         let mut had_success = false;
-        let mut warnings: Vec<String> = Vec::new();
+        let mut warnings: Vec<BorsaError> = Vec::new();
         for (instrument, result) in joined {
             match result {
                 Ok(resp) => {
@@ -184,7 +184,8 @@ impl<'a> DownloadBuilder<'a> {
                     });
                 }
                 Err(e) => {
-                    warnings.push(format!("{}: {e}", instrument.symbol()));
+                    // Preserve the original error, which is already connector-tagged upstream.
+                    warnings.push(e);
                 }
             }
         }

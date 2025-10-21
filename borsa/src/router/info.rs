@@ -109,7 +109,7 @@ impl Borsa {
                 ex_dividend_date: None,
                 as_of: None,
             }),
-            warnings: errors.into_iter().map(|e| e.to_string()).collect(),
+            warnings: errors,
         })
     }
 

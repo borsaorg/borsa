@@ -1,5 +1,13 @@
-//! Re-export of foundational types from `paft` and aggregate/reporting types.
-// Consolidated re-exports from paft so downstream crates can depend on `borsa-core` only
+//! Re-export of foundational types from `paft` and `borsa-types`.
+// Consolidated re-exports so downstream crates can depend on `borsa-core` only
+
+// Aggregates, config, and reports (FastInfo/Info from `paft`, report envelopes from `borsa-types`)
+pub use borsa_types::BorsaError;
+
+pub use borsa_types::{
+    Attribution, BackoffConfig, BorsaConfig, DownloadReport, FetchStrategy, InfoReport,
+    MergeStrategy, Resampling, SearchReport, Span,
+};
 
 pub use paft::domain::{AssetKind, Exchange, Figi, Instrument, Isin, MarketState, Period, Symbol};
 
@@ -36,11 +44,6 @@ pub use paft::market::responses::download::{DownloadEntry, DownloadResponse};
 pub use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
 pub use paft::market::responses::search::{SearchResponse, SearchResult};
 
-// Aggregates, config, and reports (FastInfo/Info from `paft`, report envelopes from `borsa-types`)
-pub use borsa_types::{
-    Attribution, BackoffConfig, BorsaConfig, DownloadReport, FetchStrategy, InfoReport,
-    MergeStrategy, Resampling, SearchReport, Span,
-};
 pub use paft::aggregates::{FastInfo, Info};
 
 // Optional: re-export DataFrame conversion trait when the feature is enabled
