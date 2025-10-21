@@ -564,7 +564,6 @@ impl Borsa {
                 let ts_sec = ts.timestamp();
                 if provider == current_provider {
                     // Continue current provider run regardless of time gap.
-                    last_ts = ts_sec;
                 } else {
                     // Provider changed: close the previous run and start a new one.
                     attr.push((
@@ -576,8 +575,9 @@ impl Borsa {
                     ));
                     current_provider = provider;
                     run_start = ts_sec;
-                    last_ts = ts_sec;
+
                 }
+                last_ts = ts_sec;
             }
             // Close final run
             attr.push((
