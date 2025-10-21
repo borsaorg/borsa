@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-10-21
+
+### Added
+
+- New crate `borsa-types` for shared domain types and reports used across the
+  workspace (configuration, connector keys, attribution, and report envelopes).
+
+### Breaking Change
+
+- Router download API redesigned for clarity and richer context:
+  - `DownloadResponse.history: HashMap<Symbol, HistoryResponse>` replaced by
+    `DownloadResponse.entries: Vec<DownloadEntry>` where each entry includes the
+    `instrument` and its `history`.
+  - Tests updated to assert over `entries` instead of map lookups.
+
+### Changed
+
+- Moved configuration (`BorsaConfig`, `BackoffConfig`), fetch/merge strategies,
+  connector key, and attribution/span types into `borsa-types` and re-exported
+  them from `borsa`/`borsa-core`.
+
+### Removed
+
+- Deleted `borsa/src/attrib.rs`; attribution types now live in `borsa-types`.
+
+### Dependencies
+
+- Bump `paft` to `v0.6.0`.
+- Bump `yfinance-rs` to `v0.6.0`.
+
 ## [0.1.2] - 2025-10-20
 
 ### Added
