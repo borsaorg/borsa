@@ -15,7 +15,8 @@ Please review and follow our [Code of Conduct](https://github.com/borsaorg/borsa
 
 ## Repository layout
 
-- `borsa-core`: core types, errors, and the `BorsaConnector` trait
+- `borsa-types`: shared error, reports, config, attribution types
+- `borsa-core`: core traits and utilities; re-exports types from `borsa-types`
 - `borsa`: the high-level router/orchestrator
 - `borsa-yfinance`: Yahoo Finance connector
 - `examples/`: runnable example programs

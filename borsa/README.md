@@ -174,7 +174,13 @@ if let Some(info) = report.info {
         println!("{} last: {}", info.symbol.as_str(), price.format());
     }
     println!("Market state: {}", info.market_state.map_or("N/A".into(), |s| s.to_string()));
-    println!("Warnings: {}", report.warnings.join(", "));
+    let warnings = report
+        .warnings
+        .iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    println!("Warnings: {}", warnings);
 }
 ```
 
