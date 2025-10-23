@@ -11,7 +11,7 @@ impl Borsa {
         /// - If `limit` is set, truncates after merge to enforce the cap.
         method: search(req: borsa_core::SearchRequest) -> borsa_core::SearchReport,
         accessor: as_search_provider,
-        capability: "search",
+        capability: borsa_core::Capability::Search,
         call: search(req)
     }
 }

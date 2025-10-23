@@ -63,7 +63,7 @@ macro_rules! borsa_router_method {
                                         Err(e) => Err(e),
                                     }
                                 } else {
-                                    Err(borsa_core::BorsaError::connector(c2.name(), concat!("missing ", $capability, " capability during call")))
+                                    Err(borsa_core::BorsaError::connector(c2.name(), format!("missing {} capability during call", $capability)))
                                 }
                             }
                         })
@@ -143,7 +143,7 @@ macro_rules! borsa_router_search {
                 self.cfg.request_timeout,
                 futures::future::join_all(tasks),
             )
-            .await else { return Err(borsa_core::BorsaError::request_timeout($capability)) };
+            .await else { return Err(borsa_core::BorsaError::request_timeout($capability.to_string())) };
 
             let mut merged: Vec<borsa_core::SearchResult> = Vec::new();
             let mut errors: Vec<borsa_core::BorsaError> = Vec::new();
@@ -175,7 +175,7 @@ macro_rules! borsa_router_search {
             let mut merged = self.dedup_search_results_by_exchange($req_ident.kind(), merged);
 
             if !attempted_any {
-                return Err(borsa_core::BorsaError::unsupported($capability));
+                return Err(borsa_core::BorsaError::unsupported($capability.to_string()));
             }
 
             if let Some(limit) = $req_ident.limit() && merged.len() > limit { merged.truncate(limit); }

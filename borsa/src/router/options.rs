@@ -10,7 +10,7 @@ impl Borsa {
         method: options_expirations(inst: &borsa_core::Instrument) -> Vec<i64>,
         provider: OptionsExpirationsProvider,
         accessor: as_options_expirations_provider,
-        capability: "options-expirations",
+        capability: borsa_core::Capability::OptionsExpirations,
         not_found: "options",
         call: options_expirations(inst)
     }
@@ -23,7 +23,7 @@ impl Borsa {
         method: option_chain(inst: &borsa_core::Instrument, date: Option<i64>) -> borsa_core::OptionChain,
         provider: OptionChainProvider,
         accessor: as_option_chain_provider,
-        capability: "option-chain",
+        capability: borsa_core::Capability::OptionChain,
         not_found: "options",
         call: option_chain(inst, date)
     }

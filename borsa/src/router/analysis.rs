@@ -10,7 +10,7 @@ impl Borsa {
         method: recommendations(inst: &borsa_core::Instrument) -> Vec<borsa_core::RecommendationRow>,
         provider: RecommendationsProvider,
         accessor: as_recommendations_provider,
-        capability: "recommendations",
+        capability: borsa_core::Capability::Recommendations,
         not_found: "analysis",
         call: recommendations(inst)
     }
@@ -23,7 +23,7 @@ impl Borsa {
         method: recommendations_summary(inst: &borsa_core::Instrument) -> borsa_core::RecommendationSummary,
         provider: RecommendationsSummaryProvider,
         accessor: as_recommendations_summary_provider,
-        capability: "recommendations-summary",
+        capability: borsa_core::Capability::RecommendationsSummary,
         not_found: "analysis",
         call: recommendations_summary(inst)
     }
@@ -36,7 +36,7 @@ impl Borsa {
         method: upgrades_downgrades(inst: &borsa_core::Instrument) -> Vec<borsa_core::UpgradeDowngradeRow>,
         provider: UpgradesDowngradesProvider,
         accessor: as_upgrades_downgrades_provider,
-        capability: "upgrades-downgrades",
+        capability: borsa_core::Capability::UpgradesDowngrades,
         not_found: "analysis",
         call: upgrades_downgrades(inst)
     }
@@ -49,7 +49,7 @@ impl Borsa {
         method: analyst_price_target(inst: &borsa_core::Instrument) -> borsa_core::PriceTarget,
         provider: AnalystPriceTargetProvider,
         accessor: as_analyst_price_target_provider,
-        capability: "analyst-price-target",
+        capability: borsa_core::Capability::AnalystPriceTarget,
         not_found: "analysis",
         call: analyst_price_target(inst)
     }

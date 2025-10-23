@@ -2,7 +2,7 @@
 // Consolidated re-exports so downstream crates can depend on `borsa-core` only
 
 // Aggregates, config, and reports (FastInfo/Info from `paft`, report envelopes from `borsa-types`)
-pub use borsa_types::BorsaError;
+pub use borsa_types::{BorsaError, Capability};
 
 pub use borsa_types::ConnectorKey;
 pub use borsa_types::routing_policy::Selector;

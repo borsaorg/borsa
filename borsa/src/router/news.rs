@@ -10,7 +10,7 @@ impl Borsa {
         method: news(inst: &borsa_core::Instrument, req: borsa_core::NewsRequest) -> Vec<borsa_core::NewsArticle>,
         provider: NewsProvider,
         accessor: as_news_provider,
-        capability: "news",
+        capability: borsa_core::Capability::News,
         not_found: "news",
         call: news(inst, req)
     }

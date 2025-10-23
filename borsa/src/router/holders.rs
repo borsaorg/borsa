@@ -10,7 +10,7 @@ impl Borsa {
         method: major_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::MajorHolder>,
         provider: MajorHoldersProvider,
         accessor: as_major_holders_provider,
-        capability: "major-holders",
+        capability: borsa_core::Capability::MajorHolders,
         not_found: "holders",
         call: major_holders(inst)
     }
@@ -23,7 +23,7 @@ impl Borsa {
         method: institutional_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::InstitutionalHolder>,
         provider: InstitutionalHoldersProvider,
         accessor: as_institutional_holders_provider,
-        capability: "institutional-holders",
+        capability: borsa_core::Capability::InstitutionalHolders,
         not_found: "holders",
         call: institutional_holders(inst)
     }
@@ -33,7 +33,7 @@ impl Borsa {
         method: mutual_fund_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::InstitutionalHolder>,
         provider: MutualFundHoldersProvider,
         accessor: as_mutual_fund_holders_provider,
-        capability: "mutual-fund-holders",
+        capability: borsa_core::Capability::MutualFundHolders,
         not_found: "holders",
         call: mutual_fund_holders(inst)
     }
@@ -46,7 +46,7 @@ impl Borsa {
         method: insider_transactions(inst: &borsa_core::Instrument) -> Vec<borsa_core::InsiderTransaction>,
         provider: InsiderTransactionsProvider,
         accessor: as_insider_transactions_provider,
-        capability: "insider-transactions",
+        capability: borsa_core::Capability::InsiderTransactions,
         not_found: "holders",
         call: insider_transactions(inst)
     }
@@ -56,7 +56,7 @@ impl Borsa {
         method: insider_roster_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::InsiderRosterHolder>,
         provider: InsiderRosterHoldersProvider,
         accessor: as_insider_roster_holders_provider,
-        capability: "insider-roster",
+        capability: borsa_core::Capability::InsiderRoster,
         not_found: "holders",
         call: insider_roster_holders(inst)
     }
@@ -69,7 +69,7 @@ impl Borsa {
         method: net_share_purchase_activity(inst: &borsa_core::Instrument) -> Option<borsa_core::NetSharePurchaseActivity>,
         provider: NetSharePurchaseActivityProvider,
         accessor: as_net_share_purchase_activity_provider,
-        capability: "net-share-purchase-activity",
+        capability: borsa_core::Capability::NetSharePurchaseActivity,
         not_found: "holders",
         call: net_share_purchase_activity(inst)
     }

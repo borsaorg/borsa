@@ -10,7 +10,7 @@ impl Borsa {
         method: sustainability(inst: &borsa_core::Instrument) -> borsa_core::EsgScores,
         provider: EsgProvider,
         accessor: as_esg_provider,
-        capability: "esg",
+        capability: borsa_core::Capability::Esg,
         not_found: "esg",
         call: sustainability(inst)
     }

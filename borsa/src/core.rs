@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use borsa_core::types::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
-use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument, RoutingContext};
+use borsa_core::{AssetKind, BorsaConnector, BorsaError, Capability, Instrument, RoutingContext};
 
 /// Orchestrator that routes requests across registered providers.
 pub struct Borsa {
@@ -305,22 +305,26 @@ impl Borsa {
             skip(fut),
             fields(
                 connector = connector_name,
-                capability = capability,
+                capability = %capability,
                 timeout_ms = u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX),
             ),
         )
     )]
     pub(crate) async fn provider_call_with_timeout<T, Fut>(
         connector_name: &'static str,
-        capability: &'static str,
+        capability: Capability,
         timeout: std::time::Duration,
         fut: Fut,
     ) -> Result<T, BorsaError>
     where
         Fut: core::future::Future<Output = Result<T, BorsaError>>,
     {
-        (tokio::time::timeout(timeout, fut).await)
-            .unwrap_or_else(|_| Err(BorsaError::provider_timeout(connector_name, capability)))
+        (tokio::time::timeout(timeout, fut).await).unwrap_or_else(|_| {
+            Err(BorsaError::provider_timeout(
+                connector_name,
+                capability.to_string(),
+            ))
+        })
     }
     /// Start building a new `Borsa` instance.
     ///
@@ -422,7 +426,7 @@ impl Borsa {
     pub(crate) async fn fetch_single<T, F, Fut>(
         &self,
         inst: &Instrument,
-        capability_label: &'static str,
+        capability_label: Capability,
         not_found_label: &'static str,
         call: F,
     ) -> Result<T, BorsaError>
@@ -462,7 +466,7 @@ impl Borsa {
     async fn fetch_single_priority_with_fallback<T, F, Fut>(
         &self,
         inst: &Instrument,
-        capability_label: &'static str,
+        capability_label: Capability,
         not_found_label: &'static str,
         call: F,
     ) -> Result<T, BorsaError>
@@ -503,7 +507,7 @@ impl Borsa {
         }
 
         if !attempted_any {
-            return Err(BorsaError::unsupported(capability_label));
+            return Err(BorsaError::unsupported(capability_label.to_string()));
         }
 
         if all_not_found
@@ -543,7 +547,7 @@ impl Borsa {
     async fn fetch_single_latency<T, F, Fut>(
         &self,
         inst: &Instrument,
-        capability_label: &'static str,
+        capability_label: Capability,
         not_found_label: &'static str,
         call: F,
     ) -> Result<T, BorsaError>
@@ -605,7 +609,7 @@ impl Borsa {
                 Err(BorsaError::AllProvidersFailed(errors))
             }
         } else {
-            Err(BorsaError::unsupported(capability_label))
+            Err(BorsaError::unsupported(capability_label.to_string()))
         }
     }
 }

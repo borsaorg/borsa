@@ -12,7 +12,7 @@ impl Borsa {
         method: profile(inst: &borsa_core::Instrument) -> borsa_core::Profile,
         provider: ProfileProvider,
         accessor: as_profile_provider,
-        capability: "profile",
+        capability: borsa_core::Capability::Profile,
         not_found: "profile",
         call: profile(inst)
     }
@@ -25,7 +25,7 @@ impl Borsa {
         method: isin(inst: &borsa_core::Instrument) -> Option<Isin>,
         provider: IsinProvider,
         accessor: as_isin_provider,
-        capability: "isin",
+        capability: borsa_core::Capability::Isin,
         not_found: "isin",
         call: isin(inst)
     }

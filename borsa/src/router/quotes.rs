@@ -18,7 +18,7 @@ impl Borsa {
         method: quote(inst: &borsa_core::Instrument) -> borsa_core::Quote,
         provider: QuoteProvider,
         accessor: as_quote_provider,
-        capability: "quote",
+        capability: borsa_core::Capability::Quote,
         not_found: "quote",
         call: quote(inst),
         post_ok: |q: &Quote, i: &borsa_core::Instrument| -> Result<(), borsa_core::BorsaError> { Borsa::enforce_quote_exchange(i, q) }

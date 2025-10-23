@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 mod attribution;
+mod capability;
 mod config;
 mod connector;
 mod error;
@@ -9,6 +10,7 @@ mod reports;
 pub mod routing_policy;
 
 pub use attribution::{Attribution, Span};
+pub use capability::Capability;
 pub use config::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
 pub use connector::ConnectorKey;
 pub use error::BorsaError;

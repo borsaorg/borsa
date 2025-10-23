@@ -244,7 +244,7 @@ fn collapse_stream_errors(errors: Vec<BorsaError>) -> BorsaError {
         .filter(borsa_core::BorsaError::is_actionable)
         .collect();
     match actionable.len() {
-        0 => BorsaError::unsupported("stream-quotes"),
+        0 => BorsaError::unsupported(borsa_core::Capability::StreamQuotes.to_string()),
         1 => actionable.remove(0),
         _ => BorsaError::AllProvidersFailed(actionable),
     }
@@ -318,7 +318,9 @@ impl Borsa {
         }
 
         if scored.is_empty() {
-            return Err(borsa_core::BorsaError::unsupported("stream-quotes"));
+            return Err(borsa_core::BorsaError::unsupported(
+                borsa_core::Capability::StreamQuotes.to_string(),
+            ));
         }
 
         scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));

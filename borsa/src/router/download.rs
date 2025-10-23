@@ -167,7 +167,11 @@ impl<'a> DownloadBuilder<'a> {
             .await
             {
                 Ok(v) => v,
-                Err(_) => return Err(BorsaError::request_timeout("download:history")),
+                Err(_) => {
+                    return Err(BorsaError::request_timeout(
+                        borsa_core::Capability::DownloadHistory.to_string(),
+                    ));
+                }
             };
 
         let mut entries: Vec<DownloadEntry> = Vec::new();

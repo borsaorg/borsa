@@ -130,7 +130,11 @@ impl Borsa {
             }
         };
         (crate::core::with_request_deadline(self.cfg.request_timeout, make_future()).await)
-            .unwrap_or_else(|_| Err(BorsaError::request_timeout("history")))
+            .unwrap_or_else(|_| {
+                Err(BorsaError::request_timeout(
+                    borsa_core::Capability::History.to_string(),
+                ))
+            })
     }
 
     fn finalize_history_results(
@@ -150,7 +154,7 @@ impl Borsa {
                     .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
             {
                 return Err(BorsaError::AllProvidersTimedOut {
-                    capability: "history".to_string(),
+                    capability: borsa_core::Capability::History.to_string(),
                 });
             }
             return Err(BorsaError::AllProvidersFailed(errors));
@@ -343,7 +347,9 @@ impl Borsa {
             }
         }
         if eligible.is_empty() {
-            return Err(BorsaError::unsupported("history"));
+            return Err(BorsaError::unsupported(
+                borsa_core::Capability::History.to_string(),
+            ));
         }
         Ok(eligible)
     }
@@ -413,8 +419,13 @@ impl Borsa {
                 .as_history_provider()
                 .expect("checked is_some above")
                 .history(&inst, eff_req);
-            let resp =
-                Self::provider_call_with_timeout(c.name(), "history", provider_timeout, fut).await;
+            let resp = Self::provider_call_with_timeout(
+                c.name(),
+                borsa_core::Capability::History,
+                provider_timeout,
+                fut,
+            )
+            .await;
             (idx, c.name(), resp, resample_target_min)
         }
     }
@@ -440,8 +451,13 @@ impl Borsa {
                 .as_history_provider()
                 .expect("checked is_some above")
                 .history(inst, eff_req);
-            let resp =
-                Self::provider_call_with_timeout(c.name(), "history", provider_timeout, fut).await;
+            let resp = Self::provider_call_with_timeout(
+                c.name(),
+                borsa_core::Capability::History,
+                provider_timeout,
+                fut,
+            )
+            .await;
             let result = (idx, c.name(), resp, resample_target_min);
             if let Ok(ref hr) = result.2
                 && !hr.candles.is_empty()

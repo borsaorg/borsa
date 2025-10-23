@@ -10,7 +10,7 @@ impl Borsa {
         method: earnings(inst: &borsa_core::Instrument) -> borsa_core::Earnings,
         provider: EarningsProvider,
         accessor: as_earnings_provider,
-        capability: "earnings",
+        capability: borsa_core::Capability::Earnings,
         not_found: "earnings",
         call: earnings(inst)
     }
@@ -23,7 +23,7 @@ impl Borsa {
         method: income_statement(inst: &borsa_core::Instrument, quarterly: bool) -> Vec<borsa_core::IncomeStatementRow>,
         provider: IncomeStatementProvider,
         accessor: as_income_statement_provider,
-        capability: "income-statement",
+        capability: borsa_core::Capability::IncomeStatement,
         not_found: "fundamentals",
         call: income_statement(inst, quarterly)
     }
@@ -36,7 +36,7 @@ impl Borsa {
         method: balance_sheet(inst: &borsa_core::Instrument, quarterly: bool) -> Vec<borsa_core::BalanceSheetRow>,
         provider: BalanceSheetProvider,
         accessor: as_balance_sheet_provider,
-        capability: "balance-sheet",
+        capability: borsa_core::Capability::BalanceSheet,
         not_found: "fundamentals",
         call: balance_sheet(inst, quarterly)
     }
@@ -49,7 +49,7 @@ impl Borsa {
         method: cashflow(inst: &borsa_core::Instrument, quarterly: bool) -> Vec<borsa_core::CashflowRow>,
         provider: CashflowProvider,
         accessor: as_cashflow_provider,
-        capability: "cashflow",
+        capability: borsa_core::Capability::Cashflow,
         not_found: "fundamentals",
         call: cashflow(inst, quarterly)
     }
@@ -62,7 +62,7 @@ impl Borsa {
         method: calendar(inst: &borsa_core::Instrument) -> borsa_core::Calendar,
         provider: CalendarProvider,
         accessor: as_calendar_provider,
-        capability: "calendar",
+        capability: borsa_core::Capability::Calendar,
         not_found: "calendar",
         call: calendar(inst)
     }
