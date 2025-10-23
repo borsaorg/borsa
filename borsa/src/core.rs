@@ -234,14 +234,12 @@ pub async fn with_request_deadline<T, Fut>(
 where
     Fut: core::future::Future<Output = T>,
 {
-    if let Some(d) = deadline {
-        match tokio::time::timeout(d, fut).await {
-            Ok(v) => Ok(v),
-            Err(_) => Err(BorsaError::request_timeout("request")),
-        }
-    } else {
-        Ok(fut.await)
-    }
+    let Some(d) = deadline else {
+        return Ok(fut.await);
+    };
+    tokio::time::timeout(d, fut)
+        .await
+        .map_err(|_| BorsaError::request_timeout("request"))
 }
 
 impl Borsa {

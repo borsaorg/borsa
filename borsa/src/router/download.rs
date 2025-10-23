@@ -63,6 +63,10 @@ impl<'a> DownloadBuilder<'a> {
     ///
     /// # Errors
     /// Returns an error if the instrument's symbol already exists in the list.
+    ///
+    /// # Panics
+    /// Panics only if an internal invariant is broken whereby the just-pushed
+    /// instrument is missing; this cannot occur in normal use.
     pub fn add_instrument(mut self, inst: Instrument) -> Result<Self, BorsaError> {
         let mut combined = self.instruments.clone();
         combined.push(inst);

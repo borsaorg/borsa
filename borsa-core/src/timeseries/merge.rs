@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashSet, btree_map::Entry};
 use std::hash::{Hash, Hasher};
 
 use crate::BorsaError;
+use crate::timeseries::util;
 use chrono::{DateTime, Utc};
 use paft::market::action::Action;
 use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
@@ -47,16 +48,11 @@ where
             match candle_map.entry(c.ts) {
                 Entry::Vacant(v) => {
                     // Enforce per-candle internal currency consistency and series-wide currency invariants
-                    let open_cur_ref = c.open.currency();
-                    if !(open_cur_ref == c.high.currency()
-                        && open_cur_ref == c.low.currency()
-                        && open_cur_ref == c.close.currency())
-                    {
-                        return Err(BorsaError::Data(
-                            "Connector provided mixed-currency history".into(),
-                        ));
-                    }
+                    util::ensure_candle_currency_uniform(&c).map_err(|_| {
+                        BorsaError::Data("Connector provided mixed-currency history".into())
+                    })?;
 
+                    let open_cur_ref = c.open.currency();
                     if let Some(cur) = &series_currency {
                         if cur != open_cur_ref {
                             return Err(BorsaError::Data(
@@ -92,9 +88,7 @@ where
 
     let mut candles: Vec<Candle> = candle_map.into_values().collect();
     // Enforce invariant: merged series do not carry per-candle raw close provenance
-    for c in &mut candles {
-        c.close_unadj = None;
-    }
+    util::strip_unadjusted(&mut candles);
 
     let actions = dedup_actions(actions);
 
@@ -127,21 +121,18 @@ where
     for s in series {
         for mut c in s {
             // Enforce per-candle internal currency consistency and series-wide currency invariants
-            let open_cur_ref = c.open.currency();
-            if !(open_cur_ref == c.high.currency()
-                && open_cur_ref == c.low.currency()
-                && open_cur_ref == c.close.currency())
-            {
-                return Err(BorsaError::Data(format!(
+            util::ensure_candle_currency_uniform(&c).map_err(|_| {
+                BorsaError::Data(format!(
                     "Mixed currencies within candle at {}: open={:?} high={:?} low={:?} close={:?}",
                     c.ts,
                     c.open.currency(),
                     c.high.currency(),
                     c.low.currency(),
                     c.close.currency()
-                )));
-            }
+                ))
+            })?;
 
+            let open_cur_ref = c.open.currency();
             if let Some(cur) = &series_currency {
                 if cur != open_cur_ref {
                     return Err(BorsaError::Data(format!(

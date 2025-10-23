@@ -129,10 +129,8 @@ impl Borsa {
                 )),
             }
         };
-        match crate::core::with_request_deadline(self.cfg.request_timeout, make_future()).await {
-            Ok(v) => v,
-            Err(_) => Err(BorsaError::request_timeout("history")),
-        }
+        (crate::core::with_request_deadline(self.cfg.request_timeout, make_future()).await)
+            .unwrap_or_else(|_| Err(BorsaError::request_timeout("history")))
     }
 
     fn finalize_history_results(
@@ -194,9 +192,7 @@ impl Borsa {
         match borsa_core::timeseries::merge::merge_history(results.iter().cloned().map(|(_, r)| r))
         {
             Ok(mut m) => {
-                for c in &mut m.candles {
-                    c.close_unadj = None;
-                }
+                borsa_core::timeseries::util::strip_unadjusted(&mut m.candles);
                 Ok(m)
             }
             Err(borsa_core::BorsaError::Data(msg))
@@ -222,19 +218,16 @@ impl Borsa {
             let mut cur: Option<borsa_core::Currency> = None;
             let mut state = CurrencyState::NoData;
             for c in &hr.candles {
-                let oc = c.open.currency().clone();
-                if let Some(prev) = &cur {
-                    if prev != &oc
-                        || oc != *c.high.currency()
-                        || oc != *c.low.currency()
-                        || oc != *c.close.currency()
-                    {
-                        state = CurrencyState::Inconsistent;
-                        break;
-                    }
-                } else {
-                    cur = Some(oc);
+                if borsa_core::timeseries::util::ensure_candle_currency_uniform(c).is_err() {
+                    state = CurrencyState::Inconsistent;
+                    break;
                 }
+                let oc = c.open.currency().clone();
+                if cur.as_ref().is_some_and(|prev| prev != &oc) {
+                    state = CurrencyState::Inconsistent;
+                    break;
+                }
+                cur.get_or_insert(oc);
             }
             if !matches!(state, CurrencyState::Inconsistent) {
                 state = cur.map_or(CurrencyState::NoData, CurrencyState::Consistent);
@@ -482,9 +475,7 @@ impl Borsa {
                                         continue;
                                     }
                                 }
-                                for c in &mut hr.candles {
-                                    c.close_unadj = None;
-                                }
+                                borsa_core::timeseries::util::strip_unadjusted(&mut hr.candles);
                             }
                             ResamplePlan::Daily => {
                                 match borsa_core::timeseries::resample::resample_to_daily_with_meta(
@@ -497,9 +488,7 @@ impl Borsa {
                                         continue;
                                     }
                                 }
-                                for c in &mut hr.candles {
-                                    c.close_unadj = None;
-                                }
+                                borsa_core::timeseries::util::strip_unadjusted(&mut hr.candles);
                             }
                             ResamplePlan::Weekly => {
                                 match borsa_core::timeseries::resample::resample_to_weekly_with_meta(
@@ -512,9 +501,7 @@ impl Borsa {
                                         continue;
                                     }
                                 }
-                                for c in &mut hr.candles {
-                                    c.close_unadj = None;
-                                }
+                                borsa_core::timeseries::util::strip_unadjusted(&mut hr.candles);
                             }
                         }
                     }
@@ -596,9 +583,7 @@ impl Borsa {
             false
         };
         if will_resample {
-            for c in &mut merged.candles {
-                c.close_unadj = None;
-            }
+            borsa_core::timeseries::util::strip_unadjusted(&mut merged.candles);
         }
 
         if matches!(self.cfg.resampling, Resampling::Weekly) {

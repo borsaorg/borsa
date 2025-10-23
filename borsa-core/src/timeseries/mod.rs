@@ -10,3 +10,5 @@ pub mod infer;
 pub mod merge;
 /// Resampling utilities for aggregating candles to daily/weekly/minutes.
 pub mod resample;
+/// Shared helpers used by merge/resample and router.
+pub mod util;

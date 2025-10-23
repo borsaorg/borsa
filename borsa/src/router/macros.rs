@@ -139,15 +139,11 @@ macro_rules! borsa_router_search {
             });
 
             // Apply optional request-level timeout if configured
-            let joined = match $crate::core::with_request_deadline(
+            let Ok(joined) = $crate::core::with_request_deadline(
                 self.cfg.request_timeout,
                 futures::future::join_all(tasks),
             )
-            .await
-            {
-                Ok(v) => v,
-                Err(_) => return Err(borsa_core::BorsaError::request_timeout($capability)),
-            };
+            .await else { return Err(borsa_core::BorsaError::request_timeout($capability)) };
 
             let mut merged: Vec<borsa_core::SearchResult> = Vec::new();
             let mut errors: Vec<borsa_core::BorsaError> = Vec::new();

@@ -21,6 +21,7 @@ const fn week_start_ts(ts: DateTime<Utc>) -> Option<DateTime<Utc>> {
 /// Generic resampler that groups sorted candles by a bucket function and
 /// aggregates OHLCV within each bucket.
 use crate::BorsaError;
+use crate::timeseries::util;
 
 fn resample_by<F>(mut candles: Vec<Candle>, bucket_of: F) -> Result<Vec<Candle>, BorsaError>
 where
@@ -51,9 +52,16 @@ where
             continue;
         };
         if bucket == cur_bucket {
-            if !(c.open.currency() == high.currency()
-                && c.open.currency() == low.currency()
-                && c.open.currency() == close.currency())
+            if util::ensure_candle_currency_uniform(&Candle {
+                ts: c.ts,
+                open: c.open.clone(),
+                high: high.clone(),
+                low: low.clone(),
+                close: close.clone(),
+                close_unadj: None,
+                volume: None,
+            })
+            .is_err()
             {
                 return Err(BorsaError::Data(format!(
                     "Mixed currencies in resample bucket at {}: open={:?} high={:?} low={:?} close={:?}",
@@ -126,9 +134,16 @@ fn finalize_bucket(
     cur_bucket: DateTime<Utc>,
     agg: BucketAgg,
 ) -> Result<(), BorsaError> {
-    if !(agg.open.currency() == agg.high.currency()
-        && agg.open.currency() == agg.low.currency()
-        && agg.open.currency() == agg.close.currency())
+    if util::ensure_candle_currency_uniform(&Candle {
+        ts: cur_bucket,
+        open: agg.open.clone(),
+        high: agg.high.clone(),
+        low: agg.low.clone(),
+        close: agg.close.clone(),
+        close_unadj: None,
+        volume: None,
+    })
+    .is_err()
     {
         return Err(BorsaError::Data(format!(
             "Mixed currencies in resample bucket (finalize) at {}: open={:?} high={:?} low={:?} close={:?}",
