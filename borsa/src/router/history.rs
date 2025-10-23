@@ -475,7 +475,6 @@ impl Borsa {
                                         continue;
                                     }
                                 }
-                                borsa_core::timeseries::util::strip_unadjusted(&mut hr.candles);
                             }
                             ResamplePlan::Daily => {
                                 match borsa_core::timeseries::resample::resample_to_daily_with_meta(
@@ -488,7 +487,6 @@ impl Borsa {
                                         continue;
                                     }
                                 }
-                                borsa_core::timeseries::util::strip_unadjusted(&mut hr.candles);
                             }
                             ResamplePlan::Weekly => {
                                 match borsa_core::timeseries::resample::resample_to_weekly_with_meta(
@@ -501,7 +499,6 @@ impl Borsa {
                                         continue;
                                     }
                                 }
-                                borsa_core::timeseries::util::strip_unadjusted(&mut hr.candles);
                             }
                         }
                     }
@@ -582,10 +579,6 @@ impl Borsa {
         } else {
             false
         };
-        if will_resample {
-            borsa_core::timeseries::util::strip_unadjusted(&mut merged.candles);
-        }
-
         if matches!(self.cfg.resampling, Resampling::Weekly) {
             let new_candles = borsa_core::timeseries::resample::resample_to_weekly_with_meta(
                 std::mem::take(&mut merged.candles),
@@ -601,6 +594,9 @@ impl Borsa {
                 merged.meta.as_ref(),
             )?;
             merged.candles = new_candles;
+        }
+        if will_resample {
+            borsa_core::timeseries::util::strip_unadjusted(&mut merged.candles);
         }
         Ok(())
     }
