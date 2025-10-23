@@ -139,13 +139,14 @@ macro_rules! borsa_router_search {
             });
 
             // Apply optional request-level timeout if configured
-            let joined = if let Some(deadline) = self.cfg.request_timeout {
-                match tokio::time::timeout(deadline, futures::future::join_all(tasks)).await {
-                    Ok(v) => v,
-                    Err(_) => return Err(borsa_core::BorsaError::request_timeout($capability)),
-                }
-            } else {
-                futures::future::join_all(tasks).await
+            let joined = match $crate::core::with_request_deadline(
+                self.cfg.request_timeout,
+                futures::future::join_all(tasks),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(_) => return Err(borsa_core::BorsaError::request_timeout($capability)),
             };
 
             let mut merged: Vec<borsa_core::SearchResult> = Vec::new();

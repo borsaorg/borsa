@@ -221,6 +221,29 @@ pub fn tag_err(connector: &str, e: BorsaError) -> BorsaError {
     }
 }
 
+/// Apply an optional request-level deadline to a future.
+///
+/// If `deadline` is `Some(d)`, the future is wrapped in `tokio::time::timeout(d, ...)`.
+/// When the timeout elapses, returns `BorsaError::RequestTimeout` with a generic
+/// capability label; call sites can remap the label if needed.
+/// If `deadline` is `None`, simply awaits the future.
+pub async fn with_request_deadline<T, Fut>(
+    deadline: Option<std::time::Duration>,
+    fut: Fut,
+) -> Result<T, BorsaError>
+where
+    Fut: core::future::Future<Output = T>,
+{
+    if let Some(d) = deadline {
+        match tokio::time::timeout(d, fut).await {
+            Ok(v) => Ok(v),
+            Err(_) => Err(BorsaError::request_timeout("request")),
+        }
+    } else {
+        Ok(fut.await)
+    }
+}
+
 impl Borsa {
     /// Enforce that a quote's exchange matches the instrument's desired exchange when provided.
     ///

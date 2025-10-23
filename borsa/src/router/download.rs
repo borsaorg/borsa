@@ -156,13 +156,14 @@ impl<'a> DownloadBuilder<'a> {
 
         // Apply optional request-level deadline across the fan-out
         let joined: Vec<(Instrument, Result<borsa_core::HistoryResponse, BorsaError>)> =
-            if let Some(deadline) = self.borsa.cfg.request_timeout {
-                match tokio::time::timeout(deadline, futures::future::join_all(tasks)).await {
-                    Ok(v) => v,
-                    Err(_) => return Err(BorsaError::request_timeout("download:history")),
-                }
-            } else {
-                futures::future::join_all(tasks).await
+            match crate::core::with_request_deadline(
+                self.borsa.cfg.request_timeout,
+                futures::future::join_all(tasks),
+            )
+            .await
+            {
+                Ok(v) => v,
+                Err(_) => return Err(BorsaError::request_timeout("download:history")),
             };
 
         let mut entries: Vec<DownloadEntry> = Vec::new();

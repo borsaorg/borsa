@@ -129,12 +129,9 @@ impl Borsa {
                 )),
             }
         };
-        if let Some(deadline) = self.cfg.request_timeout {
-            tokio::time::timeout(deadline, make_future())
-                .await
-                .unwrap_or_else(|_| Err(BorsaError::request_timeout("history")))
-        } else {
-            make_future().await
+        match crate::core::with_request_deadline(self.cfg.request_timeout, make_future()).await {
+            Ok(v) => v,
+            Err(_) => Err(BorsaError::request_timeout("history")),
         }
     }
 
