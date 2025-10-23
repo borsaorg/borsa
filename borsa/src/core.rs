@@ -367,53 +367,39 @@ impl Borsa {
         BorsaBuilder::new()
     }
 
-    pub(crate) fn ordered(&self, inst: &Instrument) -> Vec<Arc<dyn BorsaConnector>> {
+    fn ordered_for_context(&self, ctx: &RoutingContext) -> Vec<Arc<dyn BorsaConnector>> {
         let mut out: Vec<(usize, Arc<dyn BorsaConnector>)> =
             self.connectors.iter().cloned().enumerate().collect();
+        out.retain(|(_, c)| {
+            let key = c.key();
+            self.cfg
+                .routing_policy
+                .providers
+                .provider_rank(ctx, &key)
+                .is_some()
+        });
+        out.sort_by_key(|(orig_i, c)| {
+            let key = c.key();
+            self.cfg
+                .routing_policy
+                .provider_sort_key(ctx, &key, *orig_i)
+        });
+        out.into_iter().map(|(_, c)| c).collect()
+    }
+
+    pub(crate) fn ordered(&self, inst: &Instrument) -> Vec<Arc<dyn BorsaConnector>> {
         let ctx = RoutingContext::new(
             Some(inst.symbol_str()),
             Some(*inst.kind()),
             inst.exchange().cloned(),
         );
-        out.retain(|(_, c)| {
-            let key = c.key();
-            self.cfg
-                .routing_policy
-                .providers
-                .provider_rank(&ctx, &key)
-                .is_some()
-        });
-        out.sort_by_key(|(orig_i, c)| {
-            let key = c.key();
-            self.cfg
-                .routing_policy
-                .provider_sort_key(&ctx, &key, *orig_i)
-        });
-        out.into_iter().map(|(_, c)| c).collect()
+        self.ordered_for_context(&ctx)
     }
 
     pub(crate) fn ordered_for_kind(&self, kind: Option<AssetKind>) -> Vec<Arc<dyn BorsaConnector>> {
-        let mut out: Vec<(usize, Arc<dyn BorsaConnector>)> =
-            self.connectors.iter().cloned().enumerate().collect();
         let ctx = RoutingContext::new(None, kind, None);
-        out.retain(|(_, c)| {
-            let key = c.key();
-            self.cfg
-                .routing_policy
-                .providers
-                .provider_rank(&ctx, &key)
-                .is_some()
-        });
-        out.sort_by_key(|(orig_i, c)| {
-            let key = c.key();
-            self.cfg
-                .routing_policy
-                .provider_sort_key(&ctx, &key, *orig_i)
-        });
-        out.into_iter().map(|(_, c)| c).collect()
+        self.ordered_for_context(&ctx)
     }
-
-    // removed: ordered_for_context (unused)
 
     // execute_fetch removed in favor of explicit provider routing per router
 
