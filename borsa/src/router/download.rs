@@ -4,6 +4,20 @@ use borsa_core::{
 };
 use std::collections::HashSet;
 
+// Validate that all instruments have unique symbols.
+fn validate_unique_symbols(insts: &[Instrument]) -> Result<(), BorsaError> {
+    let mut seen = HashSet::new();
+    for inst in insts {
+        let symbol = inst.symbol().to_string();
+        if !seen.insert(symbol.clone()) {
+            return Err(BorsaError::InvalidArg(format!(
+                "duplicate symbol '{symbol}' in instruments list"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Builder to orchestrate bulk history downloads for multiple symbols.
 pub struct DownloadBuilder<'a> {
     pub(crate) borsa: &'a Borsa,
@@ -39,16 +53,7 @@ impl<'a> DownloadBuilder<'a> {
     /// # Errors
     /// Returns an error if duplicate symbols are detected in the provided instruments.
     pub fn instruments(mut self, insts: &[Instrument]) -> Result<Self, BorsaError> {
-        // Check for duplicate symbols
-        let mut seen = HashSet::new();
-        for inst in insts {
-            let symbol = inst.symbol().to_string();
-            if !seen.insert(symbol.clone()) {
-                return Err(BorsaError::InvalidArg(format!(
-                    "duplicate symbol '{symbol}' in instruments list"
-                )));
-            }
-        }
+        validate_unique_symbols(insts)?;
 
         self.instruments = insts.to_vec();
         Ok(self)
@@ -59,19 +64,16 @@ impl<'a> DownloadBuilder<'a> {
     /// # Errors
     /// Returns an error if the instrument's symbol already exists in the list.
     pub fn add_instrument(mut self, inst: Instrument) -> Result<Self, BorsaError> {
-        // Check for duplicate symbol
-        if self
-            .instruments
-            .iter()
-            .any(|existing| existing.symbol_str() == inst.symbol_str())
-        {
+        let mut combined = self.instruments.clone();
+        combined.push(inst);
+        if validate_unique_symbols(&combined).is_err() {
             return Err(BorsaError::InvalidArg(format!(
                 "duplicate symbol '{}' already exists in instruments list",
-                inst.symbol()
+                combined.last().expect("pushed instrument exists").symbol()
             )));
         }
 
-        self.instruments.push(inst);
+        self.instruments = combined;
         Ok(self)
     }
 
@@ -125,15 +127,7 @@ impl<'a> DownloadBuilder<'a> {
         }
 
         // Defensive check for duplicates (should not happen if using the builder correctly)
-        let mut seen = HashSet::new();
-        for inst in &self.instruments {
-            let symbol = inst.symbol().to_string();
-            if !seen.insert(symbol.clone()) {
-                return Err(BorsaError::InvalidArg(format!(
-                    "duplicate symbol '{symbol}' detected in instruments list"
-                )));
-            }
-        }
+        validate_unique_symbols(&self.instruments)?;
 
         // Build a validated HistoryRequest now; convert timestamp seconds safely.
         let req: HistoryRequest = if let Some((start, end)) = self.period {
