@@ -237,11 +237,16 @@ fn jitter_wait(base_ms: u64, jitter_percent: u32) -> u64 {
     base_ms + rng.random_range(0..jitter_range)
 }
 
-fn collapse_stream_errors(mut errors: Vec<BorsaError>) -> BorsaError {
-    match errors.len() {
+fn collapse_stream_errors(errors: Vec<BorsaError>) -> BorsaError {
+    let mut actionable: Vec<BorsaError> = errors
+        .into_iter()
+        .flat_map(borsa_core::BorsaError::flatten)
+        .filter(borsa_core::BorsaError::is_actionable)
+        .collect();
+    match actionable.len() {
         0 => BorsaError::unsupported("stream-quotes"),
-        1 => errors.remove(0),
-        _ => BorsaError::AllProvidersFailed(errors),
+        1 => actionable.remove(0),
+        _ => BorsaError::AllProvidersFailed(actionable),
     }
 }
 

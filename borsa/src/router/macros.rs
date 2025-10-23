@@ -148,7 +148,7 @@ macro_rules! borsa_router_search {
             let mut merged: Vec<borsa_core::SearchResult> = Vec::new();
             let mut errors: Vec<borsa_core::BorsaError> = Vec::new();
             let mut attempted_any = false;
-            for (name, attempted, res) in joined {
+            for (_name, attempted, res) in joined {
                 if attempted {
                     attempted_any = true;
                 }
@@ -160,11 +160,11 @@ macro_rules! borsa_router_search {
                     }
                     Err(e) => {
                         if attempted {
-                            if let borsa_core::BorsaError::AllProvidersFailed(v) = e {
-                                errors.extend(v);
-                            } else {
-                                errors.push($crate::core::tag_err(name, e));
-                            }
+                            errors.extend(
+                                e.flatten()
+                                    .into_iter()
+                                    .filter(|er| er.is_actionable()),
+                            );
                         }
                     }
                 }

@@ -12,18 +12,6 @@ type ProfileFields = (
     Option<borsa_core::FundKind>,
 );
 
-fn append_actionable(errors: &mut Vec<BorsaError>, err: BorsaError) {
-    match err {
-        BorsaError::AllProvidersFailed(list) => {
-            for inner in list {
-                append_actionable(errors, inner);
-            }
-        }
-        BorsaError::Unsupported { .. } | BorsaError::NotFound { .. } => {}
-        other => errors.push(other),
-    }
-}
-
 impl Borsa {
     /// Build a comprehensive `Info` record by composing multiple data sources.
     ///
@@ -44,9 +32,15 @@ impl Borsa {
         let (profile_res, quote_res, isin_res) =
             tokio::join!(self.profile(inst), self.quote(inst), self.isin(inst));
 
-        // Collect errors with flattening of AllProvidersFailed for transparency
+        // Collect actionable errors uniformly using centralized helpers
         let mut errors: Vec<BorsaError> = Vec::new();
-        let mut push_err = |e: BorsaError| append_actionable(&mut errors, e);
+        let mut push_err = |e: BorsaError| {
+            errors.extend(
+                e.flatten()
+                    .into_iter()
+                    .filter(borsa_core::BorsaError::is_actionable),
+            );
+        };
 
         let profile = match profile_res {
             Ok(v) => Some(v),

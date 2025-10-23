@@ -114,6 +114,30 @@ impl BorsaError {
             capability: capability.into(),
         }
     }
+
+    /// Returns true if this error should be surfaced to users as actionable.
+    ///
+    /// Non-actionable errors are those indicating capability absence or a benign
+    /// not-found condition. Aggregates are classified based on their contents.
+    #[must_use]
+    pub fn is_actionable(&self) -> bool {
+        match self {
+            Self::Unsupported { .. } | Self::NotFound { .. } => false,
+            Self::AllProvidersFailed(inner) => inner.iter().any(Self::is_actionable),
+            _ => true,
+        }
+    }
+
+    /// Flatten nested `AllProvidersFailed` structures into a plain vector.
+    ///
+    /// This preserves other error variants as-is and unwraps recursively.
+    #[must_use]
+    pub fn flatten(self) -> Vec<Self> {
+        match self {
+            Self::AllProvidersFailed(list) => list.into_iter().flat_map(Self::flatten).collect(),
+            other => vec![other],
+        }
+    }
 }
 
 impl From<paft::Error> for BorsaError {
