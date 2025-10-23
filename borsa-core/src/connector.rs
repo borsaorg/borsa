@@ -272,6 +272,13 @@ pub trait BorsaConnector: Send + Sync {
     /// A stable identifier for priority lists (e.g., "borsa-yfinance", "borsa-coinmarketcap").
     fn name(&self) -> &'static str;
 
+    /// Canonical connector key constructed from the static name.
+    ///
+    /// Use this helper when configuring routing policies.
+    fn key(&self) -> ConnectorKey {
+        ConnectorKey::new(self.name())
+    }
+
     /// Human-friendly vendor string.
     fn vendor(&self) -> &'static str {
         "unknown"

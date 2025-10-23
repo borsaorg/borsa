@@ -20,7 +20,8 @@ impl Borsa {
         accessor: as_quote_provider,
         capability: "quote",
         not_found: "quote",
-        call: quote(inst)
+        call: quote(inst),
+        post_ok: |q: &Quote, i: &borsa_core::Instrument| -> Result<(), borsa_core::BorsaError> { Borsa::enforce_quote_exchange(i, q) }
     }
 
     /// Fetch quotes for multiple instruments.

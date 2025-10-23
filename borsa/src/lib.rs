@@ -33,11 +33,18 @@
 //! let yf = Arc::new(YfConnector::new_default());
 //! let av = Arc::new(AvConnector::new_with_key("..."));
 //!
+//! let routing = borsa_core::RoutingPolicyBuilder::new()
+//!     .providers_for_kind(
+//!         AssetKind::Equity,
+//!         &[av.key(), yf.key()],
+//!     )
+//!     .build();
+//!
 //! let borsa = Borsa::builder()
 //!     .with_connector(yf.clone())
 //!     .with_connector(av.clone())
-//!     // Type-safe, ergonomic API - no strings, no typos possible
-//!     .prefer_for_kind(AssetKind::Equity, &[av, yf])
+//!     // Type-safe, ergonomic API via typed connector keys
+//!     .routing_policy(routing)
 //!     .merge_history_strategy(MergeStrategy::Deep)
 //!     .fetch_strategy(FetchStrategy::PriorityWithFallback)
 //!     .resampling(Resampling::Daily)

@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - New crate `borsa-types` for shared domain types and reports used across the
   workspace (configuration, connector keys, attribution, and report envelopes).
+- Unified routing policy for provider and exchange ordering:
+  - `borsa-types::routing_policy::{RoutingPolicy, RoutingPolicyBuilder}` with
+    composable global/kind/symbol/exchange rules and an optional `strict` flag.
+  - Exchange preferences are used for search de-duplication (Symbol > Kind > Global).
+- `BorsaConnector::key()` helper for typed connector keys when building policies.
+- `BorsaError::StrictSymbolsRejected` to surface strict policy exclusions in streaming.
+- Full serde support for `BorsaConfig` enums and `ConnectorKey` to enable config-as-data.
 
 ### Breaking Change
 
@@ -27,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Report envelopes (`InfoReport`, `SearchReport`, `DownloadReport`) change `warnings`
      from `Vec<String>` to `Vec<BorsaError>` and propagate structured errors instead of strings.
 - `borsa-core::error` module removed; import `BorsaError` via `borsa_core::types::BorsaError`.
+- Builder APIs `prefer_for_kind(...)` and `prefer_symbol(...)` were removed and
+  replaced by a unified `routing_policy(...)` configuration built with
+  `RoutingPolicyBuilder`. Update builder calls and tests accordingly.
+- borsa-yfinance: `YfConnector::KEY` constant is replaced by `BorsaConnector::key()`
+  or `YfConnector::key_static()` for constructing typed keys.
 
 ### Changed
 
@@ -41,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   readability and stability across runs; compute daily candle counts explicitly.
 - examples: implement `supports_kind` on mock connectors to match the current
   connector trait.
+- quote routing: enforce instrument exchange on successful quotes; exchange
+  mismatch is treated as `NotFound` to enable priority fallback/latency racing.
+- search: de-duplicate cross-provider results by symbol using configured
+  exchange preferences (Symbol > Kind > Global) while preserving traversal order.
+- streaming: assign symbols per provider subset based on routing policy and drop
+  updates for unassigned symbols; strict rules can proactively reject symbols.
+- `BorsaConfig` now carries a unified `routing_policy` and is fully
+  `Serialize`/`Deserialize` for external configuration.
 
 ### Fixed
 

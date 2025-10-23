@@ -1,5 +1,5 @@
 use crate::helpers::{AAPL, usd};
-use borsa_core::{AssetKind, QuoteUpdate};
+use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate, RoutingPolicyBuilder};
 use chrono::TimeZone;
 
 use crate::helpers::MockConnector;
@@ -30,10 +30,13 @@ async fn stream_quotes_respects_kind_hint_support() {
         }])
         .build();
 
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_kind(AssetKind::Equity, &[wrong_kind.key(), right_kind.key()])
+        .build();
     let borsa = borsa::Borsa::builder()
         .with_connector(wrong_kind.clone())
         .with_connector(right_kind.clone())
-        .prefer_for_kind(AssetKind::Equity, &[wrong_kind, right_kind]) // Even if W is first, kind hint should filter it out
+        .routing_policy(policy)
         .build()
         .unwrap();
 

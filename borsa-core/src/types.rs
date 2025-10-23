@@ -4,10 +4,13 @@
 // Aggregates, config, and reports (FastInfo/Info from `paft`, report envelopes from `borsa-types`)
 pub use borsa_types::BorsaError;
 
+pub use borsa_types::ConnectorKey;
+pub use borsa_types::routing_policy::Selector;
 pub use borsa_types::{
     Attribution, BackoffConfig, BorsaConfig, DownloadReport, FetchStrategy, InfoReport,
     MergeStrategy, Resampling, SearchReport, Span,
 };
+pub use borsa_types::{Preference, RoutingContext, RoutingPolicy, RoutingPolicyBuilder, ScopeKey};
 
 pub use paft::domain::{AssetKind, Exchange, Figi, Instrument, Isin, MarketState, Period, Symbol};
 

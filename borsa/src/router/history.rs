@@ -575,7 +575,6 @@ impl Borsa {
                     ));
                     current_provider = provider;
                     run_start = ts_sec;
-
                 }
                 last_ts = ts_sec;
             }

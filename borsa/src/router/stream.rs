@@ -1,6 +1,14 @@
 use crate::{BackoffConfig, Borsa};
-use borsa_core::{BorsaConnector, BorsaError, Instrument};
+use borsa_core::{BorsaConnector, BorsaError, Instrument, RoutingContext};
 use rand::Rng;
+use std::collections::HashSet;
+
+type StreamProviderScore = (
+    usize,
+    usize,
+    std::sync::Arc<dyn BorsaConnector>,
+    HashSet<String>,
+);
 
 impl Borsa {
     /// Start streaming quotes with automatic backoff and provider failover.
@@ -22,6 +30,14 @@ impl Borsa {
     /// # Errors
     /// Returns an error if streaming initialization fails for all eligible providers of a kind
     /// or when no streaming-capable providers are available.
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa::router::stream_quotes_with_backoff",
+            skip(self, instruments, backoff_override)
+        )
+    )]
+    #[allow(clippy::too_many_lines)]
     pub async fn stream_quotes_with_backoff(
         &self,
         instruments: &[Instrument],
@@ -41,11 +57,16 @@ impl Borsa {
             ));
         }
 
-        // Group instruments by kind to respect provider supports_kind checks and priorities.
-        let mut by_kind: std::collections::HashMap<borsa_core::AssetKind, Vec<Instrument>> =
-            std::collections::HashMap::new();
+        // Group instruments by (kind, exchange) to respect provider rules that depend on exchange.
+        let mut by_group: std::collections::HashMap<
+            (borsa_core::AssetKind, Option<borsa_core::Exchange>),
+            Vec<Instrument>,
+        > = std::collections::HashMap::new();
         for inst in instruments.iter().cloned() {
-            by_kind.entry(*inst.kind()).or_default().push(inst);
+            by_group
+                .entry((*inst.kind(), inst.exchange().cloned()))
+                .or_default()
+                .push(inst);
         }
 
         let resolved_backoff: BackoffConfig =
@@ -59,11 +80,70 @@ impl Borsa {
         let mut joins = Vec::new();
         let mut init_receivers: Vec<tokio::sync::oneshot::Receiver<Result<(), BorsaError>>> =
             Vec::new();
-        for (kind, list) in by_kind {
-            let providers = self.eligible_stream_providers(kind)?;
-            let allow: std::collections::HashSet<String> =
-                list.iter().map(|i| i.symbol().to_string()).collect();
-            let instruments_vec = list.clone();
+        for ((kind, ex), list) in by_group {
+            let EligibleStreamProviders {
+                providers,
+                provider_symbols,
+                union_symbols,
+            } = self.eligible_stream_providers_for_context(kind, ex.as_ref(), &list)?;
+            if union_symbols.is_empty() {
+                continue;
+            }
+
+            // Strict policy failure precheck: find symbols requested but rejected by a strict rule.
+            let requested: HashSet<String> = list.iter().map(|i| i.symbol().to_string()).collect();
+            let rejected: Vec<String> = requested.difference(&union_symbols).cloned().collect();
+            if !rejected.is_empty() {
+                // Determine if strict rules excluded these symbols (vs capability absence).
+                let mut strict_filtered: Vec<String> = Vec::new();
+                // Consider only streaming-capable providers that support this kind
+                let candidates: Vec<&std::sync::Arc<dyn BorsaConnector>> = self
+                    .connectors
+                    .iter()
+                    .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
+                    .collect();
+                for sym in &rejected {
+                    if !candidates.is_empty() {
+                        let mut any_allowed = false;
+                        for c in &candidates {
+                            let ctx =
+                                RoutingContext::new(Some(sym.as_str()), Some(kind), ex.clone());
+                            if self
+                                .cfg
+                                .routing_policy
+                                .providers
+                                .provider_rank(&ctx, &c.key())
+                                .is_some()
+                            {
+                                any_allowed = true;
+                                break;
+                            }
+                        }
+                        if !any_allowed {
+                            strict_filtered.push(sym.clone());
+                        }
+                    }
+                }
+                if !strict_filtered.is_empty() {
+                    return Err(BorsaError::StrictSymbolsRejected {
+                        rejected: strict_filtered,
+                    });
+                }
+            }
+
+            // Build per-provider instrument subsets and allow-sets
+            let mut provider_instruments: Vec<Vec<Instrument>> =
+                Vec::with_capacity(providers.len());
+            let mut provider_allow: Vec<HashSet<String>> = Vec::with_capacity(providers.len());
+            for allow in &provider_symbols {
+                let assigned = list
+                    .iter()
+                    .filter(|&inst| allow.contains(inst.symbol().as_str()))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                provider_instruments.push(assigned);
+                provider_allow.push(allow.clone());
+            }
 
             let min_backoff_ms = resolved_backoff.min_backoff_ms;
             let max_backoff_ms = resolved_backoff.max_backoff_ms;
@@ -74,12 +154,12 @@ impl Borsa {
 
             let params = KindSupervisorParams {
                 providers,
-                instruments: instruments_vec,
-                allow,
+                provider_instruments,
+                provider_allow,
                 min_backoff_ms,
                 max_backoff_ms,
                 factor,
-                jitter_percent: jitter_percent.into(),
+                jitter_percent: u32::from(jitter_percent),
                 initial_notify: Some(init_tx),
             };
             let join = Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
@@ -167,8 +247,10 @@ fn collapse_stream_errors(mut errors: Vec<BorsaError>) -> BorsaError {
 
 struct KindSupervisorParams {
     providers: Vec<std::sync::Arc<dyn BorsaConnector>>,
-    instruments: Vec<Instrument>,
-    allow: std::collections::HashSet<String>,
+    /// Assigned instruments per provider, aligned by index with `providers`.
+    provider_instruments: Vec<Vec<Instrument>>,
+    /// Allowed symbol set per provider, aligned by index with `providers`.
+    provider_allow: Vec<HashSet<String>>,
     min_backoff_ms: u64,
     max_backoff_ms: u64,
     factor: u32,
@@ -176,23 +258,84 @@ struct KindSupervisorParams {
     initial_notify: Option<tokio::sync::oneshot::Sender<Result<(), BorsaError>>>,
 }
 
+struct EligibleStreamProviders {
+    /// Providers eligible for this (kind, exchange) group sorted by score and registration order
+    providers: Vec<std::sync::Arc<dyn BorsaConnector>>,
+    /// Allowed symbols per provider, aligned with `providers`
+    provider_symbols: Vec<HashSet<String>>,
+    /// Union of all allowed symbols across providers
+    union_symbols: HashSet<String>,
+}
+
 impl Borsa {
-    fn eligible_stream_providers(
+    fn eligible_stream_providers_for_context(
         &self,
         kind: borsa_core::AssetKind,
-    ) -> Result<Vec<std::sync::Arc<dyn BorsaConnector>>, borsa_core::BorsaError> {
-        let ordered = self.ordered_for_kind(Some(kind));
-        let mut eligible: Vec<std::sync::Arc<dyn BorsaConnector>> = ordered
-            .into_iter()
-            .filter(|c| c.as_stream_provider().is_some())
-            .collect();
-        eligible.retain(|c| c.supports_kind(kind));
-        if eligible.is_empty() {
+        exchange: Option<&borsa_core::Exchange>,
+        instruments: &[Instrument],
+    ) -> Result<EligibleStreamProviders, borsa_core::BorsaError> {
+        // Score all connectors by the minimum per-symbol rank across the requested instruments,
+        // then sort by (min_rank, registration_index). Collect allowed symbols in the process.
+        let mut scored: Vec<StreamProviderScore> = Vec::new();
+
+        for (orig_idx, connector) in self.connectors.iter().cloned().enumerate() {
+            if connector.as_stream_provider().is_none() {
+                continue;
+            }
+            if !connector.supports_kind(kind) {
+                continue;
+            }
+
+            let mut allowed_syms: HashSet<String> = HashSet::new();
+            let mut min_rank: usize = usize::MAX;
+            for inst in instruments {
+                let ctx = RoutingContext::new(
+                    Some(inst.symbol_str()),
+                    Some(kind),
+                    inst.exchange().cloned().or_else(|| exchange.cloned()),
+                );
+                if let Some((rank, _strict)) = self
+                    .cfg
+                    .routing_policy
+                    .providers
+                    .provider_rank(&ctx, &connector.key())
+                {
+                    allowed_syms.insert(inst.symbol().to_string());
+                    if rank < min_rank {
+                        min_rank = rank;
+                    }
+                }
+            }
+
+            if !allowed_syms.is_empty() {
+                scored.push((min_rank, orig_idx, connector, allowed_syms));
+            }
+        }
+
+        if scored.is_empty() {
             return Err(borsa_core::BorsaError::unsupported("stream-quotes"));
         }
-        Ok(eligible)
+
+        scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));
+
+        let mut providers: Vec<std::sync::Arc<dyn BorsaConnector>> = Vec::new();
+        let mut provider_symbols: Vec<HashSet<String>> = Vec::new();
+        let mut union_symbols: HashSet<String> = HashSet::new();
+
+        for (_, _, c, syms) in scored {
+            union_symbols.extend(syms.iter().cloned());
+            providers.push(c);
+            provider_symbols.push(syms);
+        }
+
+        Ok(EligibleStreamProviders {
+            providers,
+            provider_symbols,
+            union_symbols,
+        })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn spawn_kind_supervisor(
         params: KindSupervisorParams,
         mut stop_watch: tokio::sync::watch::Receiver<bool>,
@@ -202,8 +345,8 @@ impl Borsa {
             use tokio::time::{Duration, sleep};
             let KindSupervisorParams {
                 providers,
-                instruments,
-                allow,
+                provider_instruments,
+                provider_allow,
                 min_backoff_ms,
                 max_backoff_ms,
                 factor,
@@ -221,7 +364,15 @@ impl Borsa {
                         i += 1;
                         continue;
                     };
-                    match sp.stream_quotes(&instruments).await {
+                    // Skip providers with no assigned instruments.
+                    if provider_instruments
+                        .get(i)
+                        .is_none_or(std::vec::Vec::is_empty)
+                    {
+                        i += 1;
+                        continue;
+                    }
+                    match sp.stream_quotes(&provider_instruments[i]).await {
                         Ok((handle, mut prx)) => {
                             connected = true;
                             if let Some(tx) = initial_notify.take() {
@@ -230,6 +381,7 @@ impl Borsa {
                             initial_errors.clear();
 
                             let mut provider_handle = Some(handle);
+                            let allowed = provider_allow.get(i);
                             loop {
                                 tokio::select! {
                                     biased;
@@ -245,12 +397,17 @@ impl Borsa {
                                     }
                                     maybe_u = prx.recv() => {
                                         if let Some(u) = maybe_u {
-                                            if allow.contains(u.symbol.as_str()) &&
-                                                tx_clone.send(u).await.is_err()
-                                            {
-                                                if let Some(h) = provider_handle.take() { h.abort(); }
-                                                return;
-                                            }
+                                            let mut pass = true;
+                                            if let Some(allowset) = allowed
+                                                && !allowset.contains(u.symbol.as_str()) {
+                                                    pass = false;
+                                                    #[cfg(feature = "tracing")]
+                                                    tracing::warn!(symbol = %u.symbol, provider_index = i, "dropping update for unassigned symbol");
+                                                }
+                                            if pass && tx_clone.send(u).await.is_err() {
+                                                    if let Some(h) = provider_handle.take() { h.abort(); }
+                                                    return;
+                                                }
                                         } else {
                                             if let Some(h) = provider_handle.take() { h.abort(); }
                                             break;

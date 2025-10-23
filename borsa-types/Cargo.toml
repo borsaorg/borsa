@@ -13,7 +13,7 @@ keywords = ["finance", "types", "borsa", "api", "data"]
 categories = ["api-bindings", "finance", "data-structures"]
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive", "rc"] }
 paft = { workspace = true }
 thiserror = { workspace = true }
 

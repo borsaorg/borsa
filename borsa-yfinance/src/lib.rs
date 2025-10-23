@@ -107,7 +107,10 @@ pub struct YfConnector {
 
 impl YfConnector {
     /// Static connector key for orchestrator priority configuration.
-    pub const KEY: ConnectorKey = ConnectorKey::new("borsa-yfinance");
+    #[must_use]
+    pub const fn key_static() -> ConnectorKey {
+        ConnectorKey::new("borsa-yfinance")
+    }
 
     fn looks_like_not_found(msg: &str) -> bool {
         let m = msg.to_ascii_lowercase();

@@ -1,47 +1,28 @@
 use borsa::Borsa;
+use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
 
-use crate::helpers::mock_connector::MockConnector;
-use crate::helpers::usd;
-use borsa_core::{AssetKind, Quote, Symbol};
-use rust_decimal::Decimal;
+use crate::helpers::m_quote;
 
 #[tokio::test]
 async fn per_kind_priority_applies_to_quotes() {
-    let low = MockConnector::builder()
-        .name("low")
-        .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
-            shortname: None,
-            price: Some(usd("10.0")),
-            previous_close: None,
-            exchange: None,
-            market_state: None,
-        })
-        .build();
+    let low = m_quote("low", 10.0);
+    let high = m_quote("high", 99.0);
 
-    let high = MockConnector::builder()
-        .name("high")
-        .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
-            shortname: None,
-            price: Some(usd("99.0")),
-            previous_close: None,
-            exchange: None,
-            market_state: None,
-        })
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_kind(AssetKind::Equity, &[high.key(), low.key()])
         .build();
 
     let borsa = Borsa::builder()
         .with_connector(low.clone())
         .with_connector(high.clone())
-        .prefer_for_kind(AssetKind::Equity, &[high, low])
+        .routing_policy(policy)
         .build()
         .unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
-        q.price.as_ref().map(borsa_core::Money::amount).unwrap(),
-        Decimal::from(99u8)
+        q.price.unwrap().amount(),
+        rust_decimal::Decimal::from_f64_retain(99.0).unwrap()
     );
 }

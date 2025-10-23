@@ -1,5 +1,5 @@
 use crate::helpers::{AAPL, usd};
-use borsa_core::{AssetKind, QuoteUpdate};
+use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate, RoutingPolicyBuilder};
 use chrono::TimeZone;
 
 use crate::helpers::MockConnector;
@@ -33,10 +33,14 @@ async fn stream_quotes_routes_to_streaming_connector() {
         .with_stream_updates(b_updates)
         .build();
 
+    // Set registration order as [A, B], but per-symbol rule prefers B for AAPL.
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_symbol(AAPL, &[b.key(), a.key()])
+        .build();
     let borsa = borsa::Borsa::builder()
         .with_connector(a.clone())
         .with_connector(b.clone())
-        .prefer_for_kind(AssetKind::Equity, &[b, a]) // prioritize B (streaming)
+        .routing_policy(policy)
         .build()
         .unwrap();
 

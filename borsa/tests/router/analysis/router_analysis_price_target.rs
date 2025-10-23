@@ -1,7 +1,7 @@
 use crate::helpers::MockConnector;
 use crate::helpers::usd;
 use borsa::Borsa;
-use borsa_core::{AssetKind, PriceTarget};
+use borsa_core::{AssetKind, BorsaConnector, PriceTarget, RoutingPolicyBuilder};
 use rust_decimal::Decimal;
 use tokio::time::Duration;
 
@@ -30,10 +30,13 @@ async fn price_target_respects_per_kind_priority() {
         .returns_analyst_price_target_ok(high_pt)
         .build();
 
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_kind(AssetKind::Equity, &[high_arc.key(), low_arc.key()])
+        .build();
     let borsa = Borsa::builder()
         .with_connector(low_arc.clone())
         .with_connector(high_arc.clone())
-        .prefer_for_kind(AssetKind::Equity, &[high_arc, low_arc])
+        .routing_policy(policy)
         .build()
         .unwrap();
 

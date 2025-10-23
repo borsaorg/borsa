@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 #[cfg(feature = "tracing")]
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use borsa_core::connector::ConnectorKey;
 use borsa_core::types::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
-use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
+use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument, RoutingContext};
 
 /// Orchestrator that routes requests across registered providers.
 pub struct Borsa {
@@ -46,7 +44,7 @@ impl BorsaBuilder {
     ///
     /// Behavior and trade-offs:
     /// - The order in which you register connectors is used only when no explicit
-    ///   priorities are set via `prefer_*` methods.
+    ///   priorities are set via a custom [`RoutingPolicy`](borsa_core::RoutingPolicy).
     /// - Multiple connectors can support the same capability; the orchestrator will
     ///   route based on priorities and the selected fetch/merge strategies.
     /// - Duplicates are not deduplicated; avoid registering the same connector twice.
@@ -56,48 +54,16 @@ impl BorsaBuilder {
         self
     }
 
-    /// Set preferred providers for an `AssetKind` using connector instances.
+    /// Set the unified routing policy controlling provider and exchange ordering.
     ///
-    /// Behavior and trade-offs:
-    /// - Influences ordering among eligible providers for the given kind; it does not
-    ///   filter out non-listed connectors (they remain after the listed ones).
-    /// - Per-symbol preferences (see `prefer_symbol`) take precedence over
-    ///   kind-level preferences when both are specified.
-    /// - Type-safe and ergonomic: eliminates the possibility of typos and makes refactoring safer.
+    /// Semantics:
+    /// - Provider eligibility and ordering are driven by provider rules in the
+    ///   policy. Unknown connector keys are rejected at build time.
+    /// - Exchange preferences influence search result de-duplication only; they
+    ///   do not change provider eligibility.
     #[must_use]
-    pub fn prefer_for_kind(
-        mut self,
-        kind: AssetKind,
-        connectors_desc: &[Arc<dyn BorsaConnector>],
-    ) -> Self {
-        let keys: Vec<ConnectorKey> = connectors_desc
-            .iter()
-            .map(|c| ConnectorKey::new(c.name()))
-            .collect();
-        self.cfg.per_kind_priority.insert(kind, keys);
-        self
-    }
-
-    /// Set preferred providers for a symbol using connector instances.
-    ///
-    /// Behavior and trade-offs:
-    /// - Overrides any kind-level preference for the specified symbol.
-    /// - The list is an ordering hint; unlisted but capable connectors are still
-    ///   considered after the listed ones.
-    /// - Type-safe and ergonomic: eliminates the possibility of typos and makes refactoring safer.
-    #[must_use]
-    pub fn prefer_symbol(
-        mut self,
-        symbol: &str,
-        connectors_desc: &[Arc<dyn BorsaConnector>],
-    ) -> Self {
-        let keys: Vec<ConnectorKey> = connectors_desc
-            .iter()
-            .map(|c| ConnectorKey::new(c.name()))
-            .collect();
-        self.cfg
-            .per_symbol_priority
-            .insert(symbol.to_string(), keys);
+    pub fn routing_policy(mut self, policy: borsa_core::RoutingPolicy) -> Self {
+        self.cfg.routing_policy = policy;
         self
     }
 
@@ -204,30 +170,27 @@ impl BorsaBuilder {
     /// Build the `Borsa` orchestrator.
     ///
     /// # Errors
-    /// Returns `InvalidArg` if no connectors have been registered via `with_connector`.
+    /// - `InvalidArg` if no connectors have been registered via `with_connector`.
+    /// - `InvalidArg` if the routing policy references unknown connector keys.
     pub fn build(mut self) -> Result<Borsa, BorsaError> {
-        // Validate connector keys against registered connectors; drop unknowns and dedup.
+        // Collect registered connector names for validation.
         let known: std::collections::HashSet<&'static str> =
             self.connectors.iter().map(|c| c.name()).collect();
 
-        let filter_keys = |v: &mut Vec<ConnectorKey>| {
-            let mut out: Vec<ConnectorKey> = Vec::new();
-            let mut seen: std::collections::HashSet<&'static str> =
-                std::collections::HashSet::new();
-            for k in v.iter().copied() {
-                let n = k.as_str();
-                if known.contains(n) && seen.insert(n) {
-                    out.push(k);
-                }
-            }
-            *v = out;
-        };
+        // Normalize provider rules and collect unknown connector references.
+        let mut providers = std::mem::take(&mut self.cfg.routing_policy.providers);
+        let unknown = providers.normalize_and_collect_unknown(&known);
+        self.cfg.routing_policy.providers = providers;
 
-        for v in self.cfg.per_kind_priority.values_mut() {
-            filter_keys(v);
-        }
-        for v in self.cfg.per_symbol_priority.values_mut() {
-            filter_keys(v);
+        if !unknown.is_empty() {
+            let details = unknown
+                .into_iter()
+                .map(|(selector, names)| format!("{selector:?}: {}", names.join(", ")))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(BorsaError::InvalidArg(format!(
+                "routing policy references unknown connectors: {details}"
+            )));
         }
 
         if self.connectors.is_empty() {
@@ -259,6 +222,60 @@ pub fn tag_err(connector: &str, e: BorsaError) -> BorsaError {
 }
 
 impl Borsa {
+    /// Enforce that a quote's exchange matches the instrument's desired exchange when provided.
+    ///
+    /// When the instrument specifies an exchange, a mismatched quote exchange is treated as
+    /// `NotFound` to trigger fallback or allow latency racing to continue. Quotes missing an
+    /// exchange pass through unchanged to preserve legacy behaviour.
+    pub(crate) fn enforce_quote_exchange(
+        inst: &Instrument,
+        q: &borsa_core::Quote,
+    ) -> Result<(), BorsaError> {
+        let Some(want) = inst.exchange() else {
+            return Ok(());
+        };
+
+        match q.exchange.as_ref() {
+            Some(have) if have == want => Ok(()),
+            Some(_) => Err(BorsaError::not_found(format!(
+                "quote for {} (exchange mismatch)",
+                inst.symbol()
+            ))),
+            None => Ok(()),
+        }
+    }
+
+    pub(crate) fn dedup_search_results_by_exchange(
+        &self,
+        kind: Option<AssetKind>,
+        merged: Vec<borsa_core::SearchResult>,
+    ) -> Vec<borsa_core::SearchResult> {
+        use std::collections::HashMap;
+        let mut grouped: HashMap<String, Vec<(usize, borsa_core::SearchResult)>> = HashMap::new();
+        for (i, r) in merged.into_iter().enumerate() {
+            grouped
+                .entry(r.symbol.as_str().to_string())
+                .or_default()
+                .push((i, r));
+        }
+        // Preserve overall provider order by selecting the best per symbol, then sorting by first-seen index.
+        let mut selected: Vec<(usize, borsa_core::SearchResult)> =
+            Vec::with_capacity(grouped.len());
+        for (sym, mut group) in grouped {
+            group.sort_by_key(|(i, r)| {
+                let ctx_kind = kind.or(Some(r.kind));
+                let ctx = RoutingContext::new(Some(&sym), ctx_kind, None);
+                self.cfg
+                    .routing_policy
+                    .exchange_sort_key(&ctx, r.exchange.as_ref(), *i)
+            });
+            let first_index = group.iter().map(|(i, _)| *i).min().unwrap_or(usize::MAX);
+            let best = group.remove(0).1;
+            selected.push((first_index, best));
+        }
+        selected.sort_by_key(|(i, _)| *i);
+        selected.into_iter().map(|(_, r)| r).collect()
+    }
     /// Wrap a provider future with a timeout and standardized timeout error mapping.
     #[cfg_attr(
         feature = "tracing",
@@ -309,10 +326,17 @@ impl Borsa {
     /// let yf = Arc::new(YfConnector::new_default());
     /// let av = Arc::new(AvConnector::new_with_key("..."));
     ///
+    /// let policy = borsa_core::RoutingPolicyBuilder::new()
+    ///     .providers_for_kind(
+    ///         AssetKind::Equity,
+    ///         &[av.key(), yf.key()],
+    ///     )
+    ///     .build();
+    ///
     /// let borsa = borsa::Borsa::builder()
     ///     .with_connector(yf.clone())
     ///     .with_connector(av.clone())
-    ///     .prefer_for_kind(AssetKind::Equity, &[av, yf])
+    ///     .routing_policy(policy)
     ///     .merge_history_strategy(borsa::MergeStrategy::Deep)
     ///     .fetch_strategy(borsa::FetchStrategy::PriorityWithFallback)
     ///     .build()?;
@@ -323,49 +347,52 @@ impl Borsa {
     }
 
     pub(crate) fn ordered(&self, inst: &Instrument) -> Vec<Arc<dyn BorsaConnector>> {
-        let out: Vec<(usize, Arc<dyn BorsaConnector>)> =
+        let mut out: Vec<(usize, Arc<dyn BorsaConnector>)> =
             self.connectors.iter().cloned().enumerate().collect();
-
-        let order_with = |pref: &Vec<ConnectorKey>,
-                          mut v: Vec<(usize, Arc<dyn BorsaConnector>)>| {
-            let pos: HashMap<_, _> = pref
-                .iter()
-                .enumerate()
-                .map(|(i, n)| (n.as_str(), i))
-                .collect();
-            v.sort_by_key(|(orig_i, c)| {
-                (pos.get(c.name()).copied().unwrap_or(usize::MAX), *orig_i)
-            });
-            v.into_iter().map(|(_, c)| c).collect()
-        };
-
-        if let Some(pref) = self.cfg.per_symbol_priority.get(inst.symbol_str()) {
-            return order_with(pref, out);
-        }
-        if let Some(pref) = self.cfg.per_kind_priority.get(inst.kind()) {
-            return order_with(pref, out);
-        }
+        let ctx = RoutingContext::new(
+            Some(inst.symbol_str()),
+            Some(*inst.kind()),
+            inst.exchange().cloned(),
+        );
+        out.retain(|(_, c)| {
+            let key = c.key();
+            self.cfg
+                .routing_policy
+                .providers
+                .provider_rank(&ctx, &key)
+                .is_some()
+        });
+        out.sort_by_key(|(orig_i, c)| {
+            let key = c.key();
+            self.cfg
+                .routing_policy
+                .provider_sort_key(&ctx, &key, *orig_i)
+        });
         out.into_iter().map(|(_, c)| c).collect()
     }
 
     pub(crate) fn ordered_for_kind(&self, kind: Option<AssetKind>) -> Vec<Arc<dyn BorsaConnector>> {
         let mut out: Vec<(usize, Arc<dyn BorsaConnector>)> =
             self.connectors.iter().cloned().enumerate().collect();
-        if let Some(k) = kind
-            && let Some(pref) = self.cfg.per_kind_priority.get(&k)
-        {
-            let pos: HashMap<_, _> = pref
-                .iter()
-                .enumerate()
-                .map(|(i, n)| (n.as_str(), i))
-                .collect();
-            out.sort_by_key(|(orig_i, c)| {
-                (pos.get(c.name()).copied().unwrap_or(usize::MAX), *orig_i)
-            });
-            return out.into_iter().map(|(_, c)| c).collect();
-        }
+        let ctx = RoutingContext::new(None, kind, None);
+        out.retain(|(_, c)| {
+            let key = c.key();
+            self.cfg
+                .routing_policy
+                .providers
+                .provider_rank(&ctx, &key)
+                .is_some()
+        });
+        out.sort_by_key(|(orig_i, c)| {
+            let key = c.key();
+            self.cfg
+                .routing_policy
+                .provider_sort_key(&ctx, &key, *orig_i)
+        });
         out.into_iter().map(|(_, c)| c).collect()
     }
+
+    // removed: ordered_for_context (unused)
 
     // execute_fetch removed in favor of explicit provider routing per router
 

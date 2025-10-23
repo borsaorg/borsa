@@ -127,7 +127,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let borsa = Borsa::builder()
         .with_connector(yf_connector.clone())
         .with_connector(mock_connector.clone())
-        .prefer_for_kind(AssetKind::Equity, &[mock_connector, yf_connector])
+        .routing_policy(
+            borsa_core::RoutingPolicyBuilder::new()
+                .providers_for_kind(
+                    AssetKind::Equity,
+                    &[mock_connector.key(), yf_connector.key()],
+                )
+                .build(),
+        )
         .build()?;
 
     // 3. Define the instrument and a request for recent history.

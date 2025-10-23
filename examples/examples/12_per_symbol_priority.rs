@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use borsa::Borsa;
 use borsa_core::{
-    AssetKind, BorsaError, Currency, Instrument, Money, Quote,
-    connector::{BorsaConnector, QuoteProvider},
+    AssetKind, BorsaConnector, BorsaError, Currency, Instrument, Money, Quote,
+    RoutingPolicyBuilder, connector::QuoteProvider,
 };
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
@@ -85,13 +85,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let slow_conn = Arc::new(SlowConnector);
 
     // 2. Build Borsa with a default priority and a per-symbol override.
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_kind(AssetKind::Equity, &[fast_conn.key(), slow_conn.key()])
+        .providers_for_symbol("SPECIAL", &[slow_conn.key(), fast_conn.key()])
+        .build();
     let borsa = Borsa::builder()
         .with_connector(fast_conn.clone())
         .with_connector(slow_conn.clone())
-        // Default: Prefer the fast connector for all equities.
-        .prefer_for_kind(AssetKind::Equity, &[fast_conn.clone(), slow_conn.clone()])
-        // Override: For the symbol "SPECIAL", prefer the slow connector.
-        .prefer_symbol("SPECIAL", &[slow_conn.clone(), fast_conn.clone()])
+        .routing_policy(policy)
         .build()?;
 
     // --- SCENARIO 1: Fetch a normal symbol ---

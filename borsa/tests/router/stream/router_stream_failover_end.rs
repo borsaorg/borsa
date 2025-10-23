@@ -1,5 +1,5 @@
 use crate::helpers::{AAPL, usd};
-use borsa_core::{AssetKind, QuoteUpdate};
+use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate, RoutingPolicyBuilder};
 use chrono::TimeZone;
 
 use crate::helpers::MockConnector;
@@ -40,10 +40,13 @@ async fn stream_quotes_fails_over_when_first_provider_ends() {
         .with_stream_updates(p2_updates)
         .build();
 
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_kind(AssetKind::Equity, &[p1.key(), p2.key()])
+        .build();
     let borsa = borsa::Borsa::builder()
         .with_connector(p1.clone())
         .with_connector(p2.clone())
-        .prefer_for_kind(AssetKind::Equity, &[p1, p2]) // P1 has higher priority
+        .routing_policy(policy)
         .build()
         .unwrap();
 

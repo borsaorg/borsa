@@ -1,13 +1,13 @@
 //! Configuration types shared across orchestrators and connectors.
 
-use std::collections::HashMap;
+// no extra prelude imports
 use std::time::Duration;
 
-use crate::connector::ConnectorKey;
-use paft::domain::AssetKind;
+use crate::routing_policy::RoutingPolicy;
+use serde::{Deserialize, Serialize};
 
 /// Strategy for selecting among eligible data providers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum FetchStrategy {
     /// Use priority order and fall back to the next provider on failure.
@@ -18,7 +18,7 @@ pub enum FetchStrategy {
 }
 
 /// Strategy for merging history data from multiple providers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum MergeStrategy {
     /// Fetch from all eligible providers concurrently and merge their data.
@@ -31,7 +31,7 @@ pub enum MergeStrategy {
 }
 
 /// Forced resampling mode for merged history series.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum Resampling {
     /// Do not force resampling; preserve the effective interval unless auto-subdaily triggers.
@@ -44,7 +44,7 @@ pub enum Resampling {
 }
 
 /// Exponential backoff configuration for reconnecting streaming sessions.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BackoffConfig {
     /// Minimum backoff delay in milliseconds.
     pub min_backoff_ms: u64,
@@ -68,12 +68,14 @@ impl Default for BackoffConfig {
 }
 
 /// Global configuration for the `Borsa` orchestrator.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BorsaConfig {
-    /// Preferred provider order per asset kind (highest priority first).
-    pub per_kind_priority: HashMap<AssetKind, Vec<ConnectorKey>>,
-    /// Preferred provider order per specific symbol.
-    pub per_symbol_priority: HashMap<String, Vec<ConnectorKey>>,
+    /// Unified routing policy controlling provider and exchange ordering.
+    ///
+    /// - Provider rules select and order eligible connectors; unknown connector
+    ///   keys are rejected during `borsa`'s build step.
+    /// - Exchange preferences influence search de-duplication only.
+    pub routing_policy: RoutingPolicy,
     /// Prefer adjusted history series when merging.
     pub prefer_adjusted_history: bool,
     /// Forced resampling mode for merged history.
@@ -96,8 +98,7 @@ pub struct BorsaConfig {
 impl Default for BorsaConfig {
     fn default() -> Self {
         Self {
-            per_kind_priority: HashMap::new(),
-            per_symbol_priority: HashMap::new(),
+            routing_policy: RoutingPolicy::default(),
             prefer_adjusted_history: false,
             resampling: Resampling::None,
             auto_resample_subdaily_to_daily: false,

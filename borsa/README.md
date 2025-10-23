@@ -114,15 +114,47 @@ let spy = Instrument::from_symbol("SPY", AssetKind::Equity)
 Configure which connectors to use for different assets:
 
 ```rust
+use std::sync::Arc;
+use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
+let yf_connector = Arc::new(YfConnector::new_default());
+let alpha_vantage_connector = Arc::new(AlphaVantageConnector::new_with_key("..."));
+
+let routing = RoutingPolicyBuilder::new()
+    // Prefer Alpha Vantage for crypto (type-safe, ergonomic API)
+    .providers_for_kind(
+        AssetKind::Crypto,
+        &[
+            alpha_vantage_connector.key(),
+            yf_connector.key(),
+        ],
+    )
+    // Use specific connector for TSLA
+    .providers_for_symbol(
+        "TSLA",
+        &[
+            alpha_vantage_connector.key(),
+            yf_connector.key(),
+        ],
+    )
+    // Prefer Yahoo for NASDAQ-listed instruments
+    .providers_for_exchange(
+        borsa_core::Exchange::try_from_str("NASDAQ").unwrap(),
+        &[yf_connector.key(), alpha_vantage_connector.key()],
+    )
+    .build();
+
 let borsa = Borsa::builder()
     .with_connector(yf_connector.clone())
     .with_connector(alpha_vantage_connector.clone())
-    // Prefer Alpha Vantage for crypto (type-safe, ergonomic API)
-    .prefer_for_kind(AssetKind::Crypto, &[alpha_vantage_connector.clone(), yf_connector.clone()])
-    // Use specific connector for TSLA
-    .prefer_symbol("TSLA", &[alpha_vantage_connector, yf_connector])
+    .routing_policy(routing)
     .build()?;
 ```
+
+Routing semantics at a glance:
+- Provider rules: the most specific matching rule wins (counts set fields among `symbol`, `kind`, `exchange`). If tied, precedence is Symbol > Kind > Exchange; if still tied, the rule defined last wins. Mark a rule `strict` to disable fallback to unlisted providers in that context.
+- Exchange preferences: used only for search de-duplication and resolved by Symbol > Kind > Global; they do not change which providers are eligible.
+
+Migration note: the old builder methods `prefer_for_kind` and `prefer_symbol` have been replaced with a unified `routing_policy(...)` API built via `RoutingPolicyBuilder`.
 
 ## Data Types
 

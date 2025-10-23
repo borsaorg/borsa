@@ -1,10 +1,11 @@
 use crate::helpers::MockConnector;
 use borsa::Borsa;
-use borsa_core::{AssetKind, RecommendationRow};
+use borsa_core::{AssetKind, BorsaConnector, RecommendationRow, RoutingPolicyBuilder};
+use tokio::time::Duration;
 
 #[tokio::test]
 async fn recommendations_respects_per_kind_priority() {
-    let low_arc = MockConnector::builder()
+    let low = MockConnector::builder()
         .name("low")
         .returns_recommendations_ok(vec![RecommendationRow {
             period: "2024-07".parse().unwrap(),
@@ -15,9 +16,9 @@ async fn recommendations_respects_per_kind_priority() {
             strong_sell: Some(1),
         }])
         .build();
-    let high_arc = MockConnector::builder()
+    let high = MockConnector::builder()
         .name("high")
-        .delay(std::time::Duration::from_millis(80))
+        .delay(Duration::from_millis(80))
         .returns_recommendations_ok(vec![RecommendationRow {
             period: "2024-08".parse().unwrap(),
             strong_buy: Some(5),
@@ -28,15 +29,20 @@ async fn recommendations_respects_per_kind_priority() {
         }])
         .build();
 
+    let policy = RoutingPolicyBuilder::new()
+        .providers_for_kind(AssetKind::Equity, &[high.key(), low.key()])
+        .build();
+
     let borsa = Borsa::builder()
-        .with_connector(low_arc.clone())
-        .with_connector(high_arc.clone())
-        .prefer_for_kind(AssetKind::Equity, &[high_arc, low_arc])
+        .with_connector(low.clone())
+        .with_connector(high.clone())
+        .routing_policy(policy)
         .build()
         .unwrap();
 
     let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
     let out = borsa.recommendations(&inst).await.unwrap();
-    // Should come from "high" despite being slower
+
+    // Should come from "high" despite being slower.
     assert_eq!(out[0].period, "2024-08".parse().unwrap());
 }

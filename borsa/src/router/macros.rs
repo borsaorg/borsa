@@ -1,6 +1,10 @@
 /// Generate a router async method that selects providers, applies kind filters,
 /// and calls a single-provider method. Handles not-found fallbacks via orchestrator.
 ///
+/// Optional `post_ok` hook can transform a successful provider response into an
+/// error (e.g., enforcing exchange constraints) to enable fallback or continue
+/// races under latency mode.
+///
 /// Notes on `not_found` label:
 /// - Pass a noun only (e.g., "quote", "holders", "analysis").
 /// - The orchestrator formats the final error as "{label} for {SYMBOL}".
@@ -15,6 +19,7 @@ macro_rules! borsa_router_method {
         capability: $capability:expr,
         not_found: $not_found:expr,
         call: $call_name:ident( $call_first:ident $(, $call_rest:ident )* )
+        $(, post_ok: $post_ok:expr )?
     ) => {
         $(#[$meta])*
         #[cfg_attr(
@@ -42,13 +47,21 @@ macro_rules! borsa_router_method {
                         return None;
                     }
                     let c2 = c.clone();
-                    if let Some(_) = c2.$accessor() {
+                    if c2.$accessor().is_some() {
                         Some({
                             let i2 = i.clone();
                             $( let $arg_ident = $arg_ident.clone(); )*
                             async move {
                                 if let Some(p) = c2.$accessor() {
-                                    p.$call_name(&i2 $(, $call_rest )*).await
+                                    let res = p.$call_name(&i2 $(, $call_rest )*).await;
+                                    match res {
+                                        Ok(v) => {
+                                            // Optional post-success mapping/enforcement.
+                                            $( { ($post_ok)(&v, &i2)?; } )?
+                                            Ok(v)
+                                        }
+                                        Err(e) => Err(e),
+                                    }
                                 } else {
                                     Err(borsa_core::BorsaError::connector(c2.name(), concat!("missing ", $capability, " capability during call")))
                                 }
@@ -66,6 +79,10 @@ macro_rules! borsa_router_method {
 
 /// Generate a router search method that queries providers concurrently, de-dups
 /// results by symbol, and applies an optional limit.
+///
+/// De-duplication uses the configured exchange preferences (symbol > kind >
+/// global) to pick the best exchange per symbol, preserving overall provider
+/// traversal order for stable results.
 #[macro_export]
 macro_rules! borsa_router_search {
     (
@@ -132,7 +149,6 @@ macro_rules! borsa_router_search {
             };
 
             let mut merged: Vec<borsa_core::SearchResult> = Vec::new();
-            let mut seen = std::collections::BTreeSet::<String>::new();
             let mut errors: Vec<borsa_core::BorsaError> = Vec::new();
             let mut attempted_any = false;
             for (name, attempted, res) in joined {
@@ -142,11 +158,7 @@ macro_rules! borsa_router_search {
                 match res {
                     Ok(sr) => {
                         if attempted {
-                            for item in sr.results.into_iter() {
-                                if seen.insert(item.symbol.as_str().to_string()) {
-                                    merged.push(item);
-                                }
-                            }
+                            merged.extend(sr.results.into_iter());
                         }
                     }
                     Err(e) => {
@@ -161,15 +173,14 @@ macro_rules! borsa_router_search {
                 }
             }
 
+            // Deduplicate by symbol using configured exchange preferences.
+            let mut merged = self.dedup_search_results_by_exchange($req_ident.kind(), merged);
+
             if !attempted_any {
                 return Err(borsa_core::BorsaError::unsupported($capability));
             }
 
-            if let Some(limit) = $req_ident.limit()
-                && merged.len() > limit
-            {
-                merged.truncate(limit);
-            }
+            if let Some(limit) = $req_ident.limit() && merged.len() > limit { merged.truncate(limit); }
 
             if merged.is_empty() && !errors.is_empty() {
                 return Err(borsa_core::BorsaError::AllProvidersFailed(errors));

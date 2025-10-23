@@ -69,6 +69,13 @@ pub enum BorsaError {
         /// Capability label that timed out across all providers.
         capability: String,
     },
+
+    /// Strict routing policy rejected one or more requested symbols for streaming.
+    #[error("strict routing rejected symbols: {rejected:?}")]
+    StrictSymbolsRejected {
+        /// List of symbol strings that were excluded by strict routing rules.
+        rejected: Vec<String>,
+    },
 }
 
 impl BorsaError {

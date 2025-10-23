@@ -131,20 +131,42 @@ let borsa = Borsa::builder()
     .build()?;
 ```
 
-- Per-kind or per-symbol connector priority:
+- Composable provider routing (symbol/kind/exchange) and strict rules:
 
 ```rust
-use borsa_core::AssetKind;
+use std::sync::Arc;
+use borsa_core::{AssetKind, BorsaConnector, Exchange, RoutingPolicyBuilder};
 let yf = Arc::new(YfConnector::new_default());
 let av = Arc::new(AvConnector::new_with_key("..."));
+
+let routing = RoutingPolicyBuilder::new()
+    // Kind-level default ordering
+    .providers_for_kind(AssetKind::Equity, &[yf.key(), av.key()])
+    // Symbol override
+    .providers_for_symbol("AAPL", &[av.key(), yf.key()])
+    // Exchange override (e.g., prefer Yahoo for NASDAQ)
+    .providers_for_exchange(Exchange::try_from_str("NASDAQ").unwrap(), &[yf.key(), av.key()])
+    // Strict rule (no fallback) for Crypto: only Yahoo will be attempted
+    .providers_rule(
+        borsa_core::Selector { symbol: None, kind: Some(AssetKind::Crypto), exchange: None },
+        &[yf.key()],
+        true,
+    )
+    .build();
 
 let borsa = Borsa::builder()
     .with_connector(yf.clone())
     .with_connector(av.clone())
-    .prefer_for_kind(AssetKind::Equity, &[yf.clone(), av.clone()])
-    .prefer_symbol("AAPL", &[av]) // overrides kind preference
+    .routing_policy(routing)
     .build()?;
 ```
+
+Note on routing semantics:
+
+- Provider rules: the most specific matching rule wins (counts set fields among `symbol`, `kind`, `exchange`). If equally specific, the rule that sets the highest-precedence field (Symbol > Kind > Exchange) wins; if still tied, the last-defined rule wins. `strict` rules disable fallback to unlisted providers.
+- Exchange preferences: used for search de-duplication only and resolve by Symbol > Kind > Global.
+
+Migration note: the old builder methods `prefer_for_kind` and `prefer_symbol` are replaced by `routing_policy(...)`. Use `RoutingPolicyBuilder` to declare preferences at symbol/kind/exchange scopes and optional `strict` rules.
 
 ## Examples
 
