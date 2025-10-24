@@ -4,6 +4,9 @@ use std::sync::Arc;
 
 use borsa_core::types::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Capability, Instrument, RoutingContext};
+use futures::stream::{FuturesUnordered, StreamExt};
+use std::collections::HashSet;
+use std::mem;
 
 /// Orchestrator that routes requests across registered providers.
 pub struct Borsa {
@@ -174,11 +177,10 @@ impl BorsaBuilder {
     /// - `InvalidArg` if the routing policy references unknown connector keys.
     pub fn build(mut self) -> Result<Borsa, BorsaError> {
         // Collect registered connector names for validation.
-        let known: std::collections::HashSet<&'static str> =
-            self.connectors.iter().map(|c| c.name()).collect();
+        let known: HashSet<&'static str> = self.connectors.iter().map(|c| c.name()).collect();
 
         // Normalize provider rules and collect unknown connector references.
-        let mut providers = std::mem::take(&mut self.cfg.routing_policy.providers);
+        let mut providers = mem::take(&mut self.cfg.routing_policy.providers);
         let unknown = providers.normalize_and_collect_unknown(&known);
         self.cfg.routing_policy.providers = providers;
 
@@ -556,8 +558,6 @@ impl Borsa {
         F: Fn(Arc<dyn BorsaConnector>, Instrument) -> Option<Fut> + Clone + Send,
         Fut: core::future::Future<Output = Result<T, BorsaError>> + Send,
     {
-        use futures::stream::{FuturesUnordered, StreamExt};
-
         let mut futs = FuturesUnordered::new();
         let mut attempted_any = false;
         for c in self.ordered(inst) {

@@ -6,6 +6,7 @@ use borsa_core::{
 };
 // use of HistoryProvider trait object occurs via method return; no import needed
 
+use futures::future::join_all;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::mem;
@@ -357,7 +358,7 @@ impl Borsa {
         let tasks = eligible.iter().map(|(idx, c)| {
             Self::spawn_history_task(*idx, c.clone(), inst.clone(), req_copy, provider_timeout)
         });
-        futures::future::join_all(tasks).await
+        join_all(tasks).await
     }
 
     fn build_effective_request(

@@ -4,14 +4,12 @@ use borsa_core::{
     RoutingContext, stream::StreamHandle,
 };
 use rand::Rng;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot, watch};
+use tokio::task::JoinHandle;
 
-type StreamProviderScore = (
-    usize,
-    usize,
-    std::sync::Arc<dyn BorsaConnector>,
-    HashSet<String>,
-);
+type StreamProviderScore = (usize, usize, Arc<dyn BorsaConnector>, HashSet<String>);
 
 impl Borsa {
     /// Start streaming quotes with automatic backoff and provider failover.
@@ -45,7 +43,7 @@ impl Borsa {
         &self,
         instruments: &[Instrument],
         backoff_override: Option<BackoffConfig>,
-    ) -> Result<(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>), BorsaError> {
+    ) -> Result<(StreamHandle, mpsc::Receiver<QuoteUpdate>), BorsaError> {
         // Ensure this async function awaits at least once to avoid unused_async lint.
         tokio::task::yield_now().await;
         if instruments.is_empty() {
@@ -55,10 +53,7 @@ impl Borsa {
         }
 
         // Group instruments by (kind, exchange) to respect provider rules that depend on exchange.
-        let mut by_group: std::collections::HashMap<
-            (AssetKind, Option<Exchange>),
-            Vec<Instrument>,
-        > = std::collections::HashMap::new();
+        let mut by_group: HashMap<(AssetKind, Option<Exchange>), Vec<Instrument>> = HashMap::new();
         for inst in instruments.iter().cloned() {
             by_group
                 .entry((*inst.kind(), inst.exchange().cloned()))
@@ -70,13 +65,12 @@ impl Borsa {
             backoff_override.or(self.cfg.backoff).unwrap_or_default();
 
         // For each kind, spin up a supervisor loop identical to previous logic, then fan-in.
-        let (tx, rx) = tokio::sync::mpsc::channel::<QuoteUpdate>(1024);
-        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
-        let (stop_broadcast_tx, stop_broadcast_rx) = tokio::sync::watch::channel(false);
+        let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let (stop_broadcast_tx, stop_broadcast_rx) = watch::channel(false);
 
         let mut joins = Vec::new();
-        let mut init_receivers: Vec<tokio::sync::oneshot::Receiver<Result<(), BorsaError>>> =
-            Vec::new();
+        let mut init_receivers: Vec<oneshot::Receiver<Result<(), BorsaError>>> = Vec::new();
         for ((kind, ex), list) in by_group {
             let EligibleStreamProviders {
                 providers,
@@ -94,7 +88,7 @@ impl Borsa {
                 // Determine if strict rules excluded these symbols (vs capability absence).
                 let mut strict_filtered: Vec<String> = Vec::new();
                 // Consider only streaming-capable providers that support this kind
-                let candidates: Vec<&std::sync::Arc<dyn BorsaConnector>> = self
+                let candidates: Vec<&Arc<dyn BorsaConnector>> = self
                     .connectors
                     .iter()
                     .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
@@ -147,7 +141,7 @@ impl Borsa {
             let factor = resolved_backoff.factor.max(1);
             let jitter_percent = resolved_backoff.jitter_percent.min(100);
 
-            let (init_tx, init_rx) = tokio::sync::oneshot::channel();
+            let (init_tx, init_rx) = oneshot::channel();
 
             let params = KindSupervisorParams {
                 providers,
@@ -210,7 +204,7 @@ impl Borsa {
     pub async fn stream_quotes(
         &self,
         instruments: &[Instrument],
-    ) -> Result<(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>), BorsaError> {
+    ) -> Result<(StreamHandle, mpsc::Receiver<QuoteUpdate>), BorsaError> {
         self.stream_quotes_with_backoff(instruments, None).await
     }
 }
@@ -239,7 +233,7 @@ fn collapse_stream_errors(errors: Vec<BorsaError>) -> BorsaError {
 }
 
 struct KindSupervisorParams {
-    providers: Vec<std::sync::Arc<dyn BorsaConnector>>,
+    providers: Vec<Arc<dyn BorsaConnector>>,
     /// Assigned instruments per provider, aligned by index with `providers`.
     provider_instruments: Vec<Vec<Instrument>>,
     /// Allowed symbol set per provider, aligned by index with `providers`.
@@ -248,12 +242,12 @@ struct KindSupervisorParams {
     max_backoff_ms: u64,
     factor: u32,
     jitter_percent: u32,
-    initial_notify: Option<tokio::sync::oneshot::Sender<Result<(), BorsaError>>>,
+    initial_notify: Option<oneshot::Sender<Result<(), BorsaError>>>,
 }
 
 struct EligibleStreamProviders {
     /// Providers eligible for this (kind, exchange) group sorted by score and registration order
-    providers: Vec<std::sync::Arc<dyn BorsaConnector>>,
+    providers: Vec<Arc<dyn BorsaConnector>>,
     /// Allowed symbols per provider, aligned with `providers`
     provider_symbols: Vec<HashSet<String>>,
     /// Union of all allowed symbols across providers
@@ -313,7 +307,7 @@ impl Borsa {
 
         scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));
 
-        let mut providers: Vec<std::sync::Arc<dyn BorsaConnector>> = Vec::new();
+        let mut providers: Vec<Arc<dyn BorsaConnector>> = Vec::new();
         let mut provider_symbols: Vec<HashSet<String>> = Vec::new();
         let mut union_symbols: HashSet<String> = HashSet::new();
 
@@ -333,9 +327,9 @@ impl Borsa {
     #[allow(clippy::too_many_lines)]
     fn spawn_kind_supervisor(
         params: KindSupervisorParams,
-        mut stop_watch: tokio::sync::watch::Receiver<bool>,
-        tx_clone: tokio::sync::mpsc::Sender<QuoteUpdate>,
-    ) -> tokio::task::JoinHandle<()> {
+        mut stop_watch: watch::Receiver<bool>,
+        tx_clone: mpsc::Sender<QuoteUpdate>,
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             use tokio::time::{Duration, sleep};
             let KindSupervisorParams {

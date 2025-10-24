@@ -1,3 +1,4 @@
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 /// Abstraction over a handle that can be queried for completion and aborted.
@@ -25,7 +26,7 @@ pub trait Stoppable {
     fn send(self);
 }
 
-impl Stoppable for tokio::sync::oneshot::Sender<()> {
+impl Stoppable for oneshot::Sender<()> {
     fn send(self) {
         let _ = Self::send(self, ());
     }
@@ -58,8 +59,8 @@ where
 ///   the underlying task is then aborted. The task may not observe the stop signal before abort.
 #[derive(Debug)]
 pub struct StreamHandle {
-    inner: Option<tokio::task::JoinHandle<()>>,
-    stop_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    inner: Option<JoinHandle<()>>,
+    stop_tx: Option<oneshot::Sender<()>>,
 }
 
 impl StreamHandle {
@@ -71,10 +72,7 @@ impl StreamHandle {
     ///
     /// Returns a handle that can be used to stop or abort the stream.
     #[must_use]
-    pub const fn new(
-        inner: tokio::task::JoinHandle<()>,
-        stop_tx: tokio::sync::oneshot::Sender<()>,
-    ) -> Self {
+    pub const fn new(inner: JoinHandle<()>, stop_tx: oneshot::Sender<()>) -> Self {
         Self {
             inner: Some(inner),
             stop_tx: Some(stop_tx),
@@ -87,7 +85,7 @@ impl StreamHandle {
     /// cooperative shutdown signal. Dropping the handle (or calling
     /// [`abort`](Self::abort)) will force-cancel the underlying task.
     #[must_use]
-    pub const fn new_abort_only(inner: tokio::task::JoinHandle<()>) -> Self {
+    pub const fn new_abort_only(inner: JoinHandle<()>) -> Self {
         Self {
             inner: Some(inner),
             stop_tx: None,

@@ -1,4 +1,6 @@
 use core::fmt::{self, Write as _};
+use std::cmp::Ordering;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashSet, btree_map::Entry};
 use std::hash::{Hash, Hasher};
 
@@ -163,9 +165,7 @@ impl<H: Hasher> fmt::Write for HashWriter<'_, H> {
     }
 }
 
-fn compare_actions(a: &Action, b: &Action) -> std::cmp::Ordering {
-    use std::cmp::Ordering;
-
+fn compare_actions(a: &Action, b: &Action) -> Ordering {
     let (ats, ak): (DateTime<Utc>, u8) = match *a {
         Action::Dividend { ts, .. } => (ts, 0),
         Action::Split { ts, .. } => (ts, 1),
@@ -219,7 +219,7 @@ fn compare_actions(a: &Action, b: &Action) -> std::cmp::Ordering {
     }
 }
 
-fn hash_action(hasher: &mut std::collections::hash_map::DefaultHasher, a: &Action) {
+fn hash_action(hasher: &mut DefaultHasher, a: &Action) {
     match a {
         Action::Dividend { ts, amount } => {
             0u8.hash(hasher);
@@ -263,7 +263,7 @@ pub fn dedup_actions(mut actions: Vec<Action>) -> Vec<Action> {
     let mut out: Vec<Action> = Vec::with_capacity(actions.len());
 
     for a in actions {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut hasher = DefaultHasher::new();
         hash_action(&mut hasher, &a);
         let h = hasher.finish();
         if seen.insert(h) {

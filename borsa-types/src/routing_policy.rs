@@ -27,16 +27,14 @@
 //!   `strict`; they will be placed after listed ones, preserving registration
 //!   order.
 
-use std::collections::{HashMap, HashSet};
-
 use crate::connector::ConnectorKey;
 use paft::domain::{AssetKind, Exchange};
 use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
-
-type Specificity = (u8, u8, u8, u8);
-type ProviderMatch<'a> = (&'a RankedList<ConnectorKey>, bool, Specificity, usize);
+use std::collections::{HashMap, HashSet};
+use std::fmt;
+use std::hash::Hash;
 
 /// Scope at which a preference applies. Precedence is Symbol > Kind > Global.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -51,14 +49,17 @@ pub enum ScopeKey {
 
 /// Ranked list of values with cached index positions for stable sort keys.
 #[derive(Debug, Clone)]
-pub(crate) struct RankedList<T> {
+pub(crate) struct RankedList<T>
+where
+    T: Clone + Eq + Hash,
+{
     values: Vec<T>,
     ranks: HashMap<T, usize>,
 }
 
 impl<T> RankedList<T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Eq + Hash,
 {
     fn new(list: &[T]) -> Self {
         let mut values: Vec<T> = Vec::new();
@@ -88,7 +89,7 @@ where
 
 impl<T> Serialize for RankedList<T>
 where
-    T: Serialize + Clone + Eq + std::hash::Hash,
+    T: Serialize + Clone + Eq + Hash,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -104,7 +105,7 @@ where
 
 impl<'de, T> Deserialize<'de> for RankedList<T>
 where
-    T: Deserialize<'de> + Clone + Eq + std::hash::Hash,
+    T: Deserialize<'de> + Clone + Eq + Hash,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -115,10 +116,10 @@ where
         }
         impl<'de, TV> Visitor<'de> for RLVisitor<TV>
         where
-            TV: Deserialize<'de> + Clone + Eq + std::hash::Hash,
+            TV: Deserialize<'de> + Clone + Eq + Hash,
         {
             type Value = RankedList<TV>;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "a sequence of values")
             }
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -142,7 +143,10 @@ where
 ///
 /// Values are de-duplicated while preserving the first occurrence order.
 #[derive(Debug, Clone)]
-pub struct Preference<T> {
+pub struct Preference<T>
+where
+    T: Clone + Eq + Hash,
+{
     global: Option<RankedList<T>>,
     by_kind: HashMap<AssetKind, RankedList<T>>,
     by_symbol: HashMap<String, RankedList<T>>,
@@ -150,7 +154,7 @@ pub struct Preference<T> {
 
 impl<T> Default for Preference<T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Eq + Hash,
 {
     fn default() -> Self {
         Self {
@@ -163,7 +167,7 @@ where
 
 impl<T> Preference<T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Eq + Hash,
 {
     /// Set the ordered list for `scope`, keeping only the first occurrence of
     /// each element and preserving order.
@@ -241,7 +245,7 @@ where
 
 impl<T> Serialize for Preference<T>
 where
-    T: Serialize + Clone + Eq + std::hash::Hash,
+    T: Serialize + Clone + Eq + Hash,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -258,30 +262,46 @@ where
 
 impl<'de, T> Deserialize<'de> for Preference<T>
 where
-    T: Deserialize<'de> + Clone + Eq + std::hash::Hash,
+    T: Deserialize<'de> + Clone + Eq + Hash,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        #[serde(bound(deserialize = "T: Deserialize<'de> + Clone + Eq + std::hash::Hash"))]
+        #[serde(bound(deserialize = "T: Deserialize<'de> + Clone + Eq + Hash"))]
         struct PrefSerde<T> {
-            global: Option<RankedList<T>>,
-            by_kind: Option<HashMap<AssetKind, RankedList<T>>>,
-            by_symbol: Option<HashMap<String, RankedList<T>>>,
+            global: Option<Vec<T>>,
+            by_kind: Option<HashMap<AssetKind, Vec<T>>>,
+            by_symbol: Option<HashMap<String, Vec<T>>>,
         }
         let tmp = PrefSerde::deserialize(deserializer)?;
+        let global = tmp.global.map(|v| RankedList::new(&v));
+        let by_kind = tmp
+            .by_kind
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(k, v)| (k, RankedList::new(&v)))
+            .collect();
+        let by_symbol = tmp
+            .by_symbol
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(s, v)| (s, RankedList::new(&v)))
+            .collect();
         Ok(Self {
-            global: tmp.global,
-            by_kind: tmp.by_kind.unwrap_or_default(),
-            by_symbol: tmp.by_symbol.unwrap_or_default(),
+            global,
+            by_kind,
+            by_symbol,
         })
     }
 }
 
 /// Iterator over configured preference scopes.
-pub struct PreferenceScopeIter<'a, T> {
+pub struct PreferenceScopeIter<'a, T>
+where
+    T: Clone + Eq + Hash,
+{
     global: Option<&'a RankedList<T>>,
     yielded_global: bool,
     by_kind: std::collections::hash_map::Iter<'a, AssetKind, RankedList<T>>,
@@ -290,7 +310,7 @@ pub struct PreferenceScopeIter<'a, T> {
 
 impl<'a, T> Iterator for PreferenceScopeIter<'a, T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Eq + Hash,
 {
     type Item = PreferenceScope<'a, T>;
 
@@ -330,7 +350,7 @@ pub enum PreferenceScope<'a, T> {
 
 impl<'a, T> PreferenceScope<'a, T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Eq + Hash,
 {
     /// Convert the borrowed scope into an owned [`ScopeKey`].
     #[must_use]
@@ -372,7 +392,7 @@ pub struct PreferenceValues<'a, T> {
 
 impl<'a, T> PreferenceValues<'a, T>
 where
-    T: Clone + Eq + std::hash::Hash,
+    T: Clone + Eq + Hash,
 {
     fn new(list: &'a RankedList<T>) -> Self {
         Self {
@@ -444,7 +464,7 @@ impl ProviderPolicy {
         &'a self,
         ctx: &RoutingContext,
     ) -> Option<(&'a RankedList<ConnectorKey>, bool)> {
-        let mut best: Option<ProviderMatch<'_>> = None;
+        let mut best: Option<(&RankedList<ConnectorKey>, bool, (u8, u8, u8, u8), usize)> = None;
         for (idx, r) in self.rules.iter().enumerate() {
             let s = &r.selector;
             if s.symbol.is_some() && s.symbol.as_deref() != ctx.symbol {
@@ -458,7 +478,7 @@ impl ProviderPolicy {
             }
             let (sb, kb, eb) = s.specificity_bits();
             let count = sb + kb + eb;
-            let spec: Specificity = (count, sb, kb, eb);
+            let spec: (u8, u8, u8, u8) = (count, sb, kb, eb);
             match best {
                 None => best = Some((&r.list, r.strict, spec, idx)),
                 Some((_, _, bspec, bidx)) => {
@@ -534,7 +554,7 @@ impl ProviderPolicy {
     ///   connectors. Callers typically surface the returned list as an error.
     pub fn normalize_and_collect_unknown(
         &mut self,
-        known: &std::collections::HashSet<&'static str>,
+        known: &HashSet<&'static str>,
     ) -> Vec<(Selector, Vec<String>)> {
         let mut unknown: Vec<(Selector, Vec<String>)> = Vec::new();
 

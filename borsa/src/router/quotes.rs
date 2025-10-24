@@ -3,6 +3,7 @@ use borsa_core::{BorsaError, Capability, Instrument, Quote};
 
 use crate::Borsa;
 use crate::borsa_router_method;
+use futures::future::join_all;
 
 impl Borsa {
     borsa_router_method! {
@@ -53,7 +54,7 @@ impl Borsa {
             }
         });
 
-        let results = futures::future::join_all(tasks).await;
+        let results = join_all(tasks).await;
 
         let mut ok_quotes: Vec<Quote> = Vec::new();
         let mut failures: Vec<(Instrument, BorsaError)> = Vec::new();

@@ -1,5 +1,7 @@
 #[cfg(feature = "test-adapters")]
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 use async_trait::async_trait;
 
@@ -190,7 +192,7 @@ pub trait YfStream: Send + Sync {
     ) -> Result<
         (
             borsa_core::stream::StreamHandle,
-            tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
+            mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
     >;
@@ -281,7 +283,7 @@ impl YfStream for RealAdapter {
     ) -> Result<
         (
             borsa_core::stream::StreamHandle,
-            tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
+            mpsc::Receiver<borsa_core::QuoteUpdate>,
         ),
         BorsaError,
     > {
@@ -291,7 +293,7 @@ impl YfStream for RealAdapter {
             .symbols(symbols.iter().cloned());
         let (handle, rx) = builder.start().map_err(|e| map_yf_err(&e, "stream"))?;
 
-        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
         let join = tokio::spawn(async move {
             // Propagate stop signal to the underlying yfinance stream handle.
             let _ = stop_rx.await;

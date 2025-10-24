@@ -3,6 +3,8 @@ use borsa_core::{
     BorsaError, Capability, DownloadEntry, DownloadReport, DownloadResponse, HistoryRequest,
     HistoryResponse, Instrument, Range,
 };
+use chrono::DateTime;
+use futures::future::join_all;
 use std::collections::HashSet;
 
 // Validate that all instruments have unique symbols.
@@ -136,10 +138,10 @@ impl<'a> DownloadBuilder<'a> {
 
         // Build a validated HistoryRequest now; convert timestamp seconds safely.
         let req: HistoryRequest = if let Some((start, end)) = self.period {
-            let start_dt = chrono::DateTime::from_timestamp(start, 0).ok_or_else(|| {
+            let start_dt = DateTime::from_timestamp(start, 0).ok_or_else(|| {
                 BorsaError::InvalidArg(format!("invalid start timestamp: {start}"))
             })?;
-            let end_dt = chrono::DateTime::from_timestamp(end, 0)
+            let end_dt = DateTime::from_timestamp(end, 0)
                 .ok_or_else(|| BorsaError::InvalidArg(format!("invalid end timestamp: {end}")))?;
             HistoryRequest::try_from_period(start_dt, end_dt, self.interval)?
         } else {
@@ -163,7 +165,7 @@ impl<'a> DownloadBuilder<'a> {
         let joined: Vec<(Instrument, Result<HistoryResponse, BorsaError>)> =
             match crate::core::with_request_deadline(
                 self.borsa.cfg.request_timeout,
-                futures::future::join_all(tasks),
+                join_all(tasks),
             )
             .await
             {
