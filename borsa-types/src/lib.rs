@@ -11,7 +11,10 @@ pub mod routing_policy;
 
 pub use attribution::{Attribution, Span};
 pub use capability::Capability;
-pub use config::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
+pub use config::{
+    BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, QuotaConfig,
+    QuotaConsumptionStrategy, QuotaState, Resampling,
+};
 pub use connector::ConnectorKey;
 pub use error::BorsaError;
 pub use reports::{DownloadReport, InfoReport, SearchReport};

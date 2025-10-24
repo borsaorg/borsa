@@ -43,6 +43,50 @@ pub enum Resampling {
     Weekly,
 }
 
+/// Strategy for consuming units from a quota when handling requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum QuotaConsumptionStrategy {
+    /// Each request deducts exactly one unit from the quota budget.
+    #[default]
+    Unit,
+    /// The caller specifies a weight (units) to deduct per request.
+    /// This allows modeling provider-specific costs.
+    Weighted,
+}
+
+/// Configuration for a token-like quota budget over a sliding window.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotaConfig {
+    /// Maximum number of units that may be consumed within a single window.
+    pub limit: u64,
+    /// Duration of the accounting window.
+    pub window: Duration,
+    /// Strategy for how requests consume units from the budget.
+    pub strategy: QuotaConsumptionStrategy,
+}
+
+impl Default for QuotaConfig {
+    fn default() -> Self {
+        Self {
+            limit: 1000,
+            window: Duration::from_secs(60),
+            strategy: QuotaConsumptionStrategy::Unit,
+        }
+    }
+}
+
+/// Snapshot of a quota budget at a point in time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct QuotaState {
+    /// Configured maximum units per window.
+    pub limit: u64,
+    /// Remaining units available in the current window.
+    pub remaining: u64,
+    /// Time remaining until the current window resets.
+    pub reset_in: Duration,
+}
+
 /// Exponential backoff configuration for reconnecting streaming sessions.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct BackoffConfig {

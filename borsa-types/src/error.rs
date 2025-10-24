@@ -76,6 +76,24 @@ pub enum BorsaError {
         /// List of symbol strings that were excluded by strict routing rules.
         rejected: Vec<String>,
     },
+
+    /// The request exceeds the configured quota budget for the current window.
+    #[error("quota exceeded: remaining={remaining} reset_in_ms={reset_in_ms}")]
+    QuotaExceeded {
+        /// Remaining units at the time of rejection.
+        remaining: u64,
+        /// Milliseconds until the quota window resets.
+        reset_in_ms: u64,
+    },
+
+    /// The request rate exceeds the configured rate limit.
+    #[error("rate limit exceeded: limit={limit} window_ms={window_ms}")]
+    RateLimitExceeded {
+        /// Allowed number of requests or units in the window.
+        limit: u64,
+        /// Window length in milliseconds.
+        window_ms: u64,
+    },
 }
 
 impl BorsaError {
