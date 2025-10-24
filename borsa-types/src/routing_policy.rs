@@ -464,7 +464,9 @@ impl ProviderPolicy {
         &'a self,
         ctx: &RoutingContext,
     ) -> Option<(&'a RankedList<ConnectorKey>, bool)> {
-        let mut best: Option<(&RankedList<ConnectorKey>, bool, (u8, u8, u8, u8), usize)> = None;
+        type SpecBits = (u8, u8, u8, u8);
+        type BestState<'b> = (&'b RankedList<ConnectorKey>, bool, SpecBits, usize);
+        let mut best: Option<BestState<'_>> = None;
         for (idx, r) in self.rules.iter().enumerate() {
             let s = &r.selector;
             if s.symbol.is_some() && s.symbol.as_deref() != ctx.symbol {
@@ -478,7 +480,7 @@ impl ProviderPolicy {
             }
             let (sb, kb, eb) = s.specificity_bits();
             let count = sb + kb + eb;
-            let spec: (u8, u8, u8, u8) = (count, sb, kb, eb);
+            let spec: SpecBits = (count, sb, kb, eb);
             match best {
                 None => best = Some((&r.list, r.strict, spec, idx)),
                 Some((_, _, bspec, bidx)) => {

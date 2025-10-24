@@ -4,6 +4,12 @@ version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Middleware wrappers for Borsa connectors (e.g., quota-aware wrappers)"
+readme = "README.md"
+repository = "https://github.com/borsaorg/borsa"
+homepage = "https://github.com/borsaorg/borsa"
+documentation = "https://docs.rs/borsa-middleware"
+keywords = ["middleware", "borsa", "finance", "stocks", "trading"]
+categories = ["api-bindings", "finance", "web-programming::http-client"]
 
 [dependencies]
 borsa-core = { workspace = true }

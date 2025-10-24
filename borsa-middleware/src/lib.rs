@@ -3,9 +3,9 @@
 //! Pass-through middleware wrappers around `BorsaConnector` implementations.
 
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use borsa_core::AssetKind;
 use borsa_core::connector::{
     AnalystPriceTargetProvider, BalanceSheetProvider, BorsaConnector, CalendarProvider,
     CashflowProvider, EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
@@ -13,6 +13,7 @@ use borsa_core::connector::{
     RecommendationsProvider, RecommendationsSummaryProvider, SearchProvider,
     UpgradesDowngradesProvider,
 };
+use borsa_core::{AssetKind, BorsaError};
 use borsa_types::{QuotaConfig, QuotaState};
 
 /// Wrapper that will enforce quotas (future work). Currently pass-through only.
@@ -20,21 +21,74 @@ pub struct QuotaAwareConnector {
     inner: Arc<dyn BorsaConnector>,
     _config: QuotaConfig,
     _state: Mutex<QuotaState>,
+    runtime: Mutex<QuotaRuntime>,
+}
+
+struct QuotaRuntime {
+    limit: u64,
+    calls_made_in_window: u64,
+    last_reset: Instant,
+    window: Duration,
 }
 
 impl QuotaAwareConnector {
     /// Create a new quota-aware wrapper around an existing connector.
     pub fn new(inner: Arc<dyn BorsaConnector>, config: QuotaConfig, state: QuotaState) -> Self {
+        let window = config.window;
+        let limit = config.limit;
         Self {
             inner,
             _config: config,
             _state: Mutex::new(state),
+            runtime: Mutex::new(QuotaRuntime {
+                limit,
+                calls_made_in_window: 0,
+                last_reset: Instant::now(),
+                window,
+            }),
         }
     }
 
     /// Access the inner connector.
     pub fn inner(&self) -> &Arc<dyn BorsaConnector> {
         &self.inner
+    }
+
+    /// Check whether a call should be allowed under the greedy quota strategy.
+    ///
+    /// # Errors
+    /// Returns `BorsaError::QuotaExceeded` when the remaining units in the current
+    /// window are zero; the error includes the estimated milliseconds until reset.
+    ///
+    /// # Panics
+    /// Panics if the internal mutex is poisoned.
+    pub fn should_allow_call(&self) -> Result<(), BorsaError> {
+        let mut rt = self.runtime.lock().expect("mutex poisoned");
+        let now = Instant::now();
+
+        if now.duration_since(rt.last_reset) >= rt.window {
+            rt.calls_made_in_window = 0;
+            rt.last_reset = now;
+        }
+
+        if rt.calls_made_in_window < rt.limit {
+            rt.calls_made_in_window += 1;
+            return Ok(());
+        }
+
+        let elapsed = now.duration_since(rt.last_reset);
+        let remaining_ms = rt
+            .window
+            .saturating_sub(elapsed)
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        let remaining_units = rt.limit.saturating_sub(rt.calls_made_in_window);
+        drop(rt);
+        Err(BorsaError::QuotaExceeded {
+            remaining: remaining_units,
+            reset_in_ms: remaining_ms,
+        })
     }
 }
 

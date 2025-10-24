@@ -5,7 +5,7 @@ use borsa_middleware::QuotaAwareConnector;
 use borsa_mock::MockConnector;
 use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
 
-fn default_quota() -> (QuotaConfig, QuotaState) {
+const fn default_quota() -> (QuotaConfig, QuotaState) {
     let cfg = QuotaConfig {
         limit: 10,
         window: std::time::Duration::from_secs(60),
