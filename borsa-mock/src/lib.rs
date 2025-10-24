@@ -43,6 +43,10 @@ impl MockConnector {
                 "borsa-mock",
                 format!("forced failure: {capability}"),
             )),
+            "RATELIMIT" => Err(BorsaError::connector(
+                "borsa-mock",
+                format!("429 Too Many Requests - rate limit exceeded during {capability}"),
+            )),
             "TIMEOUT" => {
                 // Simulate brief latency; orchestrator may time out depending on config
                 // Keep short to avoid slowing tests excessively
