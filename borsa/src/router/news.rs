@@ -1,5 +1,6 @@
 use crate::Borsa;
 use crate::borsa_router_method;
+use borsa_core::{Capability, Instrument, NewsArticle, NewsRequest};
 
 impl Borsa {
     borsa_router_method! {
@@ -7,10 +8,10 @@ impl Borsa {
         ///
         /// Behavior: providers may include duplicates or syndicated content; no
         /// de-duplication beyond provider response is applied here.
-        method: news(inst: &borsa_core::Instrument, req: borsa_core::NewsRequest) -> Vec<borsa_core::NewsArticle>,
+        method: news(inst: &Instrument, req: NewsRequest) -> Vec<NewsArticle>,
         provider: NewsProvider,
         accessor: as_news_provider,
-        capability: borsa_core::Capability::News,
+        capability: Capability::News,
         not_found: "news",
         call: news(inst, req)
     }

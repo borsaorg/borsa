@@ -1,4 +1,4 @@
-use borsa_core::{BorsaError, Quote};
+use borsa_core::{BorsaError, Capability, Instrument, Quote};
 // QuoteProvider trait is used via returned trait objects; no direct import needed
 
 use crate::Borsa;
@@ -15,13 +15,13 @@ impl Borsa {
         /// - `NotFound` from any attempted provider maps to a `NotFound` outcome when
         ///   using fallback; with latency mode, the first success wins and failures are
         ///   aggregated only if all attempts fail.
-        method: quote(inst: &borsa_core::Instrument) -> borsa_core::Quote,
+        method: quote(inst: &Instrument) -> Quote,
         provider: QuoteProvider,
         accessor: as_quote_provider,
-        capability: borsa_core::Capability::Quote,
+        capability: Capability::Quote,
         not_found: "quote",
         call: quote(inst),
-        post_ok: |q: &Quote, i: &borsa_core::Instrument| -> Result<(), borsa_core::BorsaError> { Borsa::enforce_quote_exchange(i, q) }
+        post_ok: |q: &Quote, i: &Instrument| -> Result<(), BorsaError> { Borsa::enforce_quote_exchange(i, q) }
     }
 
     /// Fetch quotes for multiple instruments.
@@ -38,8 +38,8 @@ impl Borsa {
     /// Returns an error only if joining tasks fails before per-symbol routing.
     pub async fn quotes(
         &self,
-        insts: &[borsa_core::Instrument],
-    ) -> Result<(Vec<Quote>, Vec<(borsa_core::Instrument, BorsaError)>), BorsaError> {
+        insts: &[Instrument],
+    ) -> Result<(Vec<Quote>, Vec<(Instrument, BorsaError)>), BorsaError> {
         if insts.is_empty() {
             return Ok((vec![], vec![]));
         }
@@ -56,7 +56,7 @@ impl Borsa {
         let results = futures::future::join_all(tasks).await;
 
         let mut ok_quotes: Vec<Quote> = Vec::new();
-        let mut failures: Vec<(borsa_core::Instrument, BorsaError)> = Vec::new();
+        let mut failures: Vec<(Instrument, BorsaError)> = Vec::new();
         for (inst, res) in results {
             match res {
                 Ok(q) => ok_quotes.push(q),

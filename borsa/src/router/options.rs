@@ -1,5 +1,6 @@
 use crate::Borsa;
 use crate::borsa_router_method;
+use borsa_core::{Capability, Instrument, OptionChain};
 
 impl Borsa {
     borsa_router_method! {
@@ -7,10 +8,10 @@ impl Borsa {
         ///
         /// Notes: expirations reflect the source's calendar; far-dated LEAPS support
         /// depends on provider coverage.
-        method: options_expirations(inst: &borsa_core::Instrument) -> Vec<i64>,
+        method: options_expirations(inst: &Instrument) -> Vec<i64>,
         provider: OptionsExpirationsProvider,
         accessor: as_options_expirations_provider,
-        capability: borsa_core::Capability::OptionsExpirations,
+        capability: Capability::OptionsExpirations,
         not_found: "options",
         call: options_expirations(inst)
     }
@@ -20,10 +21,10 @@ impl Borsa {
         ///
         /// Trade-offs: chains can be large; consider filtering or paging at the
         /// consumer level if your provider does not support server-side limits.
-        method: option_chain(inst: &borsa_core::Instrument, date: Option<i64>) -> borsa_core::OptionChain,
+        method: option_chain(inst: &Instrument, date: Option<i64>) -> OptionChain,
         provider: OptionChainProvider,
         accessor: as_option_chain_provider,
-        capability: borsa_core::Capability::OptionChain,
+        capability: Capability::OptionChain,
         not_found: "options",
         call: option_chain(inst, date)
     }

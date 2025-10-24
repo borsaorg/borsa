@@ -1,5 +1,5 @@
 use crate::Borsa;
-use borsa_core::{BorsaError, Isin};
+use borsa_core::{BorsaError, FastInfo, Info, InfoReport, Instrument, Isin, Profile};
 
 type ProfileFields = (
     Option<String>,
@@ -25,10 +25,7 @@ impl Borsa {
     /// # Errors
     /// Returns an error only if task join fails unexpectedly.
     /// Otherwise, succeeds and includes per-source errors in the `errors` field.
-    pub async fn info(
-        &self,
-        inst: &borsa_core::Instrument,
-    ) -> Result<borsa_core::InfoReport, BorsaError> {
+    pub async fn info(&self, inst: &Instrument) -> Result<InfoReport, BorsaError> {
         let (profile_res, quote_res, isin_res) =
             tokio::join!(self.profile(inst), self.quote(inst), self.isin(inst));
 
@@ -75,9 +72,9 @@ impl Borsa {
                 .or(q.previous_close.as_ref())
                 .map(|m| m.currency().clone())
         });
-        Ok(borsa_core::InfoReport {
+        Ok(InfoReport {
             symbol: inst.symbol().clone(),
-            info: Some(borsa_core::Info {
+            info: Some(Info {
                 symbol: inst.symbol().clone(),
                 name: name_field,
                 isin: isin_val,
@@ -107,15 +104,15 @@ impl Borsa {
         })
     }
 
-    fn pick_isin(profile: Option<&borsa_core::Profile>, explicit: Option<Isin>) -> Option<Isin> {
+    fn pick_isin(profile: Option<&Profile>, explicit: Option<Isin>) -> Option<Isin> {
         explicit.or_else(|| profile.and_then(|p| p.isin().cloned()))
     }
 
-    fn pick_profile_fields(profile: Option<&borsa_core::Profile>) -> ProfileFields {
+    fn pick_profile_fields(profile: Option<&Profile>) -> ProfileFields {
         profile.map_or(
             (None, None, None, None, None, None, None, None),
             |p| match p {
-                borsa_core::Profile::Company(c) => (
+                Profile::Company(c) => (
                     Some(c.name.clone()),
                     c.sector.clone(),
                     c.industry.clone(),
@@ -125,7 +122,7 @@ impl Borsa {
                     None,
                     None,
                 ),
-                borsa_core::Profile::Fund(f) => (
+                Profile::Fund(f) => (
                     Some(f.name.clone()),
                     None,
                     None,
@@ -148,10 +145,7 @@ impl Borsa {
     ///   latency-sensitive paths where completeness is secondary to availability.
     /// # Errors
     /// Returns an error if the quote lacks both last and previous price.
-    pub async fn fast_info(
-        &self,
-        inst: &borsa_core::Instrument,
-    ) -> Result<borsa_core::FastInfo, BorsaError> {
+    pub async fn fast_info(&self, inst: &Instrument) -> Result<FastInfo, BorsaError> {
         let q = self.quote(inst).await?;
         let last = q
             .price
@@ -165,7 +159,7 @@ impl Borsa {
             })?;
         let currency = last.currency().clone();
 
-        Ok(borsa_core::FastInfo {
+        Ok(FastInfo {
             symbol: inst.symbol().clone(),
             name: q.shortname,
             exchange: q.exchange,

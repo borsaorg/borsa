@@ -1,5 +1,8 @@
 use crate::{BackoffConfig, Borsa};
-use borsa_core::{BorsaConnector, BorsaError, Instrument, RoutingContext};
+use borsa_core::{
+    AssetKind, BorsaConnector, BorsaError, Capability, Exchange, Instrument, QuoteUpdate,
+    RoutingContext, stream::StreamHandle,
+};
 use rand::Rng;
 use std::collections::HashSet;
 
@@ -42,13 +45,7 @@ impl Borsa {
         &self,
         instruments: &[Instrument],
         backoff_override: Option<BackoffConfig>,
-    ) -> Result<
-        (
-            borsa_core::stream::StreamHandle,
-            tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
-        ),
-        borsa_core::BorsaError,
-    > {
+    ) -> Result<(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>), BorsaError> {
         // Ensure this async function awaits at least once to avoid unused_async lint.
         tokio::task::yield_now().await;
         if instruments.is_empty() {
@@ -59,7 +56,7 @@ impl Borsa {
 
         // Group instruments by (kind, exchange) to respect provider rules that depend on exchange.
         let mut by_group: std::collections::HashMap<
-            (borsa_core::AssetKind, Option<borsa_core::Exchange>),
+            (AssetKind, Option<Exchange>),
             Vec<Instrument>,
         > = std::collections::HashMap::new();
         for inst in instruments.iter().cloned() {
@@ -73,7 +70,7 @@ impl Borsa {
             backoff_override.or(self.cfg.backoff).unwrap_or_default();
 
         // For each kind, spin up a supervisor loop identical to previous logic, then fan-in.
-        let (tx, rx) = tokio::sync::mpsc::channel::<borsa_core::QuoteUpdate>(1024);
+        let (tx, rx) = tokio::sync::mpsc::channel::<QuoteUpdate>(1024);
         let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
         let (stop_broadcast_tx, stop_broadcast_rx) = tokio::sync::watch::channel(false);
 
@@ -200,10 +197,7 @@ impl Borsa {
             }
         });
 
-        Ok((
-            borsa_core::stream::StreamHandle::new(supervisor, stop_tx),
-            rx,
-        ))
+        Ok((StreamHandle::new(supervisor, stop_tx), rx))
     }
 
     /// Start streaming quotes using the configured backoff settings.
@@ -216,13 +210,7 @@ impl Borsa {
     pub async fn stream_quotes(
         &self,
         instruments: &[Instrument],
-    ) -> Result<
-        (
-            borsa_core::stream::StreamHandle,
-            tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
-        ),
-        borsa_core::BorsaError,
-    > {
+    ) -> Result<(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>), BorsaError> {
         self.stream_quotes_with_backoff(instruments, None).await
     }
 }
@@ -275,10 +263,10 @@ struct EligibleStreamProviders {
 impl Borsa {
     fn eligible_stream_providers_for_context(
         &self,
-        kind: borsa_core::AssetKind,
-        exchange: Option<&borsa_core::Exchange>,
+        kind: AssetKind,
+        exchange: Option<&Exchange>,
         instruments: &[Instrument],
-    ) -> Result<EligibleStreamProviders, borsa_core::BorsaError> {
+    ) -> Result<EligibleStreamProviders, BorsaError> {
         // Score all connectors by the minimum per-symbol rank across the requested instruments,
         // then sort by (min_rank, registration_index). Collect allowed symbols in the process.
         let mut scored: Vec<StreamProviderScore> = Vec::new();
@@ -318,8 +306,8 @@ impl Borsa {
         }
 
         if scored.is_empty() {
-            return Err(borsa_core::BorsaError::unsupported(
-                borsa_core::Capability::StreamQuotes.to_string(),
+            return Err(BorsaError::unsupported(
+                Capability::StreamQuotes.to_string(),
             ));
         }
 
@@ -346,7 +334,7 @@ impl Borsa {
     fn spawn_kind_supervisor(
         params: KindSupervisorParams,
         mut stop_watch: tokio::sync::watch::Receiver<bool>,
-        tx_clone: tokio::sync::mpsc::Sender<borsa_core::QuoteUpdate>,
+        tx_clone: tokio::sync::mpsc::Sender<QuoteUpdate>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             use tokio::time::{Duration, sleep};

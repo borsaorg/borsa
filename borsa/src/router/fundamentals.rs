@@ -1,5 +1,8 @@
 use crate::Borsa;
 use crate::borsa_router_method;
+use borsa_core::{
+    BalanceSheetRow, Calendar, Capability, CashflowRow, Earnings, IncomeStatementRow, Instrument,
+};
 
 impl Borsa {
     borsa_router_method! {
@@ -7,10 +10,10 @@ impl Borsa {
         ///
         /// Behavior: returns combined structures if available; subfields may be empty
         /// depending on provider coverage and symbol history.
-        method: earnings(inst: &borsa_core::Instrument) -> borsa_core::Earnings,
+        method: earnings(inst: &Instrument) -> Earnings,
         provider: EarningsProvider,
         accessor: as_earnings_provider,
-        capability: borsa_core::Capability::Earnings,
+        capability: Capability::Earnings,
         not_found: "earnings",
         call: earnings(inst)
     }
@@ -20,10 +23,10 @@ impl Borsa {
         ///
         /// Trade-offs: annual vs quarterly cadence alters row density; some providers
         /// report trailing values or partial periods which are passed through.
-        method: income_statement(inst: &borsa_core::Instrument, quarterly: bool) -> Vec<borsa_core::IncomeStatementRow>,
+        method: income_statement(inst: &Instrument, quarterly: bool) -> Vec<IncomeStatementRow>,
         provider: IncomeStatementProvider,
         accessor: as_income_statement_provider,
-        capability: borsa_core::Capability::IncomeStatement,
+        capability: Capability::IncomeStatement,
         not_found: "fundamentals",
         call: income_statement(inst, quarterly)
     }
@@ -33,10 +36,10 @@ impl Borsa {
         ///
         /// Notes: units and field coverage can vary by provider; values are relayed
         /// as-is without currency normalization.
-        method: balance_sheet(inst: &borsa_core::Instrument, quarterly: bool) -> Vec<borsa_core::BalanceSheetRow>,
+        method: balance_sheet(inst: &Instrument, quarterly: bool) -> Vec<BalanceSheetRow>,
         provider: BalanceSheetProvider,
         accessor: as_balance_sheet_provider,
-        capability: borsa_core::Capability::BalanceSheet,
+        capability: Capability::BalanceSheet,
         not_found: "fundamentals",
         call: balance_sheet(inst, quarterly)
     }
@@ -46,10 +49,10 @@ impl Borsa {
         ///
         /// Behavior: direct mapping from provider; sign conventions follow the source
         /// and are not adjusted.
-        method: cashflow(inst: &borsa_core::Instrument, quarterly: bool) -> Vec<borsa_core::CashflowRow>,
+        method: cashflow(inst: &Instrument, quarterly: bool) -> Vec<CashflowRow>,
         provider: CashflowProvider,
         accessor: as_cashflow_provider,
-        capability: borsa_core::Capability::Cashflow,
+        capability: Capability::Cashflow,
         not_found: "fundamentals",
         call: cashflow(inst, quarterly)
     }
@@ -59,10 +62,10 @@ impl Borsa {
         ///
         /// Notes: dates are UTC seconds; dividend information may be missing or
         /// delayed depending on provider refresh schedules.
-        method: calendar(inst: &borsa_core::Instrument) -> borsa_core::Calendar,
+        method: calendar(inst: &Instrument) -> Calendar,
         provider: CalendarProvider,
         accessor: as_calendar_provider,
-        capability: borsa_core::Capability::Calendar,
+        capability: Capability::Calendar,
         not_found: "calendar",
         call: calendar(inst)
     }

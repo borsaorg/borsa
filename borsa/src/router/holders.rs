@@ -1,5 +1,9 @@
 use crate::Borsa;
 use crate::borsa_router_method;
+use borsa_core::{
+    Capability, InsiderRosterHolder, InsiderTransaction, InstitutionalHolder, Instrument,
+    MajorHolder, NetSharePurchaseActivity,
+};
 
 impl Borsa {
     borsa_router_method! {
@@ -7,10 +11,10 @@ impl Borsa {
         ///
         /// Notes: category definitions may vary across providers; values are passed
         /// through without normalization.
-        method: major_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::MajorHolder>,
+        method: major_holders(inst: &Instrument) -> Vec<MajorHolder>,
         provider: MajorHoldersProvider,
         accessor: as_major_holders_provider,
-        capability: borsa_core::Capability::MajorHolders,
+        capability: Capability::MajorHolders,
         not_found: "holders",
         call: major_holders(inst)
     }
@@ -20,20 +24,20 @@ impl Borsa {
         ///
         /// Behavior: lists can be large; pagination is handled by providers when
         /// present and results are combined.
-        method: institutional_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::InstitutionalHolder>,
+        method: institutional_holders(inst: &Instrument) -> Vec<InstitutionalHolder>,
         provider: InstitutionalHoldersProvider,
         accessor: as_institutional_holders_provider,
-        capability: borsa_core::Capability::InstitutionalHolders,
+        capability: Capability::InstitutionalHolders,
         not_found: "holders",
         call: institutional_holders(inst)
     }
 
     borsa_router_method! {
         /// Fetch mutual fund holders.
-        method: mutual_fund_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::InstitutionalHolder>,
+        method: mutual_fund_holders(inst: &Instrument) -> Vec<InstitutionalHolder>,
         provider: MutualFundHoldersProvider,
         accessor: as_mutual_fund_holders_provider,
-        capability: borsa_core::Capability::MutualFundHolders,
+        capability: Capability::MutualFundHolders,
         not_found: "holders",
         call: mutual_fund_holders(inst)
     }
@@ -43,20 +47,20 @@ impl Borsa {
         ///
         /// Notes: reported insider activity may be delayed; fields reflect provider
         /// disclosures and are not audited.
-        method: insider_transactions(inst: &borsa_core::Instrument) -> Vec<borsa_core::InsiderTransaction>,
+        method: insider_transactions(inst: &Instrument) -> Vec<InsiderTransaction>,
         provider: InsiderTransactionsProvider,
         accessor: as_insider_transactions_provider,
-        capability: borsa_core::Capability::InsiderTransactions,
+        capability: Capability::InsiderTransactions,
         not_found: "holders",
         call: insider_transactions(inst)
     }
 
     borsa_router_method! {
         /// Fetch the insider roster.
-        method: insider_roster_holders(inst: &borsa_core::Instrument) -> Vec<borsa_core::InsiderRosterHolder>,
+        method: insider_roster_holders(inst: &Instrument) -> Vec<InsiderRosterHolder>,
         provider: InsiderRosterHoldersProvider,
         accessor: as_insider_roster_holders_provider,
-        capability: borsa_core::Capability::InsiderRoster,
+        capability: Capability::InsiderRoster,
         not_found: "holders",
         call: insider_roster_holders(inst)
     }
@@ -66,10 +70,10 @@ impl Borsa {
         ///
         /// Behavior: returns `None` when a provider offers no aggregate; consumers
         /// should handle optionality.
-        method: net_share_purchase_activity(inst: &borsa_core::Instrument) -> Option<borsa_core::NetSharePurchaseActivity>,
+        method: net_share_purchase_activity(inst: &Instrument) -> Option<NetSharePurchaseActivity>,
         provider: NetSharePurchaseActivityProvider,
         accessor: as_net_share_purchase_activity_provider,
-        capability: borsa_core::Capability::NetSharePurchaseActivity,
+        capability: Capability::NetSharePurchaseActivity,
         not_found: "holders",
         call: net_share_purchase_activity(inst)
     }

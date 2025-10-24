@@ -1,4 +1,4 @@
-use borsa_core::Isin;
+use borsa_core::{Capability, Instrument, Isin, Profile};
 
 use crate::Borsa;
 use crate::borsa_router_method;
@@ -9,10 +9,10 @@ impl Borsa {
         ///
         /// Behavior: maps provider-specific entities into a normalized enum. Some
         /// fields (e.g., website, address) may be missing depending on coverage.
-        method: profile(inst: &borsa_core::Instrument) -> borsa_core::Profile,
+        method: profile(inst: &Instrument) -> Profile,
         provider: ProfileProvider,
         accessor: as_profile_provider,
-        capability: borsa_core::Capability::Profile,
+        capability: Capability::Profile,
         not_found: "profile",
         call: profile(inst)
     }
@@ -22,10 +22,10 @@ impl Borsa {
         ///
         /// Notes: not all providers support ISIN resolution; when unavailable, callers
         /// can derive from `profile` if the provider exposes it there.
-        method: isin(inst: &borsa_core::Instrument) -> Option<Isin>,
+        method: isin(inst: &Instrument) -> Option<Isin>,
         provider: IsinProvider,
         accessor: as_isin_provider,
-        capability: borsa_core::Capability::Isin,
+        capability: Capability::Isin,
         not_found: "isin",
         call: isin(inst)
     }

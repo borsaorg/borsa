@@ -1,5 +1,6 @@
 use crate::Borsa;
 use crate::borsa_router_search;
+use borsa_core::{Capability, SearchRequest};
 
 impl Borsa {
     borsa_router_search! {
@@ -9,9 +10,9 @@ impl Borsa {
         /// - Executes search across eligible providers concurrently, merges results,
         ///   and de-duplicates by symbol.
         /// - If `limit` is set, truncates after merge to enforce the cap.
-        method: search(req: borsa_core::SearchRequest) -> borsa_core::SearchReport,
+        method: search(req: SearchRequest) -> SearchReport,
         accessor: as_search_provider,
-        capability: borsa_core::Capability::Search,
+        capability: Capability::Search,
         call: search(req)
     }
 }

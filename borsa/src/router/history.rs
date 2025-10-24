@@ -1,9 +1,17 @@
 use crate::Resampling;
 use crate::{Attribution, Borsa, MergeStrategy, Span};
-use borsa_core::{BorsaConnector, BorsaError, HistoryRequest, HistoryResponse};
+use borsa_core::{
+    AssetKind, BorsaConnector, BorsaError, Capability, Currency, HistoryRequest,
+    HistoryRequestBuilder, HistoryResponse, Instrument, Interval, timeseries,
+};
 // use of HistoryProvider trait object occurs via method return; no import needed
 
-type IndexedConnector = (usize, std::sync::Arc<dyn BorsaConnector>);
+use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
+use std::mem;
+use std::sync::Arc;
+
+type IndexedConnector = (usize, Arc<dyn BorsaConnector>);
 // Resampling plan applied to provider outputs to satisfy the requested cadence.
 // Minutes is used for intraday up-aggregation (e.g., 2m from 1m).
 enum ResamplePlan {
@@ -22,11 +30,9 @@ type HistoryOk = (usize, &'static str, HistoryResponse);
 type CollectedHistory = (Vec<HistoryOk>, Vec<BorsaError>);
 
 fn choose_effective_interval(
-    supported: &[borsa_core::Interval],
-    requested: borsa_core::Interval,
-) -> Result<(borsa_core::Interval, Option<ResamplePlan>), BorsaError> {
-    use borsa_core::Interval;
-
+    supported: &[Interval],
+    requested: Interval,
+) -> Result<(Interval, Option<ResamplePlan>), BorsaError> {
     // Exact support: pass-through
     if supported.contains(&requested) {
         return Ok((requested, None));
@@ -104,8 +110,8 @@ fn choose_effective_interval(
 impl Borsa {
     async fn fetch_joined_history(
         &self,
-        eligible: &[(usize, std::sync::Arc<dyn BorsaConnector>)],
-        inst: &borsa_core::Instrument,
+        eligible: &[(usize, Arc<dyn BorsaConnector>)],
+        inst: &Instrument,
         req_copy: HistoryRequest,
     ) -> Result<Vec<HistoryTaskResult>, BorsaError> {
         let make_future = || async {
@@ -130,11 +136,7 @@ impl Borsa {
             }
         };
         (crate::core::with_request_deadline(self.cfg.request_timeout, make_future()).await)
-            .unwrap_or_else(|_| {
-                Err(BorsaError::request_timeout(
-                    borsa_core::Capability::History.to_string(),
-                ))
-            })
+            .unwrap_or_else(|_| Err(BorsaError::request_timeout(Capability::History.to_string())))
     }
 
     fn finalize_history_results(
@@ -154,7 +156,7 @@ impl Borsa {
                     .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
             {
                 return Err(BorsaError::AllProvidersTimedOut {
-                    capability: borsa_core::Capability::History.to_string(),
+                    capability: Capability::History.to_string(),
                 });
             }
             return Err(BorsaError::AllProvidersFailed(errors));
@@ -193,36 +195,30 @@ impl Borsa {
         if results.len() == 1 {
             return Ok(results.first().unwrap().1.clone());
         }
-        match borsa_core::timeseries::merge::merge_history(results.iter().cloned().map(|(_, r)| r))
-        {
+        match timeseries::merge::merge_history(results.iter().cloned().map(|(_, r)| r)) {
             Ok(mut m) => {
-                borsa_core::timeseries::util::strip_unadjusted(&mut m.candles);
+                timeseries::util::strip_unadjusted(&mut m.candles);
                 Ok(m)
             }
-            Err(borsa_core::BorsaError::Data(msg))
-                if msg == "Connector provided mixed-currency history" =>
-            {
+            Err(BorsaError::Data(msg)) if msg == "Connector provided mixed-currency history" => {
                 Err(Self::identify_faulty_provider(results))
             }
             Err(e) => Err(e),
         }
     }
 
-    fn identify_faulty_provider(
-        results: &[(&'static str, HistoryResponse)],
-    ) -> borsa_core::BorsaError {
-        use std::collections::HashMap;
+    fn identify_faulty_provider(results: &[(&'static str, HistoryResponse)]) -> BorsaError {
         enum CurrencyState {
             NoData,
-            Consistent(borsa_core::Currency),
+            Consistent(Currency),
             Inconsistent,
         }
         let mut per_provider_currency: HashMap<&'static str, CurrencyState> = HashMap::new();
         for (name, hr) in results {
-            let mut cur: Option<borsa_core::Currency> = None;
+            let mut cur: Option<Currency> = None;
             let mut state = CurrencyState::NoData;
             for c in &hr.candles {
-                if borsa_core::timeseries::util::ensure_candle_currency_uniform(c).is_err() {
+                if timeseries::util::ensure_candle_currency_uniform(c).is_err() {
                     state = CurrencyState::Inconsistent;
                     break;
                 }
@@ -242,12 +238,12 @@ impl Borsa {
             .iter()
             .find(|(_, v)| matches!(v, CurrencyState::Inconsistent))
         {
-            return borsa_core::BorsaError::Connector {
+            return BorsaError::Connector {
                 connector: (*bad_name).to_string(),
                 msg: "Provider returned inconsistent currency data".to_string(),
             };
         }
-        let mut counts: HashMap<borsa_core::Currency, usize> = HashMap::new();
+        let mut counts: HashMap<Currency, usize> = HashMap::new();
         for v in per_provider_currency.values() {
             if let CurrencyState::Consistent(cur) = v {
                 *counts.entry(cur.clone()).or_insert(0) += 1;
@@ -260,13 +256,13 @@ impl Borsa {
                 _ => None,
             })
         {
-            return borsa_core::BorsaError::Connector {
+            return BorsaError::Connector {
                 connector: bad_name.to_string(),
                 msg: "Provider returned inconsistent currency data".to_string(),
             };
         }
         let fallback = results.last().map_or("unknown", |(n, _)| *n);
-        borsa_core::BorsaError::Connector {
+        BorsaError::Connector {
             connector: fallback.to_string(),
             msg: "Provider returned inconsistent currency data".to_string(),
         }
@@ -293,7 +289,7 @@ impl Borsa {
     /// Returns an error if no eligible provider succeeds or none support the capability.
     pub async fn history(
         &self,
-        inst: &borsa_core::Instrument,
+        inst: &Instrument,
         req: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
         let (merged, _attr) = self.history_with_attribution(inst, req).await?;
@@ -323,7 +319,7 @@ impl Borsa {
     /// the requested capability for the instrument.
     pub async fn history_with_attribution(
         &self,
-        inst: &borsa_core::Instrument,
+        inst: &Instrument,
         req: HistoryRequest,
     ) -> Result<(HistoryResponse, Attribution), BorsaError> {
         // Request types validate on construction
@@ -337,7 +333,7 @@ impl Borsa {
 impl Borsa {
     fn eligible_history_connectors(
         &self,
-        inst: &borsa_core::Instrument,
+        inst: &Instrument,
     ) -> Result<Vec<IndexedConnector>, BorsaError> {
         let ordered = self.ordered(inst);
         let mut eligible: Vec<(usize, std::sync::Arc<dyn BorsaConnector>)> = Vec::new();
@@ -347,16 +343,14 @@ impl Borsa {
             }
         }
         if eligible.is_empty() {
-            return Err(BorsaError::unsupported(
-                borsa_core::Capability::History.to_string(),
-            ));
+            return Err(BorsaError::unsupported(Capability::History.to_string()));
         }
         Ok(eligible)
     }
 
     async fn parallel_history(
-        eligible: &[(usize, std::sync::Arc<dyn BorsaConnector>)],
-        inst: &borsa_core::Instrument,
+        eligible: &[(usize, Arc<dyn BorsaConnector>)],
+        inst: &Instrument,
         req_copy: &HistoryRequest,
         provider_timeout: std::time::Duration,
     ) -> Vec<HistoryTaskResult> {
@@ -367,8 +361,8 @@ impl Borsa {
     }
 
     fn build_effective_request(
-        c: &std::sync::Arc<dyn BorsaConnector>,
-        kind: borsa_core::AssetKind,
+        c: &Arc<dyn BorsaConnector>,
+        kind: AssetKind,
         req_copy: &HistoryRequest,
     ) -> Result<(HistoryRequest, Option<ResamplePlan>), BorsaError> {
         let supported = c
@@ -379,7 +373,7 @@ impl Borsa {
         let (effective_interval, resample_plan) =
             choose_effective_interval(&supported, req_copy.interval())?;
         // Preserve all ancillary flags and timeframe; only adjust the interval using the builder.
-        let mut b = borsa_core::HistoryRequestBuilder::default();
+        let mut b = HistoryRequestBuilder::default();
         if let Some(r) = req_copy.range() {
             b = b.range(r);
         } else if let Some((s, e)) = req_copy.period() {
@@ -396,11 +390,11 @@ impl Borsa {
 
     fn spawn_history_task(
         idx: usize,
-        c: std::sync::Arc<dyn BorsaConnector>,
-        inst: borsa_core::Instrument,
+        c: Arc<dyn BorsaConnector>,
+        inst: Instrument,
         req_copy: &HistoryRequest,
         provider_timeout: std::time::Duration,
-    ) -> impl std::future::Future<
+    ) -> impl Future<
         Output = (
             usize,
             &'static str,
@@ -421,7 +415,7 @@ impl Borsa {
                 .history(&inst, eff_req);
             let resp = Self::provider_call_with_timeout(
                 c.name(),
-                borsa_core::Capability::History,
+                Capability::History,
                 provider_timeout,
                 fut,
             )
@@ -432,7 +426,7 @@ impl Borsa {
 
     async fn sequential_history(
         eligible: Vec<IndexedConnector>,
-        inst: &borsa_core::Instrument,
+        inst: &Instrument,
         req_copy: HistoryRequest,
         provider_timeout: std::time::Duration,
     ) -> Vec<HistoryTaskResult> {
@@ -453,7 +447,7 @@ impl Borsa {
                 .history(inst, eff_req);
             let resp = Self::provider_call_with_timeout(
                 c.name(),
-                borsa_core::Capability::History,
+                Capability::History,
                 provider_timeout,
                 fut,
             )
@@ -480,8 +474,8 @@ impl Borsa {
                     if let Some(plan) = resample_target_min {
                         match plan {
                             ResamplePlan::Minutes(mins) => {
-                                match borsa_core::timeseries::resample::resample_to_minutes_with_meta(
-                                    std::mem::take(&mut hr.candles),
+                                match timeseries::resample::resample_to_minutes_with_meta(
+                                    mem::take(&mut hr.candles),
                                     mins,
                                     hr.meta.as_ref(),
                                 ) {
@@ -493,8 +487,8 @@ impl Borsa {
                                 }
                             }
                             ResamplePlan::Daily => {
-                                match borsa_core::timeseries::resample::resample_to_daily_with_meta(
-                                    std::mem::take(&mut hr.candles),
+                                match timeseries::resample::resample_to_daily_with_meta(
+                                    mem::take(&mut hr.candles),
                                     hr.meta.as_ref(),
                                 ) {
                                     Ok(c) => hr.candles = c,
@@ -505,8 +499,8 @@ impl Borsa {
                                 }
                             }
                             ResamplePlan::Weekly => {
-                                match borsa_core::timeseries::resample::resample_to_weekly_with_meta(
-                                    std::mem::take(&mut hr.candles),
+                                match timeseries::resample::resample_to_weekly_with_meta(
+                                    mem::take(&mut hr.candles),
                                     hr.meta.as_ref(),
                                 ) {
                                     Ok(c) => hr.candles = c,
@@ -520,7 +514,7 @@ impl Borsa {
                     }
                     results_ord.push((idx, name, hr));
                 }
-                Ok(_) | Err(borsa_core::BorsaError::NotFound { .. }) => {}
+                Ok(_) | Err(BorsaError::NotFound { .. }) => {}
                 Err(e) => errors.push(crate::core::tag_err(name, e)),
             }
         }
@@ -538,8 +532,6 @@ impl Borsa {
     }
 
     fn build_attribution(results: &[(&'static str, HistoryResponse)], symbol: &str) -> Attribution {
-        use std::collections::BTreeMap;
-
         // 1) Determine provider attribution per timestamp using first-wins semantics
         //    based on the ordered list of provider results.
         let mut ts_to_provider: BTreeMap<chrono::DateTime<chrono::Utc>, &'static str> =
@@ -596,23 +588,23 @@ impl Borsa {
             false
         };
         if matches!(self.cfg.resampling, Resampling::Weekly) {
-            let new_candles = borsa_core::timeseries::resample::resample_to_weekly_with_meta(
-                std::mem::take(&mut merged.candles),
+            let new_candles = timeseries::resample::resample_to_weekly_with_meta(
+                mem::take(&mut merged.candles),
                 merged.meta.as_ref(),
             )?;
             merged.candles = new_candles;
         } else if matches!(self.cfg.resampling, Resampling::Daily)
             || (self.cfg.auto_resample_subdaily_to_daily
-                && borsa_core::timeseries::infer::is_subdaily(&merged.candles))
+                && timeseries::infer::is_subdaily(&merged.candles))
         {
-            let new_candles = borsa_core::timeseries::resample::resample_to_daily_with_meta(
-                std::mem::take(&mut merged.candles),
+            let new_candles = timeseries::resample::resample_to_daily_with_meta(
+                mem::take(&mut merged.candles),
                 merged.meta.as_ref(),
             )?;
             merged.candles = new_candles;
         }
         if will_resample {
-            borsa_core::timeseries::util::strip_unadjusted(&mut merged.candles);
+            timeseries::util::strip_unadjusted(&mut merged.candles);
         }
         Ok(())
     }

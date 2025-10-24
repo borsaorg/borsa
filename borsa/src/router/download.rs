@@ -1,6 +1,7 @@
 use crate::Borsa;
 use borsa_core::{
-    BorsaError, DownloadEntry, DownloadReport, DownloadResponse, HistoryRequest, Instrument,
+    BorsaError, Capability, DownloadEntry, DownloadReport, DownloadResponse, HistoryRequest,
+    HistoryResponse, Instrument, Range,
 };
 use std::collections::HashSet;
 
@@ -23,7 +24,7 @@ pub struct DownloadBuilder<'a> {
     pub(crate) borsa: &'a Borsa,
     pub(crate) instruments: Vec<Instrument>,
     // Defer building a validated HistoryRequest until run(), to avoid panics on input.
-    pub(crate) range: Option<borsa_core::Range>,
+    pub(crate) range: Option<Range>,
     pub(crate) period: Option<(i64, i64)>,
     pub(crate) interval: borsa_core::Interval,
 }
@@ -39,7 +40,7 @@ impl<'a> DownloadBuilder<'a> {
         Self {
             borsa,
             instruments: Vec::new(),
-            range: Some(borsa_core::Range::M6),
+            range: Some(Range::M6),
             period: None,
             interval: borsa_core::Interval::D1,
         }
@@ -86,7 +87,7 @@ impl<'a> DownloadBuilder<'a> {
     /// Behavior: Mutually exclusive with `period`; setting this clears an existing
     /// explicit [start, end).
     #[must_use]
-    pub const fn range(mut self, range: borsa_core::Range) -> Self {
+    pub const fn range(mut self, range: Range) -> Self {
         self.range = Some(range);
         self.period = None;
         self
@@ -142,7 +143,7 @@ impl<'a> DownloadBuilder<'a> {
                 .ok_or_else(|| BorsaError::InvalidArg(format!("invalid end timestamp: {end}")))?;
             HistoryRequest::try_from_period(start_dt, end_dt, self.interval)?
         } else {
-            let range = self.range.unwrap_or(borsa_core::Range::M6);
+            let range = self.range.unwrap_or(Range::M6);
             HistoryRequest::try_from_range(range, self.interval)?
         };
 
@@ -159,7 +160,7 @@ impl<'a> DownloadBuilder<'a> {
         });
 
         // Apply optional request-level deadline across the fan-out
-        let joined: Vec<(Instrument, Result<borsa_core::HistoryResponse, BorsaError>)> =
+        let joined: Vec<(Instrument, Result<HistoryResponse, BorsaError>)> =
             match crate::core::with_request_deadline(
                 self.borsa.cfg.request_timeout,
                 futures::future::join_all(tasks),
@@ -169,7 +170,7 @@ impl<'a> DownloadBuilder<'a> {
                 Ok(v) => v,
                 Err(_) => {
                     return Err(BorsaError::request_timeout(
-                        borsa_core::Capability::DownloadHistory.to_string(),
+                        Capability::DownloadHistory.to_string(),
                     ));
                 }
             };
