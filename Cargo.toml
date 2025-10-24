@@ -7,6 +7,7 @@ members = [
     "examples",
     "borsa-mock",
     "borsa-types",
+    "borsa-middleware",
 ]
 
 [workspace.package]
@@ -59,6 +60,7 @@ borsa-core = { path = "borsa-core", version = "0.2.0" }
 borsa = { path = "borsa", version = "0.2.0" }
 borsa-mock = { path = "borsa-mock", version = "0.2.0" }
 borsa-types = { path = "borsa-types", version = "0.2.0" }
+borsa-middleware = { path = "borsa-middleware", version = "0.2.0" }
 
 trybuild = "1.0.112"
 tokio-test = "0.4.4"

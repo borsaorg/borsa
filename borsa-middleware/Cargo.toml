@@ -1,0 +1,16 @@
+[package]
+name = "borsa-middleware"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+description = "Middleware wrappers for Borsa connectors (e.g., quota-aware wrappers)"
+
+[dependencies]
+borsa-core = { workspace = true }
+borsa-types = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+borsa-mock = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+

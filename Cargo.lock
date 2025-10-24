@@ -344,6 +344,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "borsa-middleware"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "borsa-core",
+ "borsa-mock",
+ "borsa-types",
+ "tokio",
+]
+
+[[package]]
 name = "borsa-mock"
 version = "0.2.0"
 dependencies = [
