@@ -107,10 +107,18 @@ impl BorsaConnector for QuotaAwareConnector {
     }
 
     fn as_history_provider(&self) -> Option<&dyn HistoryProvider> {
-        self.inner.as_history_provider()
+        if self.inner.as_history_provider().is_some() {
+            Some(self as &dyn HistoryProvider)
+        } else {
+            None
+        }
     }
     fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> {
-        self.inner.as_quote_provider()
+        if self.inner.as_quote_provider().is_some() {
+            Some(self as &dyn QuoteProvider)
+        } else {
+            None
+        }
     }
 
     fn as_earnings_provider(&self) -> Option<&dyn EarningsProvider> {
@@ -193,5 +201,44 @@ impl BorsaConnector for QuotaAwareConnector {
     }
     fn as_stream_provider(&self) -> Option<&dyn borsa_core::connector::StreamProvider> {
         self.inner.as_stream_provider()
+    }
+}
+
+#[async_trait]
+impl HistoryProvider for QuotaAwareConnector {
+    async fn history(
+        &self,
+        instrument: &borsa_core::Instrument,
+        req: borsa_core::HistoryRequest,
+    ) -> Result<borsa_core::HistoryResponse, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_history_provider()
+            .ok_or_else(|| BorsaError::unsupported("history"))?;
+        inner.history(instrument, req).await
+    }
+
+    fn supported_history_intervals(&self, kind: AssetKind) -> &'static [borsa_core::Interval] {
+        if let Some(inner) = self.inner.as_history_provider() {
+            inner.supported_history_intervals(kind)
+        } else {
+            &[]
+        }
+    }
+}
+
+#[async_trait]
+impl QuoteProvider for QuotaAwareConnector {
+    async fn quote(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::Quote, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_quote_provider()
+            .ok_or_else(|| BorsaError::unsupported("quote"))?;
+        inner.quote(instrument).await
     }
 }
