@@ -53,6 +53,10 @@ pub enum QuotaConsumptionStrategy {
     /// The caller specifies a weight (units) to deduct per request.
     /// This allows modeling provider-specific costs.
     Weighted,
+    /// Evenly spread requests across hours within the window. This temporarily
+    /// blocks once the per-hour allowance is exhausted, even if the daily budget
+    /// still has remaining units. Intended to smooth provider load.
+    EvenSpreadHourly,
 }
 
 /// Configuration for a token-like quota budget over a sliding window.
