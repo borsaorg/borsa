@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 //! borsa-middleware
 //!
 //! Re-exports for middleware wrappers.

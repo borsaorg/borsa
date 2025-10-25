@@ -62,6 +62,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ## Concepts
+
+### Middleware (quota-aware wrappers)
+
+`borsa-middleware` provides wrappers like `QuotaAwareConnector` that enforce request budgets and normalize provider rate-limit errors. Wrap your connectors before registering them with the builder.
+
+```rust
+use std::sync::Arc;
+use std::time::Duration;
+use borsa::{Borsa, MergeStrategy, FetchStrategy};
+use borsa_core::{AssetKind, Instrument, BorsaConnector};
+use borsa_middleware::QuotaAwareConnector;
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_mock::MockConnector; // for CI-safe examples; replace with a real connector
+
+let cfg = QuotaConfig { limit: 1000, window: Duration::from_secs(24*60*60), strategy: QuotaConsumptionStrategy::Unit };
+let st = QuotaState { limit: cfg.limit, remaining: cfg.limit, reset_in: cfg.window };
+let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
+let wrapped = Arc::new(QuotaAwareConnector::new(inner, cfg, st));
+
+let borsa = Borsa::builder()
+    .with_connector(wrapped)
+    .fetch_strategy(FetchStrategy::PriorityWithFallback)
+    .merge_history_strategy(MergeStrategy::Fallback)
+    .build()?;
+
+let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
+let _ = borsa.quote(&aapl).await?;
+```
+
+#### Error handling behavior
+
+- Provider messages that look like rate limits (e.g., contain "429", "rate limit", "too many requests") are normalized by the wrapper to `BorsaError::RateLimitExceeded`.
+- When the quota is exhausted, the wrapper returns `BorsaError::QuotaExceeded { remaining, reset_in_ms }`.
+- The router may temporarily blacklist a provider after long-window `QuotaExceeded` until the reset time, while transient per-slice blocks (from `EvenSpreadHourly`) do not trigger long-term blacklist and allow fallback.
+
 ## Observability (optional)
 
 Enable the `tracing` feature to emit structured spans from router entry points and core orchestration helpers:
@@ -151,6 +186,7 @@ let borsa = Borsa::builder()
 ```
 
 Routing semantics at a glance:
+
 - Provider rules: the most specific matching rule wins (counts set fields among `symbol`, `kind`, `exchange`). If tied, precedence is Symbol > Kind > Exchange; if still tied, the rule defined last wins. Mark a rule `strict` to disable fallback to unlisted providers in that context.
 - Exchange preferences: used only for search de-duplication and resolved by Symbol > Kind > Global; they do not change which providers are eligible.
 
