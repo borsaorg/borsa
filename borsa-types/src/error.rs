@@ -94,6 +94,13 @@ pub enum BorsaError {
         /// Window length in milliseconds.
         window_ms: u64,
     },
+
+    /// Connector is temporarily blacklisted by middleware; retry after `reset_in_ms`.
+    #[error("temporarily blacklisted: reset_in_ms={reset_in_ms}")]
+    TemporarilyBlacklisted {
+        /// Milliseconds remaining until the blacklist window elapses.
+        reset_in_ms: u64,
+    },
 }
 
 impl BorsaError {

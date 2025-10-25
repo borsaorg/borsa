@@ -48,7 +48,7 @@ async fn daily_quota_blacklists_provider() {
         .quote(&inst)
         .await
         .expect_err("third call should be blacklisted");
-    assert!(matches!(err2, BorsaError::Connector { .. }));
+    assert!(matches!(err2, BorsaError::TemporarilyBlacklisted { .. }));
 }
 
 #[tokio::test]
@@ -77,7 +77,7 @@ async fn temporary_quota_spread_does_not_blacklist_long_term() {
         .quote(&inst)
         .await
         .expect_err("third call should be blacklisted");
-    assert!(matches!(err2, BorsaError::Connector { .. }));
+    assert!(matches!(err2, BorsaError::TemporarilyBlacklisted { .. }));
     // Wait beyond slice duration and ensure calls are allowed again
     tokio::time::sleep(Duration::from_millis(150)).await;
     let _ = qp.quote(&inst).await.expect("after slice reset ok");
@@ -113,7 +113,7 @@ async fn rate_limit_triggers_blacklist() {
         .quote(&inst)
         .await
         .expect_err("should be blacklisted after rate limit");
-    assert!(matches!(err2, BorsaError::Connector { .. }));
+    assert!(matches!(err2, BorsaError::TemporarilyBlacklisted { .. }));
 }
 
 #[tokio::test]

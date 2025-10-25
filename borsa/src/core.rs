@@ -212,6 +212,9 @@ pub fn tag_err(connector: &str, e: BorsaError) -> BorsaError {
     match e {
         e @ (BorsaError::NotFound { .. }
         | BorsaError::ProviderTimeout { .. }
+        | BorsaError::RateLimitExceeded { .. }
+        | BorsaError::QuotaExceeded { .. }
+        | BorsaError::TemporarilyBlacklisted { .. }
         | BorsaError::Connector { .. }
         | BorsaError::RequestTimeout { .. }
         | BorsaError::AllProvidersTimedOut { .. }
@@ -499,7 +502,8 @@ impl Borsa {
                     Err(
                         e @ (BorsaError::ProviderTimeout { .. }
                         | BorsaError::RateLimitExceeded { .. }
-                        | BorsaError::QuotaExceeded { .. }),
+                        | BorsaError::QuotaExceeded { .. }
+                        | BorsaError::TemporarilyBlacklisted { .. }),
                     ) => {
                         all_not_found = false;
                         errors.push(e);
@@ -587,7 +591,8 @@ impl Borsa {
                     e @ (BorsaError::ProviderTimeout { .. }
                     | BorsaError::NotFound { .. }
                     | BorsaError::RateLimitExceeded { .. }
-                    | BorsaError::QuotaExceeded { .. }),
+                    | BorsaError::QuotaExceeded { .. }
+                    | BorsaError::TemporarilyBlacklisted { .. }),
                 ) => {
                     errors.push(e);
                 }

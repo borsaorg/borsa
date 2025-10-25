@@ -27,17 +27,19 @@ impl BlacklistingMiddleware {
         }
     }
 
-    fn is_blacklisted(&self) -> bool {
+    fn blacklist_remaining_ms(&self) -> Option<u64> {
         let mut guard = self.state.lock().expect("mutex poisoned");
         let now = Instant::now();
         if let Some(until) = *guard {
             if now < until {
-                return true;
+                let remaining = until.saturating_duration_since(now);
+                let ms: u64 = remaining.as_millis().try_into().unwrap_or(u64::MAX);
+                return Some(ms.max(1));
             }
             // expired
             *guard = None;
         }
-        false
+        None
     }
 
     fn blacklist_until(&self, until: Instant) {
@@ -121,11 +123,8 @@ impl HistoryProvider for BlacklistingMiddleware {
         instrument: &borsa_core::Instrument,
         req: borsa_core::HistoryRequest,
     ) -> Result<borsa_core::HistoryResponse, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -152,11 +151,8 @@ impl QuoteProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::Quote, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -175,11 +171,8 @@ impl EarningsProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::Earnings, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -199,11 +192,8 @@ impl IncomeStatementProvider for BlacklistingMiddleware {
         instrument: &borsa_core::Instrument,
         quarterly: bool,
     ) -> Result<Vec<borsa_core::IncomeStatementRow>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -223,11 +213,8 @@ impl BalanceSheetProvider for BlacklistingMiddleware {
         instrument: &borsa_core::Instrument,
         quarterly: bool,
     ) -> Result<Vec<borsa_core::BalanceSheetRow>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -247,11 +234,8 @@ impl CashflowProvider for BlacklistingMiddleware {
         instrument: &borsa_core::Instrument,
         quarterly: bool,
     ) -> Result<Vec<borsa_core::CashflowRow>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -270,11 +254,8 @@ impl CalendarProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::Calendar, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -293,11 +274,8 @@ impl RecommendationsProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::RecommendationRow>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -316,11 +294,8 @@ impl RecommendationsSummaryProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::RecommendationSummary, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -339,11 +314,8 @@ impl UpgradesDowngradesProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::UpgradeDowngradeRow>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -362,11 +334,8 @@ impl AnalystPriceTargetProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::PriceTarget, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -385,11 +354,8 @@ impl MajorHoldersProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -408,11 +374,8 @@ impl borsa_core::connector::InstitutionalHoldersProvider for BlacklistingMiddlew
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -431,11 +394,8 @@ impl borsa_core::connector::MutualFundHoldersProvider for BlacklistingMiddleware
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -454,11 +414,8 @@ impl borsa_core::connector::InsiderTransactionsProvider for BlacklistingMiddlewa
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -477,11 +434,8 @@ impl borsa_core::connector::InsiderRosterHoldersProvider for BlacklistingMiddlew
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -500,11 +454,8 @@ impl borsa_core::connector::NetSharePurchaseActivityProvider for BlacklistingMid
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -523,11 +474,8 @@ impl ProfileProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::Profile, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -546,11 +494,8 @@ impl borsa_core::connector::IsinProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Option<borsa_core::Isin>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -569,11 +514,8 @@ impl SearchProvider for BlacklistingMiddleware {
         &self,
         req: borsa_core::SearchRequest,
     ) -> Result<borsa_core::SearchResponse, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -589,11 +531,8 @@ impl EsgProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<borsa_core::EsgScores, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -613,11 +552,8 @@ impl NewsProvider for BlacklistingMiddleware {
         instrument: &borsa_core::Instrument,
         req: borsa_core::NewsRequest,
     ) -> Result<Vec<borsa_core::types::NewsArticle>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -636,11 +572,8 @@ impl OptionsExpirationsProvider for BlacklistingMiddleware {
         &self,
         instrument: &borsa_core::Instrument,
     ) -> Result<Vec<i64>, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -660,11 +593,8 @@ impl OptionChainProvider for BlacklistingMiddleware {
         instrument: &borsa_core::Instrument,
         date: Option<i64>,
     ) -> Result<borsa_core::OptionChain, BorsaError> {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
@@ -689,11 +619,8 @@ impl StreamProvider for BlacklistingMiddleware {
         ),
         BorsaError,
     > {
-        if self.is_blacklisted() {
-            return Err(BorsaError::connector(
-                self.name(),
-                "provider is temporarily blacklisted",
-            ));
+        if let Some(ms) = self.blacklist_remaining_ms() {
+            return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         let inner = self
             .inner
