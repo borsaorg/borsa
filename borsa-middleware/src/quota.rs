@@ -153,6 +153,26 @@ impl QuotaAwareConnector {
         drop(rt);
         Err(err)
     }
+
+    fn translate_provider_error(err: BorsaError) -> BorsaError {
+        match err {
+            BorsaError::Connector { connector, msg } => {
+                let lower = msg.to_lowercase();
+                let looks_like_rate_limit = lower.contains("rate limit")
+                    || lower.contains("429")
+                    || lower.contains("too many requests");
+                if looks_like_rate_limit {
+                    BorsaError::RateLimitExceeded {
+                        limit: 0,
+                        window_ms: 0,
+                    }
+                } else {
+                    BorsaError::Connector { connector, msg }
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 #[async_trait]
@@ -185,85 +205,181 @@ impl BorsaConnector for QuotaAwareConnector {
     }
 
     fn as_earnings_provider(&self) -> Option<&dyn EarningsProvider> {
-        self.inner.as_earnings_provider()
+        if self.inner.as_earnings_provider().is_some() {
+            Some(self as &dyn EarningsProvider)
+        } else {
+            None
+        }
     }
     fn as_income_statement_provider(&self) -> Option<&dyn IncomeStatementProvider> {
-        self.inner.as_income_statement_provider()
+        if self.inner.as_income_statement_provider().is_some() {
+            Some(self as &dyn IncomeStatementProvider)
+        } else {
+            None
+        }
     }
     fn as_balance_sheet_provider(&self) -> Option<&dyn BalanceSheetProvider> {
-        self.inner.as_balance_sheet_provider()
+        if self.inner.as_balance_sheet_provider().is_some() {
+            Some(self as &dyn BalanceSheetProvider)
+        } else {
+            None
+        }
     }
     fn as_cashflow_provider(&self) -> Option<&dyn CashflowProvider> {
-        self.inner.as_cashflow_provider()
+        if self.inner.as_cashflow_provider().is_some() {
+            Some(self as &dyn CashflowProvider)
+        } else {
+            None
+        }
     }
     fn as_calendar_provider(&self) -> Option<&dyn CalendarProvider> {
-        self.inner.as_calendar_provider()
+        if self.inner.as_calendar_provider().is_some() {
+            Some(self as &dyn CalendarProvider)
+        } else {
+            None
+        }
     }
     fn as_recommendations_provider(&self) -> Option<&dyn RecommendationsProvider> {
-        self.inner.as_recommendations_provider()
+        if self.inner.as_recommendations_provider().is_some() {
+            Some(self as &dyn RecommendationsProvider)
+        } else {
+            None
+        }
     }
     fn as_recommendations_summary_provider(&self) -> Option<&dyn RecommendationsSummaryProvider> {
-        self.inner.as_recommendations_summary_provider()
+        if self.inner.as_recommendations_summary_provider().is_some() {
+            Some(self as &dyn RecommendationsSummaryProvider)
+        } else {
+            None
+        }
     }
     fn as_upgrades_downgrades_provider(&self) -> Option<&dyn UpgradesDowngradesProvider> {
-        self.inner.as_upgrades_downgrades_provider()
+        if self.inner.as_upgrades_downgrades_provider().is_some() {
+            Some(self as &dyn UpgradesDowngradesProvider)
+        } else {
+            None
+        }
     }
     fn as_analyst_price_target_provider(&self) -> Option<&dyn AnalystPriceTargetProvider> {
-        self.inner.as_analyst_price_target_provider()
+        if self.inner.as_analyst_price_target_provider().is_some() {
+            Some(self as &dyn AnalystPriceTargetProvider)
+        } else {
+            None
+        }
     }
     fn as_major_holders_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::MajorHoldersProvider> {
-        self.inner.as_major_holders_provider()
+        if self.inner.as_major_holders_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::MajorHoldersProvider)
+        } else {
+            None
+        }
     }
     fn as_institutional_holders_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::InstitutionalHoldersProvider> {
-        self.inner.as_institutional_holders_provider()
+        if self.inner.as_institutional_holders_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::InstitutionalHoldersProvider)
+        } else {
+            None
+        }
     }
     fn as_mutual_fund_holders_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::MutualFundHoldersProvider> {
-        self.inner.as_mutual_fund_holders_provider()
+        if self.inner.as_mutual_fund_holders_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::MutualFundHoldersProvider)
+        } else {
+            None
+        }
     }
     fn as_insider_transactions_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::InsiderTransactionsProvider> {
-        self.inner.as_insider_transactions_provider()
+        if self.inner.as_insider_transactions_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::InsiderTransactionsProvider)
+        } else {
+            None
+        }
     }
     fn as_insider_roster_holders_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::InsiderRosterHoldersProvider> {
-        self.inner.as_insider_roster_holders_provider()
+        if self.inner.as_insider_roster_holders_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::InsiderRosterHoldersProvider)
+        } else {
+            None
+        }
     }
     fn as_net_share_purchase_activity_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::NetSharePurchaseActivityProvider> {
-        self.inner.as_net_share_purchase_activity_provider()
+        if self
+            .inner
+            .as_net_share_purchase_activity_provider()
+            .is_some()
+        {
+            Some(self as &dyn borsa_core::connector::NetSharePurchaseActivityProvider)
+        } else {
+            None
+        }
     }
     fn as_profile_provider(&self) -> Option<&dyn ProfileProvider> {
-        self.inner.as_profile_provider()
+        if self.inner.as_profile_provider().is_some() {
+            Some(self as &dyn ProfileProvider)
+        } else {
+            None
+        }
     }
     fn as_isin_provider(&self) -> Option<&dyn borsa_core::connector::IsinProvider> {
-        self.inner.as_isin_provider()
+        if self.inner.as_isin_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::IsinProvider)
+        } else {
+            None
+        }
     }
     fn as_search_provider(&self) -> Option<&dyn SearchProvider> {
-        self.inner.as_search_provider()
+        if self.inner.as_search_provider().is_some() {
+            Some(self as &dyn SearchProvider)
+        } else {
+            None
+        }
     }
     fn as_esg_provider(&self) -> Option<&dyn EsgProvider> {
-        self.inner.as_esg_provider()
+        if self.inner.as_esg_provider().is_some() {
+            Some(self as &dyn EsgProvider)
+        } else {
+            None
+        }
     }
     fn as_news_provider(&self) -> Option<&dyn NewsProvider> {
-        self.inner.as_news_provider()
+        if self.inner.as_news_provider().is_some() {
+            Some(self as &dyn NewsProvider)
+        } else {
+            None
+        }
     }
     fn as_options_expirations_provider(&self) -> Option<&dyn OptionsExpirationsProvider> {
-        self.inner.as_options_expirations_provider()
+        if self.inner.as_options_expirations_provider().is_some() {
+            Some(self as &dyn OptionsExpirationsProvider)
+        } else {
+            None
+        }
     }
     fn as_option_chain_provider(&self) -> Option<&dyn OptionChainProvider> {
-        self.inner.as_option_chain_provider()
+        if self.inner.as_option_chain_provider().is_some() {
+            Some(self as &dyn OptionChainProvider)
+        } else {
+            None
+        }
     }
     fn as_stream_provider(&self) -> Option<&dyn borsa_core::connector::StreamProvider> {
-        self.inner.as_stream_provider()
+        if self.inner.as_stream_provider().is_some() {
+            Some(self as &dyn borsa_core::connector::StreamProvider)
+        } else {
+            None
+        }
     }
 }
 
@@ -321,20 +437,432 @@ impl QuoteProvider for QuotaAwareConnector {
             .ok_or_else(|| BorsaError::unsupported("quote"))?;
         match inner.quote(instrument).await {
             Ok(response) => Ok(response),
-            Err(BorsaError::Connector { connector, msg }) => {
-                let lower = msg.to_lowercase();
-                let looks_like_rate_limit = lower.contains("rate limit")
-                    || lower.contains("429")
-                    || lower.contains("too many requests");
-                if looks_like_rate_limit {
-                    return Err(BorsaError::RateLimitExceeded {
-                        limit: 0,
-                        window_ms: 0,
-                    });
-                }
-                Err(BorsaError::Connector { connector, msg })
-            }
-            Err(other) => Err(other),
+            Err(other) => Err(Self::translate_provider_error(other)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::EarningsProvider for QuotaAwareConnector {
+    async fn earnings(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::Earnings, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_earnings_provider()
+            .ok_or_else(|| BorsaError::unsupported("earnings"))?;
+        match inner.earnings(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::IncomeStatementProvider for QuotaAwareConnector {
+    async fn income_statement(
+        &self,
+        instrument: &borsa_core::Instrument,
+        quarterly: bool,
+    ) -> Result<Vec<borsa_core::IncomeStatementRow>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_income_statement_provider()
+            .ok_or_else(|| BorsaError::unsupported("income_statement"))?;
+        match inner.income_statement(instrument, quarterly).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::BalanceSheetProvider for QuotaAwareConnector {
+    async fn balance_sheet(
+        &self,
+        instrument: &borsa_core::Instrument,
+        quarterly: bool,
+    ) -> Result<Vec<borsa_core::BalanceSheetRow>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_balance_sheet_provider()
+            .ok_or_else(|| BorsaError::unsupported("balance_sheet"))?;
+        match inner.balance_sheet(instrument, quarterly).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::CashflowProvider for QuotaAwareConnector {
+    async fn cashflow(
+        &self,
+        instrument: &borsa_core::Instrument,
+        quarterly: bool,
+    ) -> Result<Vec<borsa_core::CashflowRow>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_cashflow_provider()
+            .ok_or_else(|| BorsaError::unsupported("cashflow"))?;
+        match inner.cashflow(instrument, quarterly).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::CalendarProvider for QuotaAwareConnector {
+    async fn calendar(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::Calendar, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_calendar_provider()
+            .ok_or_else(|| BorsaError::unsupported("calendar"))?;
+        match inner.calendar(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::RecommendationsProvider for QuotaAwareConnector {
+    async fn recommendations(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::RecommendationRow>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_recommendations_provider()
+            .ok_or_else(|| BorsaError::unsupported("recommendations"))?;
+        match inner.recommendations(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::RecommendationsSummaryProvider for QuotaAwareConnector {
+    async fn recommendations_summary(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::RecommendationSummary, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_recommendations_summary_provider()
+            .ok_or_else(|| BorsaError::unsupported("recommendations_summary"))?;
+        match inner.recommendations_summary(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::UpgradesDowngradesProvider for QuotaAwareConnector {
+    async fn upgrades_downgrades(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::UpgradeDowngradeRow>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_upgrades_downgrades_provider()
+            .ok_or_else(|| BorsaError::unsupported("upgrades_downgrades"))?;
+        match inner.upgrades_downgrades(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::AnalystPriceTargetProvider for QuotaAwareConnector {
+    async fn analyst_price_target(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::PriceTarget, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_analyst_price_target_provider()
+            .ok_or_else(|| BorsaError::unsupported("analyst_price_target"))?;
+        match inner.analyst_price_target(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::MajorHoldersProvider for QuotaAwareConnector {
+    async fn major_holders(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_major_holders_provider()
+            .ok_or_else(|| BorsaError::unsupported("major_holders"))?;
+        match inner.major_holders(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::InstitutionalHoldersProvider for QuotaAwareConnector {
+    async fn institutional_holders(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_institutional_holders_provider()
+            .ok_or_else(|| BorsaError::unsupported("institutional_holders"))?;
+        match inner.institutional_holders(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::MutualFundHoldersProvider for QuotaAwareConnector {
+    async fn mutual_fund_holders(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_mutual_fund_holders_provider()
+            .ok_or_else(|| BorsaError::unsupported("mutual_fund_holders"))?;
+        match inner.mutual_fund_holders(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::InsiderTransactionsProvider for QuotaAwareConnector {
+    async fn insider_transactions(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_insider_transactions_provider()
+            .ok_or_else(|| BorsaError::unsupported("insider_transactions"))?;
+        match inner.insider_transactions(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::InsiderRosterHoldersProvider for QuotaAwareConnector {
+    async fn insider_roster_holders(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_insider_roster_holders_provider()
+            .ok_or_else(|| BorsaError::unsupported("insider_roster_holders"))?;
+        match inner.insider_roster_holders(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::NetSharePurchaseActivityProvider for QuotaAwareConnector {
+    async fn net_share_purchase_activity(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_net_share_purchase_activity_provider()
+            .ok_or_else(|| BorsaError::unsupported("net_share_purchase_activity"))?;
+        match inner.net_share_purchase_activity(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl ProfileProvider for QuotaAwareConnector {
+    async fn profile(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::Profile, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_profile_provider()
+            .ok_or_else(|| BorsaError::unsupported("profile"))?;
+        match inner.profile(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::IsinProvider for QuotaAwareConnector {
+    async fn isin(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Option<borsa_core::Isin>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_isin_provider()
+            .ok_or_else(|| BorsaError::unsupported("isin"))?;
+        match inner.isin(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl SearchProvider for QuotaAwareConnector {
+    async fn search(
+        &self,
+        req: borsa_core::SearchRequest,
+    ) -> Result<borsa_core::SearchResponse, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_search_provider()
+            .ok_or_else(|| BorsaError::unsupported("search"))?;
+        match inner.search(req).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl EsgProvider for QuotaAwareConnector {
+    async fn sustainability(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::EsgScores, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_esg_provider()
+            .ok_or_else(|| BorsaError::unsupported("sustainability"))?;
+        match inner.sustainability(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl NewsProvider for QuotaAwareConnector {
+    async fn news(
+        &self,
+        instrument: &borsa_core::Instrument,
+        req: borsa_core::NewsRequest,
+    ) -> Result<Vec<borsa_core::types::NewsArticle>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_news_provider()
+            .ok_or_else(|| BorsaError::unsupported("news"))?;
+        match inner.news(instrument, req).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl OptionsExpirationsProvider for QuotaAwareConnector {
+    async fn options_expirations(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<Vec<i64>, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_options_expirations_provider()
+            .ok_or_else(|| BorsaError::unsupported("options_expirations"))?;
+        match inner.options_expirations(instrument).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl OptionChainProvider for QuotaAwareConnector {
+    async fn option_chain(
+        &self,
+        instrument: &borsa_core::Instrument,
+        date: Option<i64>,
+    ) -> Result<borsa_core::OptionChain, BorsaError> {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_option_chain_provider()
+            .ok_or_else(|| BorsaError::unsupported("option_chain"))?;
+        match inner.option_chain(instrument, date).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
+        }
+    }
+}
+
+#[async_trait]
+impl borsa_core::connector::StreamProvider for QuotaAwareConnector {
+    async fn stream_quotes(
+        &self,
+        instruments: &[borsa_core::Instrument],
+    ) -> Result<
+        (
+            borsa_core::stream::StreamHandle,
+            tokio::sync::mpsc::Receiver<borsa_core::QuoteUpdate>,
+        ),
+        BorsaError,
+    > {
+        self.should_allow_call()?;
+        let inner = self
+            .inner
+            .as_stream_provider()
+            .ok_or_else(|| BorsaError::unsupported("stream_quotes"))?;
+        match inner.stream_quotes(instruments).await {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Self::translate_provider_error(e)),
         }
     }
 }

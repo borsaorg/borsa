@@ -88,3 +88,43 @@ async fn quote_temporarily_blocks_per_hour_slice() {
     tokio::time::sleep(Duration::from_millis(120)).await;
     assert!(q.quote(&inst).await.is_ok());
 }
+
+#[tokio::test]
+async fn profile_enforces_quota_limit() {
+    let wrapper = make_wrapper(1, 86_400_000);
+
+    let p = wrapper
+        .as_profile_provider()
+        .expect("profile capability present");
+    let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid symbol");
+
+    assert!(p.profile(&inst).await.is_ok());
+    let err = p.profile(&inst).await.expect_err("should error");
+    assert!(matches!(err, BorsaError::QuotaExceeded { .. }));
+}
+
+#[tokio::test]
+async fn search_enforces_quota_limit() {
+    let wrapper = make_wrapper(1, 86_400_000);
+    let s = wrapper
+        .as_search_provider()
+        .expect("search capability present");
+    let req = borsa_core::SearchRequest::builder("tesla").build().unwrap();
+
+    assert!(s.search(req.clone()).await.is_ok());
+    let err = s.search(req).await.expect_err("should error");
+    assert!(matches!(err, BorsaError::QuotaExceeded { .. }));
+}
+
+#[tokio::test]
+async fn earnings_enforces_quota_limit() {
+    let wrapper = make_wrapper(1, 86_400_000);
+    let e = wrapper
+        .as_earnings_provider()
+        .expect("earnings capability present");
+    let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid symbol");
+
+    assert!(e.earnings(&inst).await.is_ok());
+    let err = e.earnings(&inst).await.expect_err("should error");
+    assert!(matches!(err, BorsaError::QuotaExceeded { .. }));
+}

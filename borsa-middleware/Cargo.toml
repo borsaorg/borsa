@@ -15,6 +15,7 @@ categories = ["api-bindings", "finance", "web-programming::http-client"]
 borsa-core = { workspace = true }
 borsa-types = { workspace = true }
 async-trait = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 borsa-mock = { workspace = true }
