@@ -273,7 +273,12 @@ pub fn delegate_all_providers_impl(attr: TokenStream, item: TokenStream) -> Toke
     expanded.into()
 }
 
-fn gen_history_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 {
+fn gen_history_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
     quote! {
         #[async_trait::async_trait]
         impl #borsa_core::connector::HistoryProvider for #self_ty {
@@ -289,266 +294,434 @@ fn gen_history_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &Toke
     }
 }
 
-fn gen_quote_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::QuoteProvider for #self_ty {
-        async fn quote(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Quote, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_quote_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("quote"))?;
-            inner.quote(instrument).await
+fn gen_quote_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::QuoteProvider for #self_ty {
+            async fn quote(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Quote, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_quote_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("quote"))?;
+                inner.quote(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_earnings_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::EarningsProvider for #self_ty {
-        async fn earnings(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Earnings, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_earnings_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("earnings"))?;
-            inner.earnings(instrument).await
+fn gen_earnings_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::EarningsProvider for #self_ty {
+            async fn earnings(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Earnings, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_earnings_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("earnings"))?;
+                inner.earnings(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_income_stmt_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::IncomeStatementProvider for #self_ty {
-        async fn income_statement(&self, instrument: &#borsa_core::Instrument, quarterly: bool) -> Result<Vec<#borsa_core::IncomeStatementRow>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_income_statement_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("income_statement"))?;
-            inner.income_statement(instrument, quarterly).await
+fn gen_income_stmt_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::IncomeStatementProvider for #self_ty {
+            async fn income_statement(&self, instrument: &#borsa_core::Instrument, quarterly: bool) -> Result<Vec<#borsa_core::IncomeStatementRow>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_income_statement_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("income_statement"))?;
+                inner.income_statement(instrument, quarterly).await
+            }
         }
     }
-}}
+}
 
-fn gen_balance_sheet_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::BalanceSheetProvider for #self_ty {
-        async fn balance_sheet(&self, instrument: &#borsa_core::Instrument, quarterly: bool) -> Result<Vec<#borsa_core::BalanceSheetRow>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_balance_sheet_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("balance_sheet"))?;
-            inner.balance_sheet(instrument, quarterly).await
+fn gen_balance_sheet_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::BalanceSheetProvider for #self_ty {
+            async fn balance_sheet(&self, instrument: &#borsa_core::Instrument, quarterly: bool) -> Result<Vec<#borsa_core::BalanceSheetRow>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_balance_sheet_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("balance_sheet"))?;
+                inner.balance_sheet(instrument, quarterly).await
+            }
         }
     }
-}}
+}
 
-fn gen_cashflow_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::CashflowProvider for #self_ty {
-        async fn cashflow(&self, instrument: &#borsa_core::Instrument, quarterly: bool) -> Result<Vec<#borsa_core::CashflowRow>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_cashflow_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("cashflow"))?;
-            inner.cashflow(instrument, quarterly).await
+fn gen_cashflow_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::CashflowProvider for #self_ty {
+            async fn cashflow(&self, instrument: &#borsa_core::Instrument, quarterly: bool) -> Result<Vec<#borsa_core::CashflowRow>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_cashflow_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("cashflow"))?;
+                inner.cashflow(instrument, quarterly).await
+            }
         }
     }
-}}
+}
 
-fn gen_calendar_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::CalendarProvider for #self_ty {
-        async fn calendar(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Calendar, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_calendar_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("calendar"))?;
-            inner.calendar(instrument).await
+fn gen_calendar_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::CalendarProvider for #self_ty {
+            async fn calendar(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Calendar, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_calendar_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("calendar"))?;
+                inner.calendar(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_recommendations_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::RecommendationsProvider for #self_ty {
-        async fn recommendations(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::RecommendationRow>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_recommendations_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("recommendations"))?;
-            inner.recommendations(instrument).await
+fn gen_recommendations_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::RecommendationsProvider for #self_ty {
+            async fn recommendations(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::RecommendationRow>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_recommendations_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("recommendations"))?;
+                inner.recommendations(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_recommendations_summary_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::RecommendationsSummaryProvider for #self_ty {
-        async fn recommendations_summary(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::RecommendationSummary, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_recommendations_summary_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("recommendations_summary"))?;
-            inner.recommendations_summary(instrument).await
+fn gen_recommendations_summary_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::RecommendationsSummaryProvider for #self_ty {
+            async fn recommendations_summary(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::RecommendationSummary, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_recommendations_summary_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("recommendations_summary"))?;
+                inner.recommendations_summary(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_upgrades_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::UpgradesDowngradesProvider for #self_ty {
-        async fn upgrades_downgrades(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::UpgradeDowngradeRow>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_upgrades_downgrades_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("upgrades_downgrades"))?;
-            inner.upgrades_downgrades(instrument).await
+fn gen_upgrades_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::UpgradesDowngradesProvider for #self_ty {
+            async fn upgrades_downgrades(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::UpgradeDowngradeRow>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_upgrades_downgrades_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("upgrades_downgrades"))?;
+                inner.upgrades_downgrades(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_price_target_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::AnalystPriceTargetProvider for #self_ty {
-        async fn analyst_price_target(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::PriceTarget, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_analyst_price_target_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("analyst_price_target"))?;
-            inner.analyst_price_target(instrument).await
+fn gen_price_target_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::AnalystPriceTargetProvider for #self_ty {
+            async fn analyst_price_target(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::PriceTarget, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_analyst_price_target_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("analyst_price_target"))?;
+                inner.analyst_price_target(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_major_holders_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::MajorHoldersProvider for #self_ty {
-        async fn major_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::MajorHolder>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_major_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("major_holders"))?;
-            inner.major_holders(instrument).await
+fn gen_major_holders_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::MajorHoldersProvider for #self_ty {
+            async fn major_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::MajorHolder>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_major_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("major_holders"))?;
+                inner.major_holders(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_institutional_holders_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::InstitutionalHoldersProvider for #self_ty {
-        async fn institutional_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InstitutionalHolder>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_institutional_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("institutional_holders"))?;
-            inner.institutional_holders(instrument).await
+fn gen_institutional_holders_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::InstitutionalHoldersProvider for #self_ty {
+            async fn institutional_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InstitutionalHolder>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_institutional_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("institutional_holders"))?;
+                inner.institutional_holders(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_mutual_fund_holders_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::MutualFundHoldersProvider for #self_ty {
-        async fn mutual_fund_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InstitutionalHolder>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_mutual_fund_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("mutual_fund_holders"))?;
-            inner.mutual_fund_holders(instrument).await
+fn gen_mutual_fund_holders_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::MutualFundHoldersProvider for #self_ty {
+            async fn mutual_fund_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InstitutionalHolder>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_mutual_fund_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("mutual_fund_holders"))?;
+                inner.mutual_fund_holders(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_insider_transactions_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::InsiderTransactionsProvider for #self_ty {
-        async fn insider_transactions(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InsiderTransaction>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_insider_transactions_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("insider_transactions"))?;
-            inner.insider_transactions(instrument).await
+fn gen_insider_transactions_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::InsiderTransactionsProvider for #self_ty {
+            async fn insider_transactions(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InsiderTransaction>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_insider_transactions_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("insider_transactions"))?;
+                inner.insider_transactions(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_insider_roster_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::InsiderRosterHoldersProvider for #self_ty {
-        async fn insider_roster_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InsiderRosterHolder>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_insider_roster_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("insider_roster_holders"))?;
-            inner.insider_roster_holders(instrument).await
+fn gen_insider_roster_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::InsiderRosterHoldersProvider for #self_ty {
+            async fn insider_roster_holders(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<#borsa_core::InsiderRosterHolder>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_insider_roster_holders_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("insider_roster_holders"))?;
+                inner.insider_roster_holders(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_net_share_purchase_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::NetSharePurchaseActivityProvider for #self_ty {
-        async fn net_share_purchase_activity(&self, instrument: &#borsa_core::Instrument) -> Result<Option<#borsa_core::NetSharePurchaseActivity>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_net_share_purchase_activity_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("net_share_purchase_activity"))?;
-            inner.net_share_purchase_activity(instrument).await
+fn gen_net_share_purchase_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::NetSharePurchaseActivityProvider for #self_ty {
+            async fn net_share_purchase_activity(&self, instrument: &#borsa_core::Instrument) -> Result<Option<#borsa_core::NetSharePurchaseActivity>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_net_share_purchase_activity_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("net_share_purchase_activity"))?;
+                inner.net_share_purchase_activity(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_profile_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::ProfileProvider for #self_ty {
-        async fn profile(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Profile, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_profile_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("profile"))?;
-            inner.profile(instrument).await
+fn gen_profile_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::ProfileProvider for #self_ty {
+            async fn profile(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::Profile, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_profile_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("profile"))?;
+                inner.profile(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_isin_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::IsinProvider for #self_ty {
-        async fn isin(&self, instrument: &#borsa_core::Instrument) -> Result<Option<#borsa_core::Isin>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_isin_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("isin"))?;
-            inner.isin(instrument).await
+fn gen_isin_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::IsinProvider for #self_ty {
+            async fn isin(&self, instrument: &#borsa_core::Instrument) -> Result<Option<#borsa_core::Isin>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_isin_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("isin"))?;
+                inner.isin(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_search_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::SearchProvider for #self_ty {
-        async fn search(&self, req: #borsa_core::SearchRequest) -> Result<#borsa_core::SearchResponse, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_search_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("search"))?;
-            inner.search(req).await
+fn gen_search_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::SearchProvider for #self_ty {
+            async fn search(&self, req: #borsa_core::SearchRequest) -> Result<#borsa_core::SearchResponse, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_search_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("search"))?;
+                inner.search(req).await
+            }
         }
     }
-}}
+}
 
-fn gen_esg_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::EsgProvider for #self_ty {
-        async fn sustainability(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::EsgScores, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_esg_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("sustainability"))?;
-            inner.sustainability(instrument).await
+fn gen_esg_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::EsgProvider for #self_ty {
+            async fn sustainability(&self, instrument: &#borsa_core::Instrument) -> Result<#borsa_core::EsgScores, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_esg_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("sustainability"))?;
+                inner.sustainability(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_news_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::NewsProvider for #self_ty {
-        async fn news(&self, instrument: &#borsa_core::Instrument, req: #borsa_core::NewsRequest) -> Result<Vec<#borsa_core::types::NewsArticle>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_news_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("news"))?;
-            inner.news(instrument, req).await
+fn gen_news_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::NewsProvider for #self_ty {
+            async fn news(&self, instrument: &#borsa_core::Instrument, req: #borsa_core::NewsRequest) -> Result<Vec<#borsa_core::types::NewsArticle>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_news_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("news"))?;
+                inner.news(instrument, req).await
+            }
         }
     }
-}}
+}
 
-fn gen_options_expirations_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::OptionsExpirationsProvider for #self_ty {
-        async fn options_expirations(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<i64>, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_options_expirations_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("options_expirations"))?;
-            inner.options_expirations(instrument).await
+fn gen_options_expirations_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::OptionsExpirationsProvider for #self_ty {
+            async fn options_expirations(&self, instrument: &#borsa_core::Instrument) -> Result<Vec<i64>, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_options_expirations_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("options_expirations"))?;
+                inner.options_expirations(instrument).await
+            }
         }
     }
-}}
+}
 
-fn gen_option_chain_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::OptionChainProvider for #self_ty {
-        async fn option_chain(&self, instrument: &#borsa_core::Instrument, date: Option<i64>) -> Result<#borsa_core::OptionChain, #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_option_chain_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("option_chain"))?;
-            inner.option_chain(instrument, date).await
+fn gen_option_chain_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::OptionChainProvider for #self_ty {
+            async fn option_chain(&self, instrument: &#borsa_core::Instrument, date: Option<i64>) -> Result<#borsa_core::OptionChain, #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_option_chain_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("option_chain"))?;
+                inner.option_chain(instrument, date).await
+            }
         }
     }
-}}
+}
 
-fn gen_stream_impl(borsa_core: &Path, self_ty: &Type, inner: &Ident, pre: &TokenStream2) -> TokenStream2 { quote! {
-    #[async_trait::async_trait]
-    impl #borsa_core::connector::StreamProvider for #self_ty {
-        async fn stream_quotes(&self, instruments: &[#borsa_core::Instrument]) -> Result<(#borsa_core::stream::StreamHandle, tokio::sync::mpsc::Receiver<#borsa_core::QuoteUpdate>), #borsa_core::BorsaError> {
-            #pre
-            let inner = self.#inner.as_stream_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("stream_quotes"))?;
-            inner.stream_quotes(instruments).await
+fn gen_stream_impl(
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        #[async_trait::async_trait]
+        impl #borsa_core::connector::StreamProvider for #self_ty {
+            async fn stream_quotes(&self, instruments: &[#borsa_core::Instrument]) -> Result<(#borsa_core::stream::StreamHandle, tokio::sync::mpsc::Receiver<#borsa_core::QuoteUpdate>), #borsa_core::BorsaError> {
+                #pre
+                let inner = self.#inner.as_stream_provider().ok_or_else(|| #borsa_core::BorsaError::unsupported("stream_quotes"))?;
+                inner.stream_quotes(instruments).await
+            }
         }
     }
-}}
+}

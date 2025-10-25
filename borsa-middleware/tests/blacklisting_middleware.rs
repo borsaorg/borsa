@@ -84,7 +84,7 @@ async fn temporary_quota_spread_does_not_blacklist_long_term() {
 }
 
 #[tokio::test]
-async fn rate_limit_transient_no_blacklist() {
+async fn rate_limit_triggers_blacklist() {
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
     let cfg = QuotaConfig {
         limit: 10,
@@ -108,11 +108,12 @@ async fn rate_limit_transient_no_blacklist() {
     let inst = Instrument::from_symbol("RATELIMIT", AssetKind::Equity).expect("valid symbol");
     let err1 = qp.quote(&inst).await.expect_err("should rate limit");
     assert!(matches!(err1, BorsaError::RateLimitExceeded { .. }));
+    // After a provider rate limit, the middleware should temporarily blacklist the provider.
     let err2 = qp
         .quote(&inst)
         .await
-        .expect_err("should still attempt and fail");
-    assert!(matches!(err2, BorsaError::RateLimitExceeded { .. }));
+        .expect_err("should be blacklisted after rate limit");
+    assert!(matches!(err2, BorsaError::Connector { .. }));
 }
 
 #[tokio::test]

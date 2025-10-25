@@ -46,23 +46,38 @@ impl BlacklistingMiddleware {
     }
 
     fn handle_error(&self, err: BorsaError) -> BorsaError {
-        if let BorsaError::QuotaExceeded {
-            remaining,
-            reset_in_ms,
-        } = err.clone()
-        {
-            // Only long-term exhaustion (remaining == 0) should trigger a longer blacklist.
-            let duration = if remaining == 0 {
-                if reset_in_ms > 0 {
-                    Duration::from_millis(reset_in_ms)
+        match err.clone() {
+            BorsaError::QuotaExceeded {
+                remaining,
+                reset_in_ms,
+            } => {
+                // Only long-term exhaustion (remaining == 0) should trigger a longer blacklist.
+                let duration = if remaining == 0 {
+                    if reset_in_ms > 0 {
+                        Duration::from_millis(reset_in_ms)
+                    } else {
+                        self.default_duration
+                    }
+                } else {
+                    // Temporary slice exhaustion; still respect reset_in for brief blacklist to avoid immediate retries.
+                    Duration::from_millis(reset_in_ms.max(1))
+                };
+                self.blacklist_until(Instant::now() + duration);
+            }
+            BorsaError::RateLimitExceeded {
+                limit: _,
+                window_ms,
+            } => {
+                // Provider indicated an external rate limit. Honor the provider window when available
+                // otherwise fall back to the configured default.
+                let duration = if window_ms > 0 {
+                    Duration::from_millis(window_ms)
                 } else {
                     self.default_duration
-                }
-            } else {
-                // Temporary slice exhaustion; still respect reset_in for brief blacklist to avoid immediate retries.
-                Duration::from_millis(reset_in_ms.max(1))
-            };
-            self.blacklist_until(Instant::now() + duration);
+                };
+                self.blacklist_until(Instant::now() + duration);
+            }
+            _ => {}
         }
         err
     }
