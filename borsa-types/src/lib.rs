@@ -6,6 +6,7 @@ mod capability;
 mod config;
 mod connector;
 mod error;
+mod middleware;
 mod reports;
 pub mod routing_policy;
 
@@ -17,6 +18,7 @@ pub use config::{
 };
 pub use connector::ConnectorKey;
 pub use error::BorsaError;
+pub use middleware::{MiddlewareLayer, MiddlewareStack};
 pub use reports::{DownloadReport, InfoReport, SearchReport};
 pub use routing_policy::{
     Preference, RoutingContext, RoutingPolicy, RoutingPolicyBuilder, ScopeKey,

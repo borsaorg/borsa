@@ -8,6 +8,7 @@ members = [
     "borsa-mock",
     "borsa-types",
     "borsa-middleware",
+    "borsa-macros",
 ]
 
 [workspace.package]

@@ -9,7 +9,7 @@ use borsa_core::connector::{
     ProfileProvider, QuoteProvider, RecommendationsProvider, RecommendationsSummaryProvider,
     SearchProvider, StreamProvider, UpgradesDowngradesProvider,
 };
-use borsa_core::{AssetKind, BorsaError};
+use borsa_core::{AssetKind, BorsaError, Middleware};
 
 /// Middleware that blacklists its inner connector for a period upon quota exhaustion.
 pub struct BlacklistingMiddleware {
@@ -68,210 +68,36 @@ impl BlacklistingMiddleware {
     }
 }
 
-#[async_trait]
-impl BorsaConnector for BlacklistingMiddleware {
-    fn name(&self) -> &'static str {
-        self.inner.name()
-    }
+/// Middleware config for constructing a [`BlacklistingMiddleware`].
+pub struct BlacklistMiddleware {
+    pub duration: Duration,
+}
 
-    fn vendor(&self) -> &'static str {
-        self.inner.vendor()
-    }
-
-    fn supports_kind(&self, kind: AssetKind) -> bool {
-        self.inner.supports_kind(kind)
-    }
-
-    fn as_history_provider(&self) -> Option<&dyn HistoryProvider> {
-        if self.inner.as_history_provider().is_some() {
-            Some(self as &dyn HistoryProvider)
-        } else {
-            None
-        }
-    }
-    fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> {
-        if self.inner.as_quote_provider().is_some() {
-            Some(self as &dyn QuoteProvider)
-        } else {
-            None
-        }
-    }
-    fn as_earnings_provider(&self) -> Option<&dyn EarningsProvider> {
-        if self.inner.as_earnings_provider().is_some() {
-            Some(self as &dyn EarningsProvider)
-        } else {
-            None
-        }
-    }
-    fn as_income_statement_provider(&self) -> Option<&dyn IncomeStatementProvider> {
-        if self.inner.as_income_statement_provider().is_some() {
-            Some(self as &dyn IncomeStatementProvider)
-        } else {
-            None
-        }
-    }
-    fn as_balance_sheet_provider(&self) -> Option<&dyn BalanceSheetProvider> {
-        if self.inner.as_balance_sheet_provider().is_some() {
-            Some(self as &dyn BalanceSheetProvider)
-        } else {
-            None
-        }
-    }
-    fn as_cashflow_provider(&self) -> Option<&dyn CashflowProvider> {
-        if self.inner.as_cashflow_provider().is_some() {
-            Some(self as &dyn CashflowProvider)
-        } else {
-            None
-        }
-    }
-    fn as_calendar_provider(&self) -> Option<&dyn CalendarProvider> {
-        if self.inner.as_calendar_provider().is_some() {
-            Some(self as &dyn CalendarProvider)
-        } else {
-            None
-        }
-    }
-    fn as_recommendations_provider(&self) -> Option<&dyn RecommendationsProvider> {
-        if self.inner.as_recommendations_provider().is_some() {
-            Some(self as &dyn RecommendationsProvider)
-        } else {
-            None
-        }
-    }
-    fn as_recommendations_summary_provider(&self) -> Option<&dyn RecommendationsSummaryProvider> {
-        if self.inner.as_recommendations_summary_provider().is_some() {
-            Some(self as &dyn RecommendationsSummaryProvider)
-        } else {
-            None
-        }
-    }
-    fn as_upgrades_downgrades_provider(&self) -> Option<&dyn UpgradesDowngradesProvider> {
-        if self.inner.as_upgrades_downgrades_provider().is_some() {
-            Some(self as &dyn UpgradesDowngradesProvider)
-        } else {
-            None
-        }
-    }
-    fn as_analyst_price_target_provider(&self) -> Option<&dyn AnalystPriceTargetProvider> {
-        if self.inner.as_analyst_price_target_provider().is_some() {
-            Some(self as &dyn AnalystPriceTargetProvider)
-        } else {
-            None
-        }
-    }
-    fn as_major_holders_provider(&self) -> Option<&dyn MajorHoldersProvider> {
-        if self.inner.as_major_holders_provider().is_some() {
-            Some(self as &dyn MajorHoldersProvider)
-        } else {
-            None
-        }
-    }
-    fn as_institutional_holders_provider(
-        &self,
-    ) -> Option<&dyn borsa_core::connector::InstitutionalHoldersProvider> {
-        if self.inner.as_institutional_holders_provider().is_some() {
-            Some(self as &dyn borsa_core::connector::InstitutionalHoldersProvider)
-        } else {
-            None
-        }
-    }
-    fn as_mutual_fund_holders_provider(
-        &self,
-    ) -> Option<&dyn borsa_core::connector::MutualFundHoldersProvider> {
-        if self.inner.as_mutual_fund_holders_provider().is_some() {
-            Some(self as &dyn borsa_core::connector::MutualFundHoldersProvider)
-        } else {
-            None
-        }
-    }
-    fn as_insider_transactions_provider(
-        &self,
-    ) -> Option<&dyn borsa_core::connector::InsiderTransactionsProvider> {
-        if self.inner.as_insider_transactions_provider().is_some() {
-            Some(self as &dyn borsa_core::connector::InsiderTransactionsProvider)
-        } else {
-            None
-        }
-    }
-    fn as_insider_roster_holders_provider(
-        &self,
-    ) -> Option<&dyn borsa_core::connector::InsiderRosterHoldersProvider> {
-        if self.inner.as_insider_roster_holders_provider().is_some() {
-            Some(self as &dyn borsa_core::connector::InsiderRosterHoldersProvider)
-        } else {
-            None
-        }
-    }
-    fn as_net_share_purchase_activity_provider(
-        &self,
-    ) -> Option<&dyn borsa_core::connector::NetSharePurchaseActivityProvider> {
-        if self
-            .inner
-            .as_net_share_purchase_activity_provider()
-            .is_some()
-        {
-            Some(self as &dyn borsa_core::connector::NetSharePurchaseActivityProvider)
-        } else {
-            None
-        }
-    }
-    fn as_profile_provider(&self) -> Option<&dyn ProfileProvider> {
-        if self.inner.as_profile_provider().is_some() {
-            Some(self as &dyn ProfileProvider)
-        } else {
-            None
-        }
-    }
-    fn as_isin_provider(&self) -> Option<&dyn borsa_core::connector::IsinProvider> {
-        if self.inner.as_isin_provider().is_some() {
-            Some(self as &dyn borsa_core::connector::IsinProvider)
-        } else {
-            None
-        }
-    }
-    fn as_search_provider(&self) -> Option<&dyn SearchProvider> {
-        if self.inner.as_search_provider().is_some() {
-            Some(self as &dyn SearchProvider)
-        } else {
-            None
-        }
-    }
-    fn as_esg_provider(&self) -> Option<&dyn EsgProvider> {
-        if self.inner.as_esg_provider().is_some() {
-            Some(self as &dyn EsgProvider)
-        } else {
-            None
-        }
-    }
-    fn as_news_provider(&self) -> Option<&dyn NewsProvider> {
-        if self.inner.as_news_provider().is_some() {
-            Some(self as &dyn NewsProvider)
-        } else {
-            None
-        }
-    }
-    fn as_options_expirations_provider(&self) -> Option<&dyn OptionsExpirationsProvider> {
-        if self.inner.as_options_expirations_provider().is_some() {
-            Some(self as &dyn OptionsExpirationsProvider)
-        } else {
-            None
-        }
-    }
-    fn as_option_chain_provider(&self) -> Option<&dyn OptionChainProvider> {
-        if self.inner.as_option_chain_provider().is_some() {
-            Some(self as &dyn OptionChainProvider)
-        } else {
-            None
-        }
-    }
-    fn as_stream_provider(&self) -> Option<&dyn StreamProvider> {
-        if self.inner.as_stream_provider().is_some() {
-            Some(self as &dyn StreamProvider)
-        } else {
-            None
-        }
+impl BlacklistMiddleware {
+    #[must_use]
+    pub const fn new(duration: Duration) -> Self {
+        Self { duration }
     }
 }
+
+impl Middleware for BlacklistMiddleware {
+    fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
+        Arc::new(BlacklistingMiddleware::new(inner, self.duration))
+    }
+
+    fn name(&self) -> &'static str {
+        "BlacklistingMiddleware"
+    }
+
+    fn config_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "default_duration_ms": self.duration.as_millis(),
+        })
+    }
+}
+
+#[borsa_macros::delegate_connector(inner)]
+impl BlacklistingMiddleware {}
 
 #[async_trait]
 impl HistoryProvider for BlacklistingMiddleware {

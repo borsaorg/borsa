@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let yf = Arc::new(YfConnector::new_default());
+    let yf = borsa_yfinance::YfConnector::rate_limited().build();
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
     let q = yf.quote(&aapl).await?;
     if let Some(price) = &q.price {
@@ -65,7 +65,7 @@ use borsa_yfinance::YfConnector;
 use borsa_core::{connector::QuoteProvider, AssetKind, Currency, Instrument, Money, Symbol};
 use std::sync::Arc;
 
-let yf = Arc::new(YfConnector::new_default());
+let yf = borsa_yfinance::YfConnector::rate_limited().build();
 let borsa = Borsa::builder().with_connector(yf).build()?;
 let inst = Instrument::from_symbol("MSFT", AssetKind::Equity)?;
 let quote = borsa.quote(&inst).await?;

@@ -20,6 +20,8 @@ tracing = ["dep:tracing", "borsa-core/tracing"]
 [dependencies]
 borsa-core = { workspace = true }
 yfinance-rs = { workspace = true }
+borsa-middleware = { workspace = true }
+borsa-types = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

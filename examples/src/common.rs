@@ -7,6 +7,6 @@ pub fn get_connector() -> Arc<dyn BorsaConnector> {
         println!("--- (Using Mock Connector for CI) ---");
         Arc::new(borsa_mock::MockConnector::new())
     } else {
-        Arc::new(borsa_yfinance::YfConnector::new_default())
+        borsa_yfinance::YfConnector::rate_limited().build()
     }
 }

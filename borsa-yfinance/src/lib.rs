@@ -7,6 +7,7 @@
 
 /// Adapter definitions and the production adapter backed by `yfinance-rs`.
 pub mod adapter;
+mod builder;
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
