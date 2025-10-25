@@ -104,7 +104,7 @@ impl ConnectorBuilder {
     pub fn to_stack(&self) -> MiddlewareStack {
         let mut stack = MiddlewareStack::new();
         for layer in &self.layers {
-            stack.push_outer(MiddlewareLayer::new(layer.name(), layer.config_json()));
+            stack.push_inner(MiddlewareLayer::new(layer.name(), layer.config_json()));
         }
         // Document inner-most raw for observability only
         stack.push_inner(MiddlewareLayer::new(
