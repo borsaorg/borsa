@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Example: Smooth usage with EvenSpreadHourly
+### Example: Smooth usage with `EvenSpreadHourly`
 
 The `EvenSpreadHourly` strategy evenly spreads a daily budget across 24 slices (typically ~1h each for a 24h window). If the current slice is exhausted but the daily budget remains, calls are temporarily blocked with `QuotaExceeded { remaining > 0 }`. The orchestrator can then fall back to other providers.
 

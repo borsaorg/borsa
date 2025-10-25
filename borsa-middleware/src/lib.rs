@@ -3,6 +3,8 @@
 //!
 //! Re-exports for middleware wrappers.
 
+mod blacklist;
 mod quota;
 
+pub use crate::blacklist::BlacklistingMiddleware;
 pub use crate::quota::QuotaAwareConnector;
