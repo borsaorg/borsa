@@ -1,17 +1,20 @@
 #[cfg(feature = "tracing")]
 use std::convert::TryFrom;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use borsa_core::types::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Capability, Instrument, RoutingContext};
 use futures::stream::{FuturesUnordered, StreamExt};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::mem;
+use std::time::{Duration, Instant};
 
 /// Orchestrator that routes requests across registered providers.
 pub struct Borsa {
     pub(crate) connectors: Vec<Arc<dyn BorsaConnector>>,
     pub(crate) cfg: BorsaConfig,
+    // Providers temporarily blacklisted due to long-term quota exhaustion (e.g., daily windows).
+    blacklist: Mutex<HashMap<borsa_core::ConnectorKey, Instant>>,
 }
 
 /// Builder for constructing a `Borsa` orchestrator with custom configuration.
@@ -204,6 +207,7 @@ impl BorsaBuilder {
         Ok(Borsa {
             connectors: self.connectors,
             cfg: self.cfg,
+            blacklist: Mutex::new(HashMap::new()),
         })
     }
 }
@@ -245,6 +249,26 @@ where
 }
 
 impl Borsa {
+    const DEFAULT_BLACKLIST_DURATION: Duration = Duration::from_secs(24 * 60 * 60);
+
+    fn is_blacklisted(&self, key: &borsa_core::ConnectorKey) -> bool {
+        let mut guard = self.blacklist.lock().expect("mutex poisoned");
+        let now = Instant::now();
+        guard.get(key).copied().is_some_and(|until| {
+            if now < until {
+                true
+            } else {
+                // expired
+                guard.remove(key);
+                false
+            }
+        })
+    }
+
+    fn blacklist_until(&self, key: borsa_core::ConnectorKey, until: Instant) {
+        let mut guard = self.blacklist.lock().expect("mutex poisoned");
+        guard.insert(key, until);
+    }
     /// Enforce that a quote's exchange matches the instrument's desired exchange when provided.
     ///
     /// When the instrument specifies an exchange, a mismatched quote exchange is treated as
@@ -482,6 +506,10 @@ impl Borsa {
         let mut all_not_found = true;
 
         for c in self.ordered(inst) {
+            let key = c.key();
+            if self.is_blacklisted(&key) {
+                continue;
+            }
             if let Some(fut) = call(c.clone(), inst.clone()) {
                 attempted_any = true;
                 match Self::provider_call_with_timeout(
@@ -496,9 +524,31 @@ impl Borsa {
                     Err(e @ BorsaError::NotFound { .. }) => {
                         errors.push(e);
                     }
-                    Err(e @ BorsaError::ProviderTimeout { .. }) => {
+                    Err(
+                        e @ (BorsaError::ProviderTimeout { .. }
+                        | BorsaError::RateLimitExceeded { .. }),
+                    ) => {
                         all_not_found = false;
                         errors.push(e);
+                    }
+                    Err(BorsaError::QuotaExceeded {
+                        remaining,
+                        reset_in_ms,
+                    }) => {
+                        all_not_found = false;
+                        // Heuristic: remaining == 0 implies overall window (e.g., daily) exhausted
+                        if remaining == 0 {
+                            let dur = if reset_in_ms > 0 {
+                                Duration::from_millis(reset_in_ms)
+                            } else {
+                                Self::DEFAULT_BLACKLIST_DURATION
+                            };
+                            self.blacklist_until(key.clone(), Instant::now() + dur);
+                        }
+                        errors.push(BorsaError::QuotaExceeded {
+                            remaining,
+                            reset_in_ms,
+                        });
                     }
                     Err(e) => {
                         all_not_found = false;
@@ -561,6 +611,10 @@ impl Borsa {
         let mut futs = FuturesUnordered::new();
         let mut attempted_any = false;
         for c in self.ordered(inst) {
+            let key = c.key();
+            if self.is_blacklisted(&key) {
+                continue;
+            }
             if let Some(fut) = call(c.clone(), inst.clone()) {
                 let name = c.name();
                 let timeout = self.cfg.provider_timeout;
@@ -579,8 +633,33 @@ impl Borsa {
         while let Some((name, res)) = futs.next().await {
             match res {
                 Ok(v) => return Ok(v),
-                Err(e @ (BorsaError::ProviderTimeout { .. } | BorsaError::NotFound { .. })) => {
+                Err(
+                    e @ (BorsaError::ProviderTimeout { .. }
+                    | BorsaError::NotFound { .. }
+                    | BorsaError::RateLimitExceeded { .. }),
+                ) => {
                     errors.push(e);
+                }
+                Err(BorsaError::QuotaExceeded {
+                    remaining,
+                    reset_in_ms,
+                }) => {
+                    // Blacklist only when overall window exhausted
+                    if remaining == 0 {
+                        let dur = if reset_in_ms > 0 {
+                            Duration::from_millis(reset_in_ms)
+                        } else {
+                            Self::DEFAULT_BLACKLIST_DURATION
+                        };
+                        self.blacklist_until(
+                            borsa_core::ConnectorKey::new(name),
+                            Instant::now() + dur,
+                        );
+                    }
+                    errors.push(BorsaError::QuotaExceeded {
+                        remaining,
+                        reset_in_ms,
+                    });
                 }
                 Err(e) => errors.push(crate::core::tag_err(name, e)),
             }

@@ -295,6 +295,7 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "borsa-core",
+ "borsa-middleware",
  "borsa-mock",
  "borsa-types",
  "chrono",
