@@ -24,6 +24,38 @@ impl ConnectorBuilder {
         }
     }
 
+    /// Internal: extract existing quota config from layers if present.
+    fn existing_quota_config(&self) -> Option<QuotaConfig> {
+        for layer in &self.layers {
+            if layer.name() == "QuotaAwareConnector" {
+                let cfg = layer.config_json();
+                let defaults = QuotaConfig::default();
+                let limit = cfg
+                    .get("limit")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(defaults.limit);
+                let window_ms = cfg
+                    .get("window_ms")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or_else(|| {
+                        u64::try_from(defaults.window.as_millis()).unwrap_or(u64::MAX)
+                    });
+                let strategy = match cfg.get("strategy").and_then(|v| v.as_str()) {
+                    Some("EvenSpreadHourly") => QuotaConsumptionStrategy::EvenSpreadHourly,
+                    Some("Weighted") => QuotaConsumptionStrategy::Weighted,
+                    Some("Unit") => QuotaConsumptionStrategy::Unit,
+                    _ => defaults.strategy,
+                };
+                return Some(QuotaConfig {
+                    limit,
+                    window: Duration::from_millis(window_ms),
+                    strategy,
+                });
+            }
+        }
+        None
+    }
+
     /// Add or replace quota configuration.
     #[must_use]
     pub fn with_quota(mut self, cfg: &QuotaConfig) -> Self {
@@ -66,36 +98,27 @@ impl ConnectorBuilder {
         self
     }
 
-    /// Shortcut: set quota limit only (keep previous window/strategy or defaults).
+    /// Shortcut: set quota limit only (preserves existing window/strategy if already set).
     #[must_use]
     pub fn quota_limit(self, limit: u64) -> Self {
-        let cfg = QuotaConfig {
-            limit,
-            window: Duration::from_secs(60),
-            strategy: QuotaConsumptionStrategy::EvenSpreadHourly,
-        };
+        let mut cfg = self.existing_quota_config().unwrap_or_default();
+        cfg.limit = limit;
         self.with_quota(&cfg)
     }
 
-    /// Shortcut: set window, inferring other fields as defaults.
+    /// Shortcut: set window (preserves existing limit/strategy if already set).
     #[must_use]
     pub fn quota_window(self, window: Duration) -> Self {
-        let cfg = QuotaConfig {
-            limit: 1,
-            window,
-            strategy: QuotaConsumptionStrategy::EvenSpreadHourly,
-        };
+        let mut cfg = self.existing_quota_config().unwrap_or_default();
+        cfg.window = window;
         self.with_quota(&cfg)
     }
 
-    /// Shortcut: set strategy with rough defaults.
+    /// Shortcut: set strategy (preserves existing limit/window if already set).
     #[must_use]
     pub fn quota_strategy(self, strategy: QuotaConsumptionStrategy) -> Self {
-        let cfg = QuotaConfig {
-            limit: 1,
-            window: Duration::from_secs(60),
-            strategy,
-        };
+        let mut cfg = self.existing_quota_config().unwrap_or_default();
+        cfg.strategy = strategy;
         self.with_quota(&cfg)
     }
 
