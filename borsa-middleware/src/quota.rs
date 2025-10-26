@@ -97,9 +97,19 @@ impl QuotaAwareConnector {
 
         // Optional hourly-spread slice handling
         if matches!(rt.strategy, QuotaConsumptionStrategy::EvenSpreadHourly) {
-            if now.duration_since(rt.slice_start) >= rt.slice_duration {
+            let elapsed = now.duration_since(rt.slice_start);
+            if elapsed >= rt.slice_duration {
                 rt.calls_made_in_slice = 0;
-                rt.slice_start = now;
+                // Align slice_start to the beginning of the current slice by calculating
+                // how many complete slices have passed and advancing by that amount.
+                // This ensures slices remain aligned to regular boundaries even with gaps in usage.
+                let slices_passed = elapsed.as_nanos() / rt.slice_duration.as_nanos();
+                let boundary_offset = Duration::from_nanos(
+                    (slices_passed * rt.slice_duration.as_nanos())
+                        .try_into()
+                        .unwrap_or(u64::MAX),
+                );
+                rt.slice_start += boundary_offset;
             }
 
             // If slice is exhausted but daily window still has room, block temporarily
