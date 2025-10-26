@@ -222,21 +222,7 @@ impl HistoryProvider for QuotaAwareConnector {
             .ok_or_else(|| BorsaError::unsupported("history"))?;
         match inner.history(instrument, req).await {
             Ok(response) => Ok(response),
-            Err(BorsaError::Connector { connector, msg }) => {
-                let lower = msg.to_lowercase();
-                let looks_like_rate_limit = lower.contains("rate limit")
-                    || lower.contains("429")
-                    || lower.contains("too many requests");
-                if looks_like_rate_limit {
-                    // Heuristic: provider indicated a rate limit; expose as RateLimitExceeded.
-                    return Err(BorsaError::RateLimitExceeded {
-                        limit: 0,
-                        window_ms: 0,
-                    });
-                }
-                Err(BorsaError::Connector { connector, msg })
-            }
-            Err(other) => Err(other),
+            Err(other) => Err(Self::translate_provider_error(other)),
         }
     }
 
