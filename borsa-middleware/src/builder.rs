@@ -1,3 +1,37 @@
+//! Builder for composing connectors with middleware layers.
+//!
+//! # Middleware Ordering Convention
+//!
+//! Middleware layers form an "onion" around the raw connector:
+//!
+//! ```text
+//! User Request
+//!     ↓
+//! Outermost Middleware (e.g., Blacklist - checks first, handles errors last)
+//!     ↓
+//! Inner Middleware (e.g., Quota - enforces limits, translates errors)
+//!     ↓
+//! Raw Connector (e.g., YFinance - makes actual API calls)
+//! ```
+//!
+//! ## Storage vs Application Order
+//!
+//! The `layers` vector stores middleware in **outermost-first** order for intuitive
+//! builder semantics (last added = outermost), but they are **applied in reverse**
+//! during `build()` to construct the proper nesting.
+//!
+//! Example:
+//! ```text
+//! builder.with_quota(..).with_blacklist(..)
+//!
+//! Storage: [Blacklist, Quota]  (outermost first)
+//! Applied:  Raw -> Quota -> Blacklist  (innermost to outermost)
+//! Result:   Blacklist(Quota(Raw))
+//! ```
+//!
+//! This convention matches [`MiddlewareStack`](borsa_types::MiddlewareStack) where
+//! `layers[0]` is the outermost layer.
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,9 +41,15 @@ use borsa_types::{MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptio
 use serde_json::json;
 
 /// Generic middleware builder for composing a connector with layered wrappers.
+///
+/// See [module-level documentation](self) for details on middleware ordering.
 pub struct ConnectorBuilder {
     raw: Arc<dyn BorsaConnector>,
-    layers: Vec<Box<dyn Middleware>>, // outermost first
+    /// Middleware layers in outermost-first order.
+    ///
+    /// During `build()`, these are applied in reverse (innermost to outermost)
+    /// to construct the proper nesting: `layers[0](layers[1](...(raw)))`.
+    layers: Vec<Box<dyn Middleware>>,
 }
 
 impl ConnectorBuilder {
@@ -55,10 +95,16 @@ impl ConnectorBuilder {
     }
 
     /// Add or replace quota configuration.
+    ///
+    /// Adds quota middleware at the outermost position (index 0) so it runs first
+    /// on the request path and last on error handling. This ensures quota checks
+    /// happen before the raw connector is called.
+    ///
+    /// If quota middleware already exists, it is removed and replaced.
     #[must_use]
     pub fn with_quota(mut self, cfg: &QuotaConfig) -> Self {
-        // Remove any existing Quota layer
         self.layers.retain(|m| m.name() != "QuotaAwareConnector");
+        // Insert at position 0 to make this the outermost layer
         self.layers
             .insert(0, Box::new(crate::quota::QuotaMiddleware::new(cfg.clone())));
         self
@@ -72,9 +118,16 @@ impl ConnectorBuilder {
     }
 
     /// Add or replace blacklist configuration.
+    ///
+    /// Adds blacklist middleware at the outermost position (index 0) so it checks
+    /// blacklist state before any other middleware runs, and handles quota/rate-limit
+    /// errors to update blacklist state.
+    ///
+    /// If blacklist middleware already exists, it is removed and replaced.
     #[must_use]
     pub fn with_blacklist(mut self, duration: Duration) -> Self {
         self.layers.retain(|m| m.name() != "BlacklistingMiddleware");
+        // Insert at position 0 to make this the outermost layer
         self.layers.insert(
             0,
             Box::new(crate::blacklist::BlacklistMiddleware::new(duration)),
@@ -114,9 +167,16 @@ impl ConnectorBuilder {
     }
 
     /// Export the current middleware stack configuration for inspection.
+    ///
+    /// Returns a [`MiddlewareStack`] that preserves the outermost-first ordering
+    /// convention. The resulting stack can be serialized, stored, and later
+    /// reconstructed with [`from_stack`](Self::from_stack).
+    ///
+    /// The raw connector is appended as the innermost "layer" for observability.
     #[must_use]
     pub fn to_stack(&self) -> MiddlewareStack {
         let mut stack = MiddlewareStack::new();
+        // Iterate in storage order (outermost first) and push_inner to maintain convention
         for layer in &self.layers {
             stack.push_inner(MiddlewareLayer::new(layer.name(), layer.config_json()));
         }
@@ -129,9 +189,15 @@ impl ConnectorBuilder {
     }
 
     /// Construct a builder from a raw connector and an explicit stack.
+    ///
+    /// Reconstructs middleware layers from a serialized [`MiddlewareStack`],
+    /// preserving the outermost-first ordering convention. Unknown middleware
+    /// types are silently ignored (forward compatibility).
+    ///
+    /// This is the inverse of [`to_stack`](Self::to_stack).
     #[must_use]
     pub fn from_stack(raw: Arc<dyn BorsaConnector>, stack: &MiddlewareStack) -> Self {
-        // Convert known layers to typed middleware; ignore unknowns for now.
+        // Convert known layers to typed middleware; ignore unknowns for forward compatibility
         let mut layers: Vec<Box<dyn Middleware>> = Vec::new();
         for l in &stack.layers {
             match l.name.as_str() {
@@ -175,19 +241,38 @@ impl ConnectorBuilder {
     }
 
     /// Build the wrapped connector according to the captured stack.
+    ///
+    /// Applies middleware layers in reverse order (innermost to outermost) to construct
+    /// the proper nesting. Since `layers` stores middleware in outermost-first order,
+    /// we reverse during iteration to apply them innermost-first.
+    ///
+    /// Example with `layers = [Blacklist, Quota]`:
+    /// ```text
+    /// 1. Start:  acc = Raw
+    /// 2. Apply Quota (last in vec):     acc = Quota(Raw)
+    /// 3. Apply Blacklist (first in vec): acc = Blacklist(Quota(Raw))
+    /// ```
+    ///
+    /// The resulting connector processes requests from outermost to innermost:
+    /// `User -> Blacklist -> Quota -> Raw`
     #[must_use]
     pub fn build(self) -> Arc<dyn BorsaConnector> {
-        // Apply outermost to innermost in order, threading through.
         let mut acc: Arc<dyn BorsaConnector> = Arc::clone(&self.raw);
+        // Reverse iteration: apply innermost middleware first, outermost last
         for m in self.layers.into_iter().rev() {
             acc = m.apply(acc);
         }
         acc
     }
 
-    /// Add an arbitrary middleware layer (outermost by default).
+    /// Add an arbitrary middleware layer at the outermost position.
+    ///
+    /// This method inserts the layer at index 0, making it the first to receive
+    /// requests and the last to handle errors. Use this for custom middleware that
+    /// should wrap all other layers.
     #[must_use]
     pub fn layer(mut self, layer: Box<dyn Middleware>) -> Self {
+        // Insert at position 0 to make this the outermost layer
         self.layers.insert(0, layer);
         self
     }
