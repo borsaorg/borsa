@@ -21,6 +21,44 @@ fn resolve_borsa_core_path() -> Path {
     }
 }
 
+/// Exhaustive list of provider traits in `BorsaConnector`.
+///
+/// This is the **source of truth** for code generation. When adding a new provider:
+/// 1. Add the trait to `borsa-core/src/connector.rs`
+/// 2. Add the trait name here
+/// 3. Add a corresponding `gen_*_impl` function below
+///
+/// The macro will optionally validate this list against `connector.rs` at compile time
+/// if the file is found. If validation fails, warnings are emitted but compilation
+/// continues (allowing external crates to use these macros without filesystem access).
+const KNOWN_PROVIDERS: &[&str] = &[
+    "HistoryProvider",
+    "QuoteProvider",
+    "EarningsProvider",
+    "IncomeStatementProvider",
+    "BalanceSheetProvider",
+    "CashflowProvider",
+    "CalendarProvider",
+    "RecommendationsProvider",
+    "RecommendationsSummaryProvider",
+    "UpgradesDowngradesProvider",
+    "AnalystPriceTargetProvider",
+    "MajorHoldersProvider",
+    "InstitutionalHoldersProvider",
+    "MutualFundHoldersProvider",
+    "InsiderTransactionsProvider",
+    "InsiderRosterHoldersProvider",
+    "NetSharePurchaseActivityProvider",
+    "ProfileProvider",
+    "IsinProvider",
+    "SearchProvider",
+    "EsgProvider",
+    "NewsProvider",
+    "OptionsExpirationsProvider",
+    "OptionChainProvider",
+    "StreamProvider",
+];
+
 fn find_borsa_core_connector_rs() -> Option<std::path::PathBuf> {
     if let Ok(override_path) = std::env::var("BORSA_CORE_CONNECTOR_RS") {
         let p = std::path::PathBuf::from(override_path);
@@ -44,11 +82,10 @@ fn find_borsa_core_connector_rs() -> Option<std::path::PathBuf> {
     None
 }
 
-fn load_connector_ast() -> syn::File {
-    let path = find_borsa_core_connector_rs().expect("borsa-macros: unable to locate borsa-core/src/connector.rs; set BORSA_CORE_CONNECTOR_RS to absolute path");
-    let content =
-        std::fs::read_to_string(&path).expect("borsa-macros: failed to read connector.rs");
-    syn::parse_file(&content).expect("borsa-macros: failed to parse borsa-core connector.rs")
+fn load_connector_ast() -> Option<syn::File> {
+    let path = find_borsa_core_connector_rs()?;
+    let content = std::fs::read_to_string(&path).ok()?;
+    syn::parse_file(&content).ok()
 }
 
 fn discover_accessors(file: &syn::File) -> Vec<(Ident, Ident)> {
@@ -135,6 +172,64 @@ fn parse_inner_ident(args: Punctuated<Meta, Token![,]>) -> (Ident, Option<String
     (inner_ident, pre_call)
 }
 
+fn provider_to_accessor_name(provider: &str) -> String {
+    let without_provider = provider.strip_suffix("Provider").unwrap_or(provider);
+    let snake_case = without_provider
+        .chars()
+        .enumerate()
+        .flat_map(|(i, c)| {
+            if i > 0 && c.is_uppercase() {
+                vec!['_', c.to_ascii_lowercase()]
+            } else {
+                vec![c.to_ascii_lowercase()]
+            }
+        })
+        .collect::<String>();
+    format!("as_{snake_case}_provider")
+}
+
+/// Optional compile-time validation: compare `KNOWN_PROVIDERS` against connector.rs.
+///
+/// This validation is best-effort and gracefully degrades:
+/// - If `connector.rs` is not found (e.g., in external crates), no validation occurs
+/// - If validation detects drift, warnings are emitted but compilation continues
+/// - In the monorepo, warnings help catch when a provider is added/removed
+///
+/// This makes the macro robust for external users while providing helpful feedback
+/// for maintainers in the monorepo environment.
+fn validate_providers_against_file() {
+    let Some(file) = load_connector_ast() else {
+        return;
+    };
+
+    let discovered = discover_accessors(&file);
+    let discovered_providers: HashSet<String> = discovered
+        .iter()
+        .map(|(_accessor, provider)| provider.to_string())
+        .collect();
+
+    let known_set: HashSet<String> = KNOWN_PROVIDERS.iter().map(|s| (*s).to_string()).collect();
+
+    let missing_in_macro: Vec<_> = discovered_providers.difference(&known_set).collect();
+    let missing_in_file: Vec<_> = known_set.difference(&discovered_providers).collect();
+
+    if !missing_in_macro.is_empty() {
+        eprintln!(
+            "cargo:warning=borsa-macros: Provider(s) in connector.rs but not in KNOWN_PROVIDERS: {missing_in_macro:?}"
+        );
+        eprintln!(
+            "cargo:warning=Please update KNOWN_PROVIDERS in borsa-macros/src/middleware/parse.rs"
+        );
+    }
+
+    if !missing_in_file.is_empty() {
+        eprintln!(
+            "cargo:warning=borsa-macros: Provider(s) in KNOWN_PROVIDERS but not in connector.rs: {missing_in_file:?}"
+        );
+        eprintln!("cargo:warning=This may indicate a typo or outdated list");
+    }
+}
+
 pub fn delegate_connector_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
     let input_impl = parse_macro_input!(item as ItemImpl);
@@ -144,14 +239,24 @@ pub fn delegate_connector_impl(attr: TokenStream, item: TokenStream) -> TokenStr
 
     // We expect an inherent impl block on the target type; we will append another impl for BorsaConnector.
     let self_ty = *input_impl.self_ty.clone();
-    // Discover accessors dynamically
-    let file = load_connector_ast();
-    let accessors = discover_accessors(&file);
+
+    // Attempt optional validation: compare KNOWN_PROVIDERS with connector.rs
+    validate_providers_against_file();
+
+    // Generate accessor methods from KNOWN_PROVIDERS (source of truth)
     let mut accessor_methods: Vec<TokenStream2> = Vec::new();
-    for (accessor_ident, provider_ident) in accessors {
+    for provider_name in KNOWN_PROVIDERS {
+        let provider_ident = Ident::new(provider_name, Span::call_site());
+        let accessor_name = provider_to_accessor_name(provider_name);
+        let accessor_ident = Ident::new(&accessor_name, Span::call_site());
+
         let method = quote! {
             fn #accessor_ident(&self) -> Option<&dyn #borsa_core::connector::#provider_ident> {
-                if self.#inner_ident.#accessor_ident().is_some() { Some(self as &dyn #borsa_core::connector::#provider_ident) } else { None }
+                if self.#inner_ident.#accessor_ident().is_some() {
+                    Some(self as &dyn #borsa_core::connector::#provider_ident)
+                } else {
+                    None
+                }
             }
         };
         accessor_methods.push(method);
@@ -172,6 +277,56 @@ pub fn delegate_connector_impl(attr: TokenStream, item: TokenStream) -> TokenStr
     expanded.into()
 }
 
+/// Dispatch to the appropriate generator function based on provider name.
+fn generate_provider_impl(
+    provider_name: &str,
+    borsa_core: &Path,
+    self_ty: &Type,
+    inner: &Ident,
+    pre: &TokenStream2,
+) -> TokenStream2 {
+    match provider_name {
+        "HistoryProvider" => gen_history_impl(borsa_core, self_ty, inner, pre),
+        "QuoteProvider" => gen_quote_impl(borsa_core, self_ty, inner, pre),
+        "EarningsProvider" => gen_earnings_impl(borsa_core, self_ty, inner, pre),
+        "IncomeStatementProvider" => gen_income_stmt_impl(borsa_core, self_ty, inner, pre),
+        "BalanceSheetProvider" => gen_balance_sheet_impl(borsa_core, self_ty, inner, pre),
+        "CashflowProvider" => gen_cashflow_impl(borsa_core, self_ty, inner, pre),
+        "CalendarProvider" => gen_calendar_impl(borsa_core, self_ty, inner, pre),
+        "RecommendationsProvider" => gen_recommendations_impl(borsa_core, self_ty, inner, pre),
+        "RecommendationsSummaryProvider" => {
+            gen_recommendations_summary_impl(borsa_core, self_ty, inner, pre)
+        }
+        "UpgradesDowngradesProvider" => gen_upgrades_impl(borsa_core, self_ty, inner, pre),
+        "AnalystPriceTargetProvider" => gen_price_target_impl(borsa_core, self_ty, inner, pre),
+        "MajorHoldersProvider" => gen_major_holders_impl(borsa_core, self_ty, inner, pre),
+        "InstitutionalHoldersProvider" => {
+            gen_institutional_holders_impl(borsa_core, self_ty, inner, pre)
+        }
+        "MutualFundHoldersProvider" => {
+            gen_mutual_fund_holders_impl(borsa_core, self_ty, inner, pre)
+        }
+        "InsiderTransactionsProvider" => {
+            gen_insider_transactions_impl(borsa_core, self_ty, inner, pre)
+        }
+        "InsiderRosterHoldersProvider" => gen_insider_roster_impl(borsa_core, self_ty, inner, pre),
+        "NetSharePurchaseActivityProvider" => {
+            gen_net_share_purchase_impl(borsa_core, self_ty, inner, pre)
+        }
+        "ProfileProvider" => gen_profile_impl(borsa_core, self_ty, inner, pre),
+        "IsinProvider" => gen_isin_impl(borsa_core, self_ty, inner, pre),
+        "SearchProvider" => gen_search_impl(borsa_core, self_ty, inner, pre),
+        "EsgProvider" => gen_esg_impl(borsa_core, self_ty, inner, pre),
+        "NewsProvider" => gen_news_impl(borsa_core, self_ty, inner, pre),
+        "OptionsExpirationsProvider" => {
+            gen_options_expirations_impl(borsa_core, self_ty, inner, pre)
+        }
+        "OptionChainProvider" => gen_option_chain_impl(borsa_core, self_ty, inner, pre),
+        "StreamProvider" => gen_stream_impl(borsa_core, self_ty, inner, pre),
+        _ => panic!("Unknown provider in KNOWN_PROVIDERS: {provider_name}"),
+    }
+}
+
 pub fn delegate_all_providers_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
     let input_impl = parse_macro_input!(item as ItemImpl);
@@ -184,86 +339,22 @@ pub fn delegate_all_providers_impl(attr: TokenStream, item: TokenStream) -> Toke
     let borsa_core = resolve_borsa_core_path();
     let self_ty = *input_impl.self_ty.clone();
 
-    // Discover provider trait idents from BorsaConnector
-    let file = load_connector_ast();
-    let discovered = discover_accessors(&file);
-    let mut discovered_set: HashSet<String> = HashSet::new();
-    for (_acc, pid) in &discovered {
-        discovered_set.insert(pid.to_string());
-    }
+    // Attempt optional validation: compare KNOWN_PROVIDERS with connector.rs
+    validate_providers_against_file();
 
-    // Known providers we can generate for
-    let known: HashSet<&str> = [
-        "HistoryProvider",
-        "QuoteProvider",
-        "EarningsProvider",
-        "IncomeStatementProvider",
-        "BalanceSheetProvider",
-        "CashflowProvider",
-        "CalendarProvider",
-        "RecommendationsProvider",
-        "RecommendationsSummaryProvider",
-        "UpgradesDowngradesProvider",
-        "AnalystPriceTargetProvider",
-        "MajorHoldersProvider",
-        "InstitutionalHoldersProvider",
-        "MutualFundHoldersProvider",
-        "InsiderTransactionsProvider",
-        "InsiderRosterHoldersProvider",
-        "NetSharePurchaseActivityProvider",
-        "ProfileProvider",
-        "IsinProvider",
-        "SearchProvider",
-        "EsgProvider",
-        "NewsProvider",
-        "OptionsExpirationsProvider",
-        "OptionChainProvider",
-        "StreamProvider",
-    ]
-    .into_iter()
-    .collect();
-
-    let known_string: std::collections::HashSet<String> =
-        known.iter().map(|s| (*s).to_string()).collect();
-    let unknown: Vec<String> = discovered_set.difference(&known_string).cloned().collect();
-    if !unknown.is_empty() {
-        let msg = format!(
-            "borsa-macros: unknown provider(s) in BorsaConnector: {}. Update macros.",
-            unknown.join(", ")
-        );
-        return syn::Error::new(Span::call_site(), msg)
-            .to_compile_error()
-            .into();
-    }
-
-    // Generate implementations for all known provider traits by delegating to inner, with optional pre_call.
-    let impls: Vec<TokenStream2> = vec![
-        gen_history_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_quote_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_earnings_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_income_stmt_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_balance_sheet_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_cashflow_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_calendar_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_recommendations_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_recommendations_summary_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_upgrades_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_price_target_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_major_holders_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_institutional_holders_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_mutual_fund_holders_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_insider_transactions_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_insider_roster_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_net_share_purchase_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_profile_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_isin_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_search_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_esg_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_news_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_options_expirations_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_option_chain_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-        gen_stream_impl(&borsa_core, &self_ty, &inner_ident, &pre_call_ts),
-    ];
+    // Generate implementations dynamically from KNOWN_PROVIDERS
+    let impls: Vec<TokenStream2> = KNOWN_PROVIDERS
+        .iter()
+        .map(|provider_name| {
+            generate_provider_impl(
+                provider_name,
+                &borsa_core,
+                &self_ty,
+                &inner_ident,
+                &pre_call_ts,
+            )
+        })
+        .collect();
 
     let expanded = quote! {
         #input_impl
