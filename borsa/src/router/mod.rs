@@ -13,4 +13,6 @@ pub mod quotes;
 pub mod search;
 pub mod stream;
 
+pub mod util;
+
 // re-export core for internal use if needed

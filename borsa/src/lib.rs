@@ -92,7 +92,7 @@
 //! }
 //! ```
 //!
-//! See the `examples/` package for runnable end-to-end demonstrations.
+//! See `borsa/examples/` for runnable end-to-end demonstrations.
 #![warn(missing_docs)]
 
 pub(crate) mod core;

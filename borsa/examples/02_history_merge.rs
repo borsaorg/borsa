@@ -1,10 +1,11 @@
+mod common;
 use async_trait::async_trait;
 use borsa::Borsa;
 use borsa_core::{
     AssetKind, BorsaError, Candle, Currency, HistoryRequest, HistoryResponse, Instrument, Money,
     connector::{BorsaConnector, HistoryProvider},
 };
-use borsa_examples::common::get_connector;
+use common::get_connector;
 
 use std::sync::Arc;
 

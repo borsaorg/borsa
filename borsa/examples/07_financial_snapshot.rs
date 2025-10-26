@@ -1,6 +1,7 @@
+mod common;
 use borsa::Borsa;
 use borsa_core::{AssetKind, Instrument, Profile};
-use borsa_examples::common::get_connector;
+use common::get_connector;
 use rust_decimal::Decimal;
 
 #[tokio::main]

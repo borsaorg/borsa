@@ -1,6 +1,7 @@
+mod common;
 use borsa::Borsa;
 use borsa_core::{AssetKind, Instrument};
-use borsa_examples::common::get_connector;
+use common::get_connector;
 
 // Helper to format a Unix timestamp into a readable date string.
 fn format_date(ts: Option<chrono::DateTime<chrono::Utc>>) -> String {

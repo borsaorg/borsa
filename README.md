@@ -43,7 +43,7 @@ Want to add a connector for your preferred data provider? We provide:
 
 ### Examples
 
-- **`examples/`**: Self-contained example programs demonstrating common workflows
+- **`borsa/examples/`**: Self-contained example programs demonstrating common workflows
 
 For crate-specific usage of the high-level client, see [borsa/README.md](https://github.com/borsaorg/borsa/blob/main/borsa/README.md).
 
@@ -170,7 +170,7 @@ Migration note: the old builder methods `prefer_for_kind` and `prefer_symbol` ar
 
 ## Examples
 
-Browse `examples/examples/` for end-to-end samples (quotes, history, fundamentals, options, news, ESG, analysis). These are small, copyable programs you can adapt in your own project.
+Browse `borsa/examples/` for end-to-end samples (quotes, history, fundamentals, options, news, ESG, analysis). These are small, copyable programs you can adapt in your own project.
 
 ### Running examples locally (CI-safe)
 
@@ -194,13 +194,13 @@ just examples-mock
 Run a specific example with the mock:
 
 ```bash
-BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa-examples --example 01_simple_quote
+BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa --example 01_simple_quote
 ```
 
 Run a specific example against live Yahoo Finance:
 
 ```bash
-cargo run -p borsa-examples --example 01_simple_quote
+cargo run -p borsa --example 01_simple_quote
 ```
 
 ## Observability (tracing)
@@ -209,13 +209,13 @@ The workspace provides optional, feature-gated tracing spans across the router (
 
 - Enable features: `borsa/tracing` and `borsa-yfinance/tracing`
 - Initialize a subscriber in your binary using `tracing-subscriber`
-- See `examples/examples/00_tracing.rs` for a minimal setup
+- See `borsa/examples/00_tracing.rs` for a minimal setup
 
 Quickstart:
 
 ```bash
 RUST_LOG=info,borsa=trace,borsa_yfinance=trace \
-  cargo run -p borsa-examples --example 00_tracing \
+  cargo run -p borsa --example 00_tracing \
   --features "borsa/tracing borsa-yfinance/tracing"
 ```
 

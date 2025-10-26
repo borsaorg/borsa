@@ -55,7 +55,7 @@ Run with the example subscriber setup:
 
 ```bash
 RUST_LOG=info,borsa=trace,borsa_yfinance=trace \
-  cargo run -p borsa-examples --example 00_tracing \
+  cargo run -p borsa --example 00_tracing \
   --features "borsa/tracing borsa-yfinance/tracing"
 ```
 
@@ -297,12 +297,6 @@ async fn router_uses_injected_yf() {
     assert_eq!(q.symbol, "MSFT");
 }
 ```
-
-Notes:
-
-- Only override the adapter(s) you need in a test; the rest fall back to clear `unsupported` defaults.
-- Keep conversions in `convert.rs` pure so they can be fuzzed and unit-tested in isolation.
-- For history tests, use `HistoryRequest::from_range(range, interval)` and provide a synthetic `yfinance_rs::HistoryResponse` through `YfHistory::from_fn`.
 
 ## License
 

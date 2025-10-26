@@ -1,7 +1,8 @@
+mod common;
 use borsa::Borsa;
 use borsa::FetchStrategy;
 use borsa_core::{AssetKind, Instrument};
-use borsa_examples::common::get_connector;
+use common::get_connector;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

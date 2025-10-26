@@ -4,7 +4,6 @@ use borsa_core::{
     HistoryResponse, Instrument, Range,
 };
 use chrono::DateTime;
-use futures::future::join_all;
 use std::collections::HashSet;
 
 // Validate that all instruments have unique symbols.
@@ -163,11 +162,8 @@ impl<'a> DownloadBuilder<'a> {
 
         // Apply optional request-level deadline across the fan-out
         let joined: Vec<(Instrument, Result<HistoryResponse, BorsaError>)> =
-            match crate::core::with_request_deadline(
-                self.borsa.cfg.request_timeout,
-                join_all(tasks),
-            )
-            .await
+            match crate::router::util::join_with_deadline(tasks, self.borsa.cfg.request_timeout)
+                .await
             {
                 Ok(v) => v,
                 Err(_) => {

@@ -139,9 +139,9 @@ macro_rules! borsa_router_search {
             });
 
             // Apply optional request-level timeout if configured
-            let Ok(joined) = $crate::core::with_request_deadline(
+            let Ok(joined) = $crate::router::util::join_with_deadline(
+                tasks,
                 self.cfg.request_timeout,
-                futures::future::join_all(tasks),
             )
             .await else { return Err(borsa_core::BorsaError::request_timeout($capability.to_string())) };
 
@@ -181,7 +181,12 @@ macro_rules! borsa_router_search {
             if let Some(limit) = $req_ident.limit() && merged.len() > limit { merged.truncate(limit); }
 
             if merged.is_empty() && !errors.is_empty() {
-                return Err(borsa_core::BorsaError::AllProvidersFailed(errors));
+                return Err($crate::router::util::collapse_errors(
+                    $capability,
+                    attempted_any,
+                    errors,
+                    None,
+                ));
             }
 
             Ok(borsa_core::SearchReport { response: Some(borsa_core::SearchResponse { results: merged }), warnings: Vec::new() })

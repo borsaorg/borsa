@@ -403,3 +403,697 @@ pub trait BorsaConnector: Send + Sync {
         None
     }
 }
+
+/// Generate `as_*_provider` accessors for a wrapper that implements
+/// `BorsaConnector` by delegating to an inner field.
+#[macro_export]
+macro_rules! borsa_connector_accessors {
+    ($inner:ident) => {
+        fn as_history_provider(&self) -> Option<&dyn $crate::connector::HistoryProvider> {
+            if self.$inner.as_history_provider().is_some() {
+                Some(self as &dyn $crate::connector::HistoryProvider)
+            } else {
+                None
+            }
+        }
+        fn as_quote_provider(&self) -> Option<&dyn $crate::connector::QuoteProvider> {
+            if self.$inner.as_quote_provider().is_some() {
+                Some(self as &dyn $crate::connector::QuoteProvider)
+            } else {
+                None
+            }
+        }
+        fn as_earnings_provider(&self) -> Option<&dyn $crate::connector::EarningsProvider> {
+            if self.$inner.as_earnings_provider().is_some() {
+                Some(self as &dyn $crate::connector::EarningsProvider)
+            } else {
+                None
+            }
+        }
+        fn as_income_statement_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::IncomeStatementProvider> {
+            if self.$inner.as_income_statement_provider().is_some() {
+                Some(self as &dyn $crate::connector::IncomeStatementProvider)
+            } else {
+                None
+            }
+        }
+        fn as_balance_sheet_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::BalanceSheetProvider> {
+            if self.$inner.as_balance_sheet_provider().is_some() {
+                Some(self as &dyn $crate::connector::BalanceSheetProvider)
+            } else {
+                None
+            }
+        }
+        fn as_cashflow_provider(&self) -> Option<&dyn $crate::connector::CashflowProvider> {
+            if self.$inner.as_cashflow_provider().is_some() {
+                Some(self as &dyn $crate::connector::CashflowProvider)
+            } else {
+                None
+            }
+        }
+        fn as_calendar_provider(&self) -> Option<&dyn $crate::connector::CalendarProvider> {
+            if self.$inner.as_calendar_provider().is_some() {
+                Some(self as &dyn $crate::connector::CalendarProvider)
+            } else {
+                None
+            }
+        }
+        fn as_recommendations_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::RecommendationsProvider> {
+            if self.$inner.as_recommendations_provider().is_some() {
+                Some(self as &dyn $crate::connector::RecommendationsProvider)
+            } else {
+                None
+            }
+        }
+        fn as_recommendations_summary_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::RecommendationsSummaryProvider> {
+            if self.$inner.as_recommendations_summary_provider().is_some() {
+                Some(self as &dyn $crate::connector::RecommendationsSummaryProvider)
+            } else {
+                None
+            }
+        }
+        fn as_upgrades_downgrades_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::UpgradesDowngradesProvider> {
+            if self.$inner.as_upgrades_downgrades_provider().is_some() {
+                Some(self as &dyn $crate::connector::UpgradesDowngradesProvider)
+            } else {
+                None
+            }
+        }
+        fn as_analyst_price_target_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::AnalystPriceTargetProvider> {
+            if self.$inner.as_analyst_price_target_provider().is_some() {
+                Some(self as &dyn $crate::connector::AnalystPriceTargetProvider)
+            } else {
+                None
+            }
+        }
+        fn as_major_holders_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::MajorHoldersProvider> {
+            if self.$inner.as_major_holders_provider().is_some() {
+                Some(self as &dyn $crate::connector::MajorHoldersProvider)
+            } else {
+                None
+            }
+        }
+        fn as_institutional_holders_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::InstitutionalHoldersProvider> {
+            if self.$inner.as_institutional_holders_provider().is_some() {
+                Some(self as &dyn $crate::connector::InstitutionalHoldersProvider)
+            } else {
+                None
+            }
+        }
+        fn as_mutual_fund_holders_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::MutualFundHoldersProvider> {
+            if self.$inner.as_mutual_fund_holders_provider().is_some() {
+                Some(self as &dyn $crate::connector::MutualFundHoldersProvider)
+            } else {
+                None
+            }
+        }
+        fn as_insider_transactions_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::InsiderTransactionsProvider> {
+            if self.$inner.as_insider_transactions_provider().is_some() {
+                Some(self as &dyn $crate::connector::InsiderTransactionsProvider)
+            } else {
+                None
+            }
+        }
+        fn as_insider_roster_holders_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::InsiderRosterHoldersProvider> {
+            if self.$inner.as_insider_roster_holders_provider().is_some() {
+                Some(self as &dyn $crate::connector::InsiderRosterHoldersProvider)
+            } else {
+                None
+            }
+        }
+        fn as_net_share_purchase_activity_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::NetSharePurchaseActivityProvider> {
+            if self
+                .$inner
+                .as_net_share_purchase_activity_provider()
+                .is_some()
+            {
+                Some(self as &dyn $crate::connector::NetSharePurchaseActivityProvider)
+            } else {
+                None
+            }
+        }
+        fn as_profile_provider(&self) -> Option<&dyn $crate::connector::ProfileProvider> {
+            if self.$inner.as_profile_provider().is_some() {
+                Some(self as &dyn $crate::connector::ProfileProvider)
+            } else {
+                None
+            }
+        }
+        fn as_isin_provider(&self) -> Option<&dyn $crate::connector::IsinProvider> {
+            if self.$inner.as_isin_provider().is_some() {
+                Some(self as &dyn $crate::connector::IsinProvider)
+            } else {
+                None
+            }
+        }
+        fn as_search_provider(&self) -> Option<&dyn $crate::connector::SearchProvider> {
+            if self.$inner.as_search_provider().is_some() {
+                Some(self as &dyn $crate::connector::SearchProvider)
+            } else {
+                None
+            }
+        }
+        fn as_esg_provider(&self) -> Option<&dyn $crate::connector::EsgProvider> {
+            if self.$inner.as_esg_provider().is_some() {
+                Some(self as &dyn $crate::connector::EsgProvider)
+            } else {
+                None
+            }
+        }
+        fn as_news_provider(&self) -> Option<&dyn $crate::connector::NewsProvider> {
+            if self.$inner.as_news_provider().is_some() {
+                Some(self as &dyn $crate::connector::NewsProvider)
+            } else {
+                None
+            }
+        }
+        fn as_options_expirations_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::OptionsExpirationsProvider> {
+            if self.$inner.as_options_expirations_provider().is_some() {
+                Some(self as &dyn $crate::connector::OptionsExpirationsProvider)
+            } else {
+                None
+            }
+        }
+        fn as_option_chain_provider(&self) -> Option<&dyn $crate::connector::OptionChainProvider> {
+            if self.$inner.as_option_chain_provider().is_some() {
+                Some(self as &dyn $crate::connector::OptionChainProvider)
+            } else {
+                None
+            }
+        }
+        fn as_stream_provider(&self) -> Option<&dyn $crate::connector::StreamProvider> {
+            if self.$inner.as_stream_provider().is_some() {
+                Some(self as &dyn $crate::connector::StreamProvider)
+            } else {
+                None
+            }
+        }
+    };
+}
+
+/// Generate all provider trait impls for a wrapper type `$self_ty`, delegating
+/// to an inner field `$inner` and applying middleware hooks.
+#[macro_export]
+macro_rules! borsa_delegate_provider_impls {
+    ($self_ty:ty, $inner:ident) => {
+        #[async_trait::async_trait]
+        impl $crate::connector::HistoryProvider for $self_ty {
+            async fn history(
+                &self,
+                instrument: &$crate::Instrument,
+                req: $crate::HistoryRequest,
+            ) -> Result<$crate::HistoryResponse, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_history_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("history"))?;
+                inner
+                    .history(instrument, req)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+            fn supported_history_intervals(
+                &self,
+                kind: $crate::AssetKind,
+            ) -> &'static [$crate::Interval] {
+                if let Some(inner) = self.$inner.as_history_provider() {
+                    inner.supported_history_intervals(kind)
+                } else {
+                    &[]
+                }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::QuoteProvider for $self_ty {
+            async fn quote(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::Quote, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_quote_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("quote"))?;
+                inner
+                    .quote(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::EarningsProvider for $self_ty {
+            async fn earnings(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::Earnings, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_earnings_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("earnings"))?;
+                inner
+                    .earnings(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::IncomeStatementProvider for $self_ty {
+            async fn income_statement(
+                &self,
+                instrument: &$crate::Instrument,
+                quarterly: bool,
+            ) -> Result<Vec<$crate::IncomeStatementRow>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_income_statement_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("income_statement"))?;
+                inner
+                    .income_statement(instrument, quarterly)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::BalanceSheetProvider for $self_ty {
+            async fn balance_sheet(
+                &self,
+                instrument: &$crate::Instrument,
+                quarterly: bool,
+            ) -> Result<Vec<$crate::BalanceSheetRow>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_balance_sheet_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("balance_sheet"))?;
+                inner
+                    .balance_sheet(instrument, quarterly)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::CashflowProvider for $self_ty {
+            async fn cashflow(
+                &self,
+                instrument: &$crate::Instrument,
+                quarterly: bool,
+            ) -> Result<Vec<$crate::CashflowRow>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_cashflow_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("cashflow"))?;
+                inner
+                    .cashflow(instrument, quarterly)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::CalendarProvider for $self_ty {
+            async fn calendar(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::Calendar, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_calendar_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("calendar"))?;
+                inner
+                    .calendar(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::RecommendationsProvider for $self_ty {
+            async fn recommendations(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::RecommendationRow>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_recommendations_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("recommendations"))?;
+                inner
+                    .recommendations(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::RecommendationsSummaryProvider for $self_ty {
+            async fn recommendations_summary(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::RecommendationSummary, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_recommendations_summary_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("recommendations_summary"))?;
+                inner
+                    .recommendations_summary(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::UpgradesDowngradesProvider for $self_ty {
+            async fn upgrades_downgrades(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::UpgradeDowngradeRow>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_upgrades_downgrades_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("upgrades_downgrades"))?;
+                inner
+                    .upgrades_downgrades(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::AnalystPriceTargetProvider for $self_ty {
+            async fn analyst_price_target(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::PriceTarget, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_analyst_price_target_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("analyst_price_target"))?;
+                inner
+                    .analyst_price_target(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::MajorHoldersProvider for $self_ty {
+            async fn major_holders(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::MajorHolder>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_major_holders_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("major_holders"))?;
+                inner
+                    .major_holders(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::InstitutionalHoldersProvider for $self_ty {
+            async fn institutional_holders(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::InstitutionalHolder>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_institutional_holders_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("institutional_holders"))?;
+                inner
+                    .institutional_holders(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::MutualFundHoldersProvider for $self_ty {
+            async fn mutual_fund_holders(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::InstitutionalHolder>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_mutual_fund_holders_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("mutual_fund_holders"))?;
+                inner
+                    .mutual_fund_holders(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::InsiderTransactionsProvider for $self_ty {
+            async fn insider_transactions(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::InsiderTransaction>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_insider_transactions_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("insider_transactions"))?;
+                inner
+                    .insider_transactions(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::InsiderRosterHoldersProvider for $self_ty {
+            async fn insider_roster_holders(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<$crate::InsiderRosterHolder>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_insider_roster_holders_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("insider_roster_holders"))?;
+                inner
+                    .insider_roster_holders(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::NetSharePurchaseActivityProvider for $self_ty {
+            async fn net_share_purchase_activity(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Option<$crate::NetSharePurchaseActivity>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_net_share_purchase_activity_provider()
+                    .ok_or_else(|| {
+                        $crate::BorsaError::unsupported("net_share_purchase_activity")
+                    })?;
+                inner
+                    .net_share_purchase_activity(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::ProfileProvider for $self_ty {
+            async fn profile(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::Profile, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_profile_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("profile"))?;
+                inner
+                    .profile(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::IsinProvider for $self_ty {
+            async fn isin(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Option<$crate::Isin>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_isin_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("isin"))?;
+                inner
+                    .isin(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::SearchProvider for $self_ty {
+            async fn search(
+                &self,
+                req: $crate::SearchRequest,
+            ) -> Result<$crate::SearchResponse, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_search_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("search"))?;
+                inner
+                    .search(req)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::EsgProvider for $self_ty {
+            async fn sustainability(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<$crate::EsgScores, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_esg_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("sustainability"))?;
+                inner
+                    .sustainability(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::NewsProvider for $self_ty {
+            async fn news(
+                &self,
+                instrument: &$crate::Instrument,
+                req: $crate::NewsRequest,
+            ) -> Result<Vec<$crate::types::NewsArticle>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_news_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("news"))?;
+                inner
+                    .news(instrument, req)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::OptionsExpirationsProvider for $self_ty {
+            async fn options_expirations(
+                &self,
+                instrument: &$crate::Instrument,
+            ) -> Result<Vec<i64>, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_options_expirations_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("options_expirations"))?;
+                inner
+                    .options_expirations(instrument)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::OptionChainProvider for $self_ty {
+            async fn option_chain(
+                &self,
+                instrument: &$crate::Instrument,
+                date: Option<i64>,
+            ) -> Result<$crate::OptionChain, $crate::BorsaError> {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_option_chain_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("option_chain"))?;
+                inner
+                    .option_chain(instrument, date)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::StreamProvider for $self_ty {
+            async fn stream_quotes(
+                &self,
+                instruments: &[$crate::Instrument],
+            ) -> Result<
+                (
+                    $crate::stream::StreamHandle,
+                    tokio::sync::mpsc::Receiver<$crate::QuoteUpdate>,
+                ),
+                $crate::BorsaError,
+            > {
+                <Self as $crate::Middleware>::pre_call(self).await?;
+                let inner = self
+                    .$inner
+                    .as_stream_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("stream_quotes"))?;
+                inner
+                    .stream_quotes(instruments)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+            }
+        }
+    };
+}

@@ -482,7 +482,7 @@ impl Borsa {
     {
         let mut attempted_any = false;
         let mut errors: Vec<BorsaError> = Vec::new();
-        let mut all_not_found = true;
+        let mut _all_not_found = true;
 
         for c in self.ordered(inst) {
             if let Some(fut) = call(c.clone(), inst.clone()) {
@@ -505,45 +505,23 @@ impl Borsa {
                         | BorsaError::QuotaExceeded { .. }
                         | BorsaError::TemporarilyBlacklisted { .. }),
                     ) => {
-                        all_not_found = false;
+                        _all_not_found = false;
                         errors.push(e);
                     }
                     Err(e) => {
-                        all_not_found = false;
+                        _all_not_found = false;
                         errors.push(crate::core::tag_err(c.name(), e));
                     }
                 }
             }
         }
 
-        if !attempted_any {
-            return Err(BorsaError::unsupported(capability_label.to_string()));
-        }
-
-        if all_not_found
-            && !errors.is_empty()
-            && errors
-                .iter()
-                .all(|e| matches!(e, BorsaError::NotFound { .. }))
-        {
-            return Err(BorsaError::not_found(format!(
-                "{} for {}",
-                not_found_label,
-                inst.symbol()
-            )));
-        }
-
-        if !errors.is_empty()
-            && errors
-                .iter()
-                .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
-        {
-            Err(BorsaError::AllProvidersTimedOut {
-                capability: capability_label.to_string(),
-            })
-        } else {
-            Err(BorsaError::AllProvidersFailed(errors))
-        }
+        return Err(crate::router::util::collapse_errors(
+            capability_label,
+            attempted_any,
+            errors,
+            Some(format!("{} for {}", not_found_label, inst.symbol())),
+        ));
     }
 
     #[cfg_attr(
@@ -601,29 +579,13 @@ impl Borsa {
         }
 
         if attempted_any {
-            if !errors.is_empty()
-                && errors
-                    .iter()
-                    .all(|e| matches!(e, BorsaError::ProviderTimeout { .. }))
-            {
-                Err(BorsaError::AllProvidersTimedOut {
-                    capability: capability_label.to_string(),
-                })
-            } else if !errors.is_empty()
-                && errors
-                    .iter()
-                    .all(|e| matches!(e, BorsaError::NotFound { .. }))
-            {
-                Err(BorsaError::not_found(format!(
-                    "{} for {}",
-                    not_found_label,
-                    inst.symbol()
-                )))
-            } else {
-                Err(BorsaError::AllProvidersFailed(errors))
-            }
-        } else {
-            Err(BorsaError::unsupported(capability_label.to_string()))
+            return Err(crate::router::util::collapse_errors(
+                capability_label,
+                attempted_any,
+                errors,
+                Some(format!("{} for {}", not_found_label, inst.symbol())),
+            ));
         }
+        Err(BorsaError::unsupported(capability_label.to_string()))
     }
 }

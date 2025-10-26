@@ -1,6 +1,7 @@
+mod common;
 use borsa::Borsa;
 use borsa_core::{AssetKind, HistoryRequest, Instrument, Interval, Range, SearchRequest};
-use borsa_examples::common::get_connector;
+use common::get_connector;
 use tracing_subscriber::fmt::format::FmtSpan;
 
 #[tokio::main]
