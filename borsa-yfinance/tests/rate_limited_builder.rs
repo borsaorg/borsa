@@ -16,6 +16,8 @@ fn rate_limited_builder_produces_expected_stack_and_name() {
     assert!(stack.layers.iter().any(|l| l.name == "RawConnector"));
 
     // Build and confirm identity is preserved as borsa-yfinance
-    let wrapped = builder.build();
+    let wrapped = builder
+        .build()
+        .expect("middleware validation should succeed");
     assert_eq!(wrapped.name(), "borsa-yfinance");
 }

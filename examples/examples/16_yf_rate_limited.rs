@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let yf: Arc<dyn BorsaConnector> = YfConnector::rate_limited()
         .quota_limit(1)
         .quota_window(Duration::from_secs(3))
-        .build();
+        .build()?;
 
     println!("Outer connector identity: {}", yf.name());
 

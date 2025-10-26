@@ -35,21 +35,28 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use borsa_core::Middleware;
 use borsa_core::connector::BorsaConnector;
+use borsa_core::{
+    BorsaError, Middleware,
+    middleware::{MiddlewareDescriptor, ValidationContext},
+};
 use borsa_types::{MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy};
 use serde_json::json;
 
 /// Generic middleware builder for composing a connector with layered wrappers.
 ///
 /// See [module-level documentation](self) for details on middleware ordering.
+///
+/// The builder stores middleware descriptors (which track type information) and validates
+/// dependencies before building the final stack. This allows middleware to enforce ordering
+/// requirements without hardcoding or footguns.
 pub struct ConnectorBuilder {
     raw: Arc<dyn BorsaConnector>,
     /// Middleware layers in outermost-first order.
     ///
     /// During `build()`, these are applied in reverse (innermost to outermost)
     /// to construct the proper nesting: `layers[0](layers[1](...(raw)))`.
-    layers: Vec<Box<dyn Middleware>>,
+    layers: Vec<MiddlewareDescriptor>,
 }
 
 impl ConnectorBuilder {
@@ -64,9 +71,9 @@ impl ConnectorBuilder {
 
     /// Internal: extract existing quota config from layers if present.
     fn existing_quota_config(&self) -> Option<QuotaConfig> {
-        for layer in &self.layers {
-            if layer.name() == "QuotaAwareConnector" {
-                let cfg = layer.config_json();
+        for desc in &self.layers {
+            if desc.name() == "QuotaAwareConnector" {
+                let cfg = desc.middleware().config_json();
                 let defaults = QuotaConfig::default();
                 let limit = cfg
                     .get("limit")
@@ -103,17 +110,19 @@ impl ConnectorBuilder {
     /// If quota middleware already exists, it is removed and replaced.
     #[must_use]
     pub fn with_quota(mut self, cfg: &QuotaConfig) -> Self {
-        self.layers.retain(|m| m.name() != "QuotaAwareConnector");
+        self.layers.retain(|d| d.name() != "QuotaAwareConnector");
         // Insert at position 0 to make this the outermost layer
-        self.layers
-            .insert(0, Box::new(crate::quota::QuotaMiddleware::new(cfg.clone())));
+        self.layers.insert(
+            0,
+            MiddlewareDescriptor::new(crate::quota::QuotaMiddleware::new(cfg.clone())),
+        );
         self
     }
 
     /// Remove quota if present.
     #[must_use]
     pub fn without_quota(mut self) -> Self {
-        self.layers.retain(|m| m.name() != "QuotaAwareConnector");
+        self.layers.retain(|d| d.name() != "QuotaAwareConnector");
         self
     }
 
@@ -126,11 +135,11 @@ impl ConnectorBuilder {
     /// If blacklist middleware already exists, it is removed and replaced.
     #[must_use]
     pub fn with_blacklist(mut self, duration: Duration) -> Self {
-        self.layers.retain(|m| m.name() != "BlacklistingMiddleware");
+        self.layers.retain(|d| d.name() != "BlacklistingMiddleware");
         // Insert at position 0 to make this the outermost layer
         self.layers.insert(
             0,
-            Box::new(crate::blacklist::BlacklistMiddleware::new(duration)),
+            MiddlewareDescriptor::new(crate::blacklist::BlacklistMiddleware::new(duration)),
         );
         self
     }
@@ -138,7 +147,7 @@ impl ConnectorBuilder {
     /// Remove blacklist if present.
     #[must_use]
     pub fn without_blacklist(mut self) -> Self {
-        self.layers.retain(|m| m.name() != "BlacklistingMiddleware");
+        self.layers.retain(|d| d.name() != "BlacklistingMiddleware");
         self
     }
 
@@ -177,8 +186,11 @@ impl ConnectorBuilder {
     pub fn to_stack(&self) -> MiddlewareStack {
         let mut stack = MiddlewareStack::new();
         // Iterate in storage order (outermost first) and push_inner to maintain convention
-        for layer in &self.layers {
-            stack.push_inner(MiddlewareLayer::new(layer.name(), layer.config_json()));
+        for desc in &self.layers {
+            stack.push_inner(MiddlewareLayer::new(
+                desc.name(),
+                desc.middleware().config_json(),
+            ));
         }
         // Document inner-most raw for observability only
         stack.push_inner(MiddlewareLayer::new(
@@ -198,7 +210,7 @@ impl ConnectorBuilder {
     #[must_use]
     pub fn from_stack(raw: Arc<dyn BorsaConnector>, stack: &MiddlewareStack) -> Self {
         // Convert known layers to typed middleware; ignore unknowns for forward compatibility
-        let mut layers: Vec<Box<dyn Middleware>> = Vec::new();
+        let mut layers: Vec<MiddlewareDescriptor> = Vec::new();
         for l in &stack.layers {
             match l.name.as_str() {
                 "QuotaAwareConnector" => {
@@ -222,7 +234,9 @@ impl ConnectorBuilder {
                         window: Duration::from_millis(window_ms),
                         strategy,
                     };
-                    layers.push(Box::new(crate::quota::QuotaMiddleware::new(cfg)));
+                    layers.push(MiddlewareDescriptor::new(
+                        crate::quota::QuotaMiddleware::new(cfg),
+                    ));
                 }
                 "BlacklistingMiddleware" => {
                     let dur_ms = l
@@ -230,9 +244,9 @@ impl ConnectorBuilder {
                         .get("default_duration_ms")
                         .and_then(serde_json::Value::as_u64)
                         .unwrap_or(300_000);
-                    layers.push(Box::new(crate::blacklist::BlacklistMiddleware::new(
-                        Duration::from_millis(dur_ms),
-                    )));
+                    layers.push(MiddlewareDescriptor::new(
+                        crate::blacklist::BlacklistMiddleware::new(Duration::from_millis(dur_ms)),
+                    ));
                 }
                 _ => {}
             }
@@ -240,11 +254,32 @@ impl ConnectorBuilder {
         Self { raw, layers }
     }
 
+    /// Validate the middleware stack without building.
+    ///
+    /// Calls `validate()` on each middleware in the stack, allowing them to check
+    /// for dependencies and ordering requirements. Returns an error if any middleware
+    /// fails validation.
+    ///
+    /// # Errors
+    /// Returns `BorsaError::InvalidMiddlewareStack` if validation fails.
+    pub fn validate(&self) -> Result<(), BorsaError> {
+        // Validation order: iterate in reverse (innermost to outermost)
+        // This matches the application order and allows middleware to check what's already "inside"
+        for (idx, desc) in self.layers.iter().enumerate().rev() {
+            let ctx = ValidationContext::new(&self.layers, idx);
+            desc.middleware().validate(&ctx)?;
+        }
+        Ok(())
+    }
+
     /// Build the wrapped connector according to the captured stack.
     ///
-    /// Applies middleware layers in reverse order (innermost to outermost) to construct
-    /// the proper nesting. Since `layers` stores middleware in outermost-first order,
-    /// we reverse during iteration to apply them innermost-first.
+    /// First validates the middleware stack to ensure all dependencies and ordering
+    /// requirements are satisfied. Then applies middleware layers in reverse order
+    /// (innermost to outermost) to construct the proper nesting.
+    ///
+    /// Since `layers` stores middleware in outermost-first order, we reverse during
+    /// iteration to apply them innermost-first.
     ///
     /// Example with `layers = [Blacklist, Quota]`:
     /// ```text
@@ -255,14 +290,23 @@ impl ConnectorBuilder {
     ///
     /// The resulting connector processes requests from outermost to innermost:
     /// `User -> Blacklist -> Quota -> Raw`
-    #[must_use]
-    pub fn build(self) -> Arc<dyn BorsaConnector> {
+    ///
+    /// # Errors
+    /// Returns `BorsaError::InvalidMiddlewareStack` if validation fails.
+    ///
+    /// # Panics
+    /// May panic if internal validation invariants are violated (should not happen
+    /// under normal circumstances).
+    pub fn build(self) -> Result<Arc<dyn BorsaConnector>, BorsaError> {
+        // Validate before building
+        self.validate()?;
+
         let mut acc: Arc<dyn BorsaConnector> = Arc::clone(&self.raw);
         // Reverse iteration: apply innermost middleware first, outermost last
-        for m in self.layers.into_iter().rev() {
-            acc = m.apply(acc);
+        for desc in self.layers.into_iter().rev() {
+            acc = desc.into_middleware().apply(acc);
         }
-        acc
+        Ok(acc)
     }
 
     /// Add an arbitrary middleware layer at the outermost position.
@@ -270,10 +314,13 @@ impl ConnectorBuilder {
     /// This method inserts the layer at index 0, making it the first to receive
     /// requests and the last to handle errors. Use this for custom middleware that
     /// should wrap all other layers.
+    ///
+    /// The middleware type is tracked via `TypeId` to enable dependency checking
+    /// and validation.
     #[must_use]
-    pub fn layer(mut self, layer: Box<dyn Middleware>) -> Self {
+    pub fn layer<M: Middleware + 'static>(mut self, layer: M) -> Self {
         // Insert at position 0 to make this the outermost layer
-        self.layers.insert(0, layer);
+        self.layers.insert(0, MiddlewareDescriptor::new(layer));
         self
     }
 }

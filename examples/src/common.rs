@@ -7,6 +7,8 @@ pub fn get_connector() -> Arc<dyn BorsaConnector> {
         println!("--- (Using Mock Connector for CI) ---");
         Arc::new(borsa_mock::MockConnector::new())
     } else {
-        borsa_yfinance::YfConnector::rate_limited().build()
+        borsa_yfinance::YfConnector::rate_limited()
+            .build()
+            .expect("middleware stack validation failed")
     }
 }

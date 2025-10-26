@@ -203,6 +203,13 @@ impl Middleware for QuotaMiddleware {
             "strategy": strategy,
         })
     }
+
+    fn validate(&self, _ctx: &borsa_core::middleware::ValidationContext) -> Result<(), BorsaError> {
+        // Optional: QuotaAware middleware works best with Blacklisting outermost (to handle quota errors)
+        // but this is not strictly required. Validation is intentionally permissive to avoid breaking
+        // existing usage patterns and allow flexible composition.
+        Ok(())
+    }
 }
 
 #[borsa_macros::delegate_connector(inner)]

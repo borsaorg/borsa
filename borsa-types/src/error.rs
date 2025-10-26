@@ -101,6 +101,13 @@ pub enum BorsaError {
         /// Milliseconds remaining until the blacklist window elapses.
         reset_in_ms: u64,
     },
+
+    /// Middleware stack configuration is invalid (missing dependencies, wrong order, etc.).
+    #[error("invalid middleware stack: {message}")]
+    InvalidMiddlewareStack {
+        /// Human-readable description of the validation failure.
+        message: String,
+    },
 }
 
 impl BorsaError {
