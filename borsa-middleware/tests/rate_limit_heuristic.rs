@@ -4,7 +4,7 @@ use std::time::Duration;
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument, Interval};
 use borsa_middleware::QuotaAwareConnector;
 use borsa_mock::MockConnector;
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
 fn make_wrapper(limit: u64, window_ms: u64) -> Arc<QuotaAwareConnector> {
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
@@ -13,12 +13,7 @@ fn make_wrapper(limit: u64, window_ms: u64) -> Arc<QuotaAwareConnector> {
         window: Duration::from_millis(window_ms),
         strategy: QuotaConsumptionStrategy::Unit,
     };
-    let st = QuotaState {
-        limit: cfg.limit,
-        remaining: cfg.limit,
-        reset_in: cfg.window,
-    };
-    Arc::new(QuotaAwareConnector::new(inner, cfg, st))
+    Arc::new(QuotaAwareConnector::new(inner, cfg))
 }
 
 #[tokio::test]

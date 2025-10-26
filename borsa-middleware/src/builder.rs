@@ -3,9 +3,7 @@ use std::time::Duration;
 
 use borsa_core::Middleware;
 use borsa_core::connector::BorsaConnector;
-use borsa_types::{
-    MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy, QuotaState,
-};
+use borsa_types::{MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy};
 use serde_json::json;
 
 /// Generic middleware builder for composing a connector with layered wrappers.
@@ -61,15 +59,8 @@ impl ConnectorBuilder {
     pub fn with_quota(mut self, cfg: &QuotaConfig) -> Self {
         // Remove any existing Quota layer
         self.layers.retain(|m| m.name() != "QuotaAwareConnector");
-        let state = QuotaState {
-            limit: cfg.limit,
-            remaining: cfg.limit,
-            reset_in: cfg.window,
-        };
-        self.layers.insert(
-            0,
-            Box::new(crate::quota::QuotaMiddleware::new(cfg.clone(), state)),
-        );
+        self.layers
+            .insert(0, Box::new(crate::quota::QuotaMiddleware::new(cfg.clone())));
         self
     }
 
@@ -165,12 +156,7 @@ impl ConnectorBuilder {
                         window: Duration::from_millis(window_ms),
                         strategy,
                     };
-                    let state = QuotaState {
-                        limit,
-                        remaining: limit,
-                        reset_in: cfg.window,
-                    };
-                    layers.push(Box::new(crate::quota::QuotaMiddleware::new(cfg, state)));
+                    layers.push(Box::new(crate::quota::QuotaMiddleware::new(cfg)));
                 }
                 "BlacklistingMiddleware" => {
                     let dur_ms = l

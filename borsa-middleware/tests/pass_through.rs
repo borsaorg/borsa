@@ -3,27 +3,21 @@ use std::sync::Arc;
 use borsa_core::{AssetKind, BorsaConnector, Instrument, Interval};
 use borsa_middleware::QuotaAwareConnector;
 use borsa_mock::MockConnector;
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
-const fn default_quota() -> (QuotaConfig, QuotaState) {
-    let cfg = QuotaConfig {
+const fn default_quota() -> QuotaConfig {
+    QuotaConfig {
         limit: 10,
         window: std::time::Duration::from_secs(60),
         strategy: QuotaConsumptionStrategy::Unit,
-    };
-    let st = QuotaState {
-        limit: cfg.limit,
-        remaining: cfg.limit,
-        reset_in: cfg.window,
-    };
-    (cfg, st)
+    }
 }
 
 #[tokio::test]
 async fn forwards_name_and_vendor() {
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
-    let (cfg, st) = default_quota();
-    let wrapper = QuotaAwareConnector::new(inner.clone(), cfg, st);
+    let cfg = default_quota();
+    let wrapper = QuotaAwareConnector::new(inner.clone(), cfg);
 
     assert_eq!(wrapper.name(), inner.name());
     assert_eq!(wrapper.vendor(), inner.vendor());
@@ -32,8 +26,8 @@ async fn forwards_name_and_vendor() {
 #[tokio::test]
 async fn forwards_capability_accessors() {
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
-    let (cfg, st) = default_quota();
-    let wrapper = QuotaAwareConnector::new(inner.clone(), cfg, st);
+    let cfg = default_quota();
+    let wrapper = QuotaAwareConnector::new(inner.clone(), cfg);
 
     assert!(wrapper.supports_kind(AssetKind::Equity));
     assert!(wrapper.as_quote_provider().is_some());
@@ -44,8 +38,8 @@ async fn forwards_capability_accessors() {
 #[tokio::test]
 async fn forwards_methods_calls() {
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
-    let (cfg, st) = default_quota();
-    let wrapper = Arc::new(QuotaAwareConnector::new(inner.clone(), cfg, st));
+    let cfg = default_quota();
+    let wrapper = Arc::new(QuotaAwareConnector::new(inner.clone(), cfg));
 
     let q = wrapper.as_quote_provider().unwrap();
     let h = wrapper.as_history_provider().unwrap();

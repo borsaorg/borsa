@@ -4,7 +4,7 @@ use std::time::Duration;
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
 use borsa_middleware::{BlacklistingMiddleware, QuotaAwareConnector};
 use borsa_mock::MockConnector;
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
 fn make_quota_wrapper(
     limit: u64,
@@ -17,12 +17,7 @@ fn make_quota_wrapper(
         window: Duration::from_millis(window_ms),
         strategy,
     };
-    let st = QuotaState {
-        limit: cfg.limit,
-        remaining: cfg.limit,
-        reset_in: cfg.window,
-    };
-    Arc::new(QuotaAwareConnector::new(inner, cfg, st))
+    Arc::new(QuotaAwareConnector::new(inner, cfg))
 }
 
 #[tokio::test]
@@ -91,12 +86,7 @@ async fn rate_limit_triggers_blacklist() {
         window: Duration::from_millis(1000),
         strategy: QuotaConsumptionStrategy::Unit,
     };
-    let st = QuotaState {
-        limit: cfg.limit,
-        remaining: cfg.limit,
-        reset_in: cfg.window,
-    };
-    let quota = Arc::new(QuotaAwareConnector::new(inner, cfg, st));
+    let quota = Arc::new(QuotaAwareConnector::new(inner, cfg));
     let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistingMiddleware::new(
         quota as Arc<dyn BorsaConnector>,
         Duration::from_secs(24 * 60 * 60),

@@ -9,13 +9,12 @@ use borsa_core::connector::{
     OptionsExpirationsProvider, ProfileProvider, QuoteProvider, SearchProvider,
 };
 use borsa_core::{AssetKind, BorsaError, Middleware};
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
 /// Wrapper that enforces quotas.
 pub struct QuotaAwareConnector {
     inner: Arc<dyn BorsaConnector>,
     _config: QuotaConfig,
-    _state: Mutex<QuotaState>,
     runtime: Mutex<QuotaRuntime>,
 }
 
@@ -36,7 +35,7 @@ struct QuotaRuntime {
 
 impl QuotaAwareConnector {
     /// Create a new quota-aware wrapper around an existing connector.
-    pub fn new(inner: Arc<dyn BorsaConnector>, config: QuotaConfig, state: QuotaState) -> Self {
+    pub fn new(inner: Arc<dyn BorsaConnector>, config: QuotaConfig) -> Self {
         let window = config.window;
         let limit = config.limit;
         // Compute hourly-spread slice parameters
@@ -58,7 +57,6 @@ impl QuotaAwareConnector {
         Self {
             inner,
             _config: config,
-            _state: Mutex::new(state),
             runtime: Mutex::new(QuotaRuntime {
                 limit,
                 calls_made_in_window: 0,
@@ -175,19 +173,18 @@ impl QuotaAwareConnector {
 /// Middleware config for constructing a [`QuotaAwareConnector`].
 pub struct QuotaMiddleware {
     pub config: QuotaConfig,
-    pub state: QuotaState,
 }
 
 impl QuotaMiddleware {
     #[must_use]
-    pub const fn new(config: QuotaConfig, state: QuotaState) -> Self {
-        Self { config, state }
+    pub const fn new(config: QuotaConfig) -> Self {
+        Self { config }
     }
 }
 
 impl Middleware for QuotaMiddleware {
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
-        Arc::new(QuotaAwareConnector::new(inner, self.config, self.state))
+        Arc::new(QuotaAwareConnector::new(inner, self.config))
     }
 
     fn name(&self) -> &'static str {
