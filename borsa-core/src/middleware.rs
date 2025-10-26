@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use crate::BorsaError;
 use crate::connector::BorsaConnector;
+use async_trait::async_trait;
 
 /// Position requirement for middleware in the stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +46,7 @@ impl<'a> ValidationContext<'a> {
     }
 
     /// Check if a middleware type exists in the stack.
-    #[must_use] 
+    #[must_use]
     pub fn has_middleware(&self, type_id: TypeId) -> bool {
         self.stack.iter().any(|m| m.type_id() == type_id)
     }
@@ -53,7 +54,7 @@ impl<'a> ValidationContext<'a> {
     /// Check if a middleware type exists outer than (closer to user than) the current middleware.
     ///
     /// Since the stack is stored outermost-first, "outer" means lower indices.
-    #[must_use] 
+    #[must_use]
     pub fn has_middleware_outer(&self, type_id: TypeId) -> bool {
         self.stack[..self.current_index]
             .iter()
@@ -63,7 +64,7 @@ impl<'a> ValidationContext<'a> {
     /// Check if a middleware type exists inner than (closer to connector than) the current middleware.
     ///
     /// Since the stack is stored outermost-first, "inner" means higher indices.
-    #[must_use] 
+    #[must_use]
     pub fn has_middleware_inner(&self, type_id: TypeId) -> bool {
         self.stack[self.current_index + 1..]
             .iter()
@@ -71,19 +72,22 @@ impl<'a> ValidationContext<'a> {
     }
 
     /// Get all middleware type IDs in the stack, ordered outermost to innermost.
-    #[must_use] 
+    #[must_use]
     pub fn middleware_types(&self) -> Vec<TypeId> {
-        self.stack.iter().map(MiddlewareDescriptor::type_id).collect()
+        self.stack
+            .iter()
+            .map(MiddlewareDescriptor::type_id)
+            .collect()
     }
 
     /// Get the middleware's position in the stack (0 = outermost, n-1 = innermost).
-    #[must_use] 
+    #[must_use]
     pub const fn current_position(&self) -> usize {
         self.current_index
     }
 
     /// Get the total number of middleware in the stack.
-    #[must_use] 
+    #[must_use]
     pub const fn stack_size(&self) -> usize {
         self.stack.len()
     }
@@ -108,25 +112,25 @@ impl MiddlewareDescriptor {
     }
 
     /// Get the type ID of the wrapped middleware.
-    #[must_use] 
+    #[must_use]
     pub const fn type_id(&self) -> TypeId {
         self.type_id
     }
 
     /// Get the human-readable name of the middleware.
-    #[must_use] 
+    #[must_use]
     pub const fn name(&self) -> &'static str {
         self.name
     }
 
     /// Get a reference to the wrapped middleware trait object.
-    #[must_use] 
+    #[must_use]
     pub fn middleware(&self) -> &dyn Middleware {
         &*self.middleware
     }
 
     /// Consume this descriptor and extract the boxed middleware.
-    #[must_use] 
+    #[must_use]
     pub fn into_middleware(self) -> Box<dyn Middleware> {
         self.middleware
     }
@@ -139,6 +143,7 @@ impl MiddlewareDescriptor {
 ///
 /// Middleware can declare dependencies and position requirements to ensure correct
 /// composition without hardcoding or footguns.
+#[async_trait]
 pub trait Middleware: Send + Sync {
     /// Apply this middleware to wrap an inner connector and return the wrapped connector.
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector>;
@@ -166,6 +171,28 @@ pub trait Middleware: Send + Sync {
     /// runtime inspection without exposing concrete types.
     fn as_any(&self) -> Option<&dyn Any> {
         None
+    }
+
+    /// Called before each async provider method in generated implementations.
+    ///
+    /// Return `Err` to short-circuit and prevent the inner provider from being called.
+    /// This is async to allow middleware to perform async validation like checking
+    /// external rate limit services, databases, etc.
+    ///
+    /// Default: Allow all calls through.
+    async fn pre_call(&self) -> Result<(), BorsaError> {
+        Ok(())
+    }
+
+    /// Transform errors returned by the inner provider in generated implementations.
+    ///
+    /// This is useful for error translation (e.g., detecting rate limits) or
+    /// side effects (e.g., updating blacklist state). This method is synchronous
+    /// because it's called within `.map_err()` closures.
+    ///
+    /// Default: Return errors unchanged.
+    fn map_error(&self, err: BorsaError) -> BorsaError {
+        err
     }
 }
 

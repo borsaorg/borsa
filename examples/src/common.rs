@@ -1,6 +1,10 @@
 use borsa_core::BorsaConnector;
 use std::sync::Arc;
 
+/// Return a connector for examples.
+///
+/// # Panics
+/// Panics if the `YFinance` rate-limited builder fails middleware validation.
 #[must_use]
 pub fn get_connector() -> Arc<dyn BorsaConnector> {
     if std::env::var("BORSA_EXAMPLES_USE_MOCK").is_ok() {

@@ -2,7 +2,7 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use borsa_core::{
-    connector::BorsaConnector, middleware::ValidationContext, BorsaError, Middleware,
+    BorsaError, Middleware, connector::BorsaConnector, middleware::ValidationContext,
 };
 use borsa_middleware::ConnectorBuilder;
 use borsa_mock::MockConnector;
@@ -81,17 +81,14 @@ fn validation_context_provides_correct_position_info() {
 
         fn validate(&self, ctx: &ValidationContext) -> Result<(), BorsaError> {
             // Check that we can query middleware positions correctly
-            let has_quota_outer = ctx.has_middleware_outer(TypeId::of::<
-                borsa_middleware::QuotaMiddleware,
-            >());
-            let has_blacklist_outer = ctx.has_middleware_outer(TypeId::of::<
-                borsa_middleware::BlacklistMiddleware,
-            >());
+            let has_quota_outer =
+                ctx.has_middleware_outer(TypeId::of::<borsa_middleware::QuotaMiddleware>());
+            let has_blacklist_outer =
+                ctx.has_middleware_outer(TypeId::of::<borsa_middleware::BlacklistMiddleware>());
 
             // This middleware should be innermost, so nothing should be inner
-            let has_quota_inner = ctx.has_middleware_inner(TypeId::of::<
-                borsa_middleware::QuotaMiddleware,
-            >());
+            let has_quota_inner =
+                ctx.has_middleware_inner(TypeId::of::<borsa_middleware::QuotaMiddleware>());
 
             if !has_quota_outer || !has_blacklist_outer {
                 return Err(BorsaError::InvalidMiddlewareStack {
@@ -119,4 +116,3 @@ fn validation_context_provides_correct_position_info() {
 
     assert!(result.is_ok());
 }
-
