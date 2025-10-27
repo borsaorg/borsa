@@ -23,7 +23,7 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 bitflags = { workspace = true }
 paft = { workspace = true }
-tokio = { workspace = true, features = ["rt", "macros", "sync"] }
+tokio = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 rust_decimal = { workspace = true }
