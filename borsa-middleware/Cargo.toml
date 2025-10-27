@@ -17,7 +17,7 @@ borsa-types = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 serde_json = { workspace = true }
-borsa-macros = { path = "../borsa-macros", version = "0.2.0" }
+borsa-macros = { workspace = true }
 
 [dev-dependencies]
 borsa-mock = { workspace = true }
