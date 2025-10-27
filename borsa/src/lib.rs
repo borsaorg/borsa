@@ -103,3 +103,60 @@ pub use borsa_core::{
 };
 pub use core::{Borsa, BorsaBuilder};
 pub use router::download::DownloadBuilder;
+
+// Re-export core types for convenience
+pub use borsa_core::{
+    // Foundational types
+    AssetKind,
+    BorsaError,
+    Capability,
+    Currency,
+    IsoCurrency,
+    Exchange,
+    Instrument,
+    Isin,
+    Money,
+
+    // Request types
+    HistoryRequest,
+    HistoryRequestBuilder,
+    NewsRequest,
+    SearchRequest,
+
+    // Response types & Data Structures
+    Address,       
+    BalanceSheetRow,
+    Calendar,
+    Candle,
+    CashflowRow,
+    CompanyProfile,
+    DownloadEntry,
+    DownloadReport,
+    DownloadResponse,
+    Earnings,
+    EsgScores,
+    FastInfo,
+    FundKind, 
+    FundProfile, 
+    HistoryResponse,
+    IncomeStatementRow,
+    Info,
+    InfoReport,
+    InsiderRosterHolder,
+    InsiderTransaction,
+    InstitutionalHolder,
+    MajorHolder,
+    MarketState,
+    NetSharePurchaseActivity,
+    NewsArticle,
+    OptionChain,
+    PriceTarget,
+    Profile,
+    Quote,
+    QuoteUpdate,
+    RecommendationRow,
+    RecommendationSummary,
+    SearchReport,
+    SearchResult,
+    UpgradeDowngradeRow,
+};
