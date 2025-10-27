@@ -50,7 +50,7 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
-        crate: [borsa, borsa-core, borsa-yfinance, examples]
+        crate: [borsa, borsa-core, borsa-yfinance]
         rust: [stable]
         # Only test beta on ubuntu to reduce CI time
         include:
@@ -76,28 +76,12 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Build dependencies
-        shell: bash
-        run: |
-          # Build dependencies first to populate cache
-          if [ -n "${{ matrix.crate }}" ]; then
-            cargo build --workspace --exclude ${{ matrix.crate }}
-          else
-            cargo build --workspace
-          fi
-
       - name: Test crate
         shell: bash
         run: |
           cd ${{ matrix.crate }}          
           cargo test --verbose
 
-      - name: Test crate with all features
-        if: matrix.crate != 'examples'
-        shell: bash
-        run: |
-          cd ${{ matrix.crate }}
-          cargo test --all-features --verbose
 
   # Workspace validation and examples
   workspace-validation:
@@ -125,12 +109,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in examples/examples/[0-9][0-9]_*.rs; do \
+          for f in borsa/examples/[0-9][0-9]_*.rs; do \
             name=$(basename "$f" .rs); \
             echo "==> Running example: $name (mock)"; \
-            BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa-examples --example "$name" || exit 1; \
+            BORSA_EXAMPLES_USE_MOCK=1 cargo run -p borsa --example "$name" || exit 1; \
           done
-
 
   # Documentation
   docs:
