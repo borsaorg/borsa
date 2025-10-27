@@ -152,6 +152,7 @@ impl Borsa {
                 factor,
                 jitter_percent: u32::from(jitter_percent),
                 initial_notify: Some(init_tx),
+                enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
             };
             let join = Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
             joins.push(join);
@@ -243,6 +244,7 @@ struct KindSupervisorParams {
     factor: u32,
     jitter_percent: u32,
     initial_notify: Option<oneshot::Sender<Result<(), BorsaError>>>,
+    enforce_monotonic: bool,
 }
 
 struct EligibleStreamProviders {
@@ -341,10 +343,16 @@ impl Borsa {
                 factor,
                 jitter_percent,
                 mut initial_notify,
+                enforce_monotonic,
             } = params;
             let mut start_index: usize = 0;
             let mut backoff_ms: u64 = min_backoff_ms;
             let mut initial_errors: Vec<BorsaError> = Vec::new();
+            // Track last timestamp per symbol across provider sessions for this kind group.
+            let mut last_ts_by_symbol: std::collections::HashMap<
+                String,
+                chrono::DateTime<chrono::Utc>,
+            > = std::collections::HashMap::new();
             loop {
                 let mut connected = false;
                 let mut i = start_index;
@@ -393,6 +401,21 @@ impl Borsa {
                                                     #[cfg(feature = "tracing")]
                                                     tracing::warn!(symbol = %u.symbol, provider_index = i, "dropping update for unassigned symbol");
                                                 }
+                                            if pass && enforce_monotonic {
+                                                let sym = u.symbol.as_str().to_string();
+                                                if let Some(prev) = last_ts_by_symbol.get(&sym)
+                                                    && u.ts < *prev {
+                                                        pass = false;
+                                                        #[cfg(feature = "tracing")]
+                                                        tracing::warn!(symbol = %u.symbol, prev_ts = %prev, ts = %u.ts, provider_index = i, "dropping out-of-order stream update (ts older than last seen)");
+                                                    }
+                                                if pass {
+                                                    last_ts_by_symbol
+                                                        .entry(sym)
+                                                        .and_modify(|p| { if u.ts > *p { *p = u.ts; } })
+                                                        .or_insert(u.ts);
+                                                }
+                                            }
                                             if pass && tx_clone.send(u).await.is_err() {
                                                     if let Some(h) = provider_handle.take() { h.abort(); }
                                                     return;

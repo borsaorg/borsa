@@ -150,6 +150,7 @@ fn borsa_config_roundtrip_serde() {
             factor: 3,
             jitter_percent: 25,
         }),
+        stream_enforce_monotonic_timestamps: true,
     };
 
     let json = serde_json::to_string(&cfg).expect("serialize cfg");

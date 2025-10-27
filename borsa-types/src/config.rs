@@ -141,6 +141,11 @@ pub struct BorsaConfig {
     pub request_timeout: Option<Duration>,
     /// Optional backoff configuration used by streaming.
     pub backoff: Option<BackoffConfig>,
+    /// When enabled, enforce per-symbol non-decreasing timestamps for stream updates.
+    /// Updates with timestamps older than the last seen for the same symbol are dropped.
+    /// Equal timestamps are allowed. Enabled by default.
+    #[serde(default = "default_true")]
+    pub stream_enforce_monotonic_timestamps: bool,
 }
 
 impl Default for BorsaConfig {
@@ -155,6 +160,11 @@ impl Default for BorsaConfig {
             provider_timeout: Duration::from_secs(5),
             request_timeout: None,
             backoff: None,
+            stream_enforce_monotonic_timestamps: true,
         }
     }
+}
+
+const fn default_true() -> bool {
+    true
 }

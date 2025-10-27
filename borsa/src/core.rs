@@ -170,6 +170,16 @@ impl BorsaBuilder {
         self
     }
 
+    /// Enforce per-symbol non-decreasing timestamps for stream updates.
+    ///
+    /// When enabled (default), updates older than the last seen per symbol are dropped.
+    /// Equal timestamps are allowed. Disable to forward provider data as-is.
+    #[must_use]
+    pub const fn stream_enforce_monotonic_timestamps(mut self, yes: bool) -> Self {
+        self.cfg.stream_enforce_monotonic_timestamps = yes;
+        self
+    }
+
     /// Build the `Borsa` orchestrator.
     ///
     /// # Errors

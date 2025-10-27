@@ -106,38 +106,30 @@ pub use router::download::DownloadBuilder;
 
 // Re-export core types for convenience
 pub use borsa_core::{
+    // Response types & Data Structures
+    Address,
     // Foundational types
     AssetKind,
-    BorsaError,
-    Capability,
-    Currency,
-    IsoCurrency,
-    Exchange,
-    Instrument,
-    Isin,
-    Money,
-
-    // Request types
-    HistoryRequest,
-    HistoryRequestBuilder,
-    NewsRequest,
-    SearchRequest,
-
-    // Response types & Data Structures
-    Address,       
     BalanceSheetRow,
+    BorsaError,
     Calendar,
     Candle,
+    Capability,
     CashflowRow,
     CompanyProfile,
+    Currency,
     DownloadEntry,
     DownloadReport,
     DownloadResponse,
     Earnings,
     EsgScores,
+    Exchange,
     FastInfo,
-    FundKind, 
-    FundProfile, 
+    FundKind,
+    FundProfile,
+    // Request types
+    HistoryRequest,
+    HistoryRequestBuilder,
     HistoryResponse,
     IncomeStatementRow,
     Info,
@@ -145,10 +137,16 @@ pub use borsa_core::{
     InsiderRosterHolder,
     InsiderTransaction,
     InstitutionalHolder,
+    Instrument,
+    Isin,
+    IsoCurrency,
     MajorHolder,
     MarketState,
+    Money,
+
     NetSharePurchaseActivity,
     NewsArticle,
+    NewsRequest,
     OptionChain,
     PriceTarget,
     Profile,
@@ -157,6 +155,8 @@ pub use borsa_core::{
     RecommendationRow,
     RecommendationSummary,
     SearchReport,
+    SearchRequest,
+
     SearchResult,
     UpgradeDowngradeRow,
 };
