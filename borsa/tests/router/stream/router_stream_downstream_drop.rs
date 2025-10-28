@@ -13,6 +13,7 @@ async fn stream_quotes_exits_when_downstream_drops() {
             price: Some(usd(&(100 + i).to_string())),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(i64::from(i), 0).unwrap(),
+            volume: None,
         })
         .collect::<Vec<_>>();
 

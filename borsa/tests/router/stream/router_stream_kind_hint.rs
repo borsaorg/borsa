@@ -15,6 +15,7 @@ async fn stream_quotes_respects_kind_hint_support() {
             price: Some(usd("1.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
+            volume: None,
         }])
         .build();
 
@@ -27,6 +28,7 @@ async fn stream_quotes_respects_kind_hint_support() {
             price: Some(usd("2.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
+            volume: None,
         }])
         .build();
 

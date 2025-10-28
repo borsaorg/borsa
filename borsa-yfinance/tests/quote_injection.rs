@@ -40,6 +40,7 @@ async fn quote_uses_injected_adapter() {
             ),
             exchange: Some(borsa_core::Exchange::try_from_str("NasdaqGS").unwrap()),
             market_state: Some("CLOSED".parse::<borsa_core::MarketState>().unwrap()),
+            day_volume: None,
         }])
     });
 

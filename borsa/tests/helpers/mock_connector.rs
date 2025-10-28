@@ -991,6 +991,7 @@ pub fn m_quote(name: &'static str, last: f64) -> Arc<MockConnector> {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build()
 }

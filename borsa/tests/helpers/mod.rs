@@ -73,5 +73,6 @@ pub fn quote_fixture(symbol: &str, price: &str) -> borsa_core::Quote {
         previous_close: None,
         exchange: None,
         market_state: None,
+        day_volume: None,
     }
 }

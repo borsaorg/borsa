@@ -19,6 +19,7 @@ async fn strategy_latency_returns_fastest_success() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
     let slow_ok = MockConnector::builder()
@@ -31,6 +32,7 @@ async fn strategy_latency_returns_fastest_success() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
 
@@ -67,6 +69,7 @@ async fn strategy_latency_ignores_faster_failure_and_returns_first_success() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
 
@@ -98,6 +101,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
     let ok = MockConnector::builder()
@@ -110,6 +114,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
 

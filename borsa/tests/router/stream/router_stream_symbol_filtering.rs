@@ -13,24 +13,28 @@ async fn stream_quotes_filters_to_requested_symbols_only() {
             price: Some(usd("1.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(crate::helpers::TSLA).unwrap(),
             price: Some(usd("2.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(MSFT).unwrap(),
             price: Some(usd("3.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(AAPL).unwrap(),
             price: Some(usd("4.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(4, 0).unwrap(),
+            volume: None,
         },
     ];
 

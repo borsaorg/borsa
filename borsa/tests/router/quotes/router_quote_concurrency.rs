@@ -17,6 +17,7 @@ async fn faster_lower_priority_does_not_beat_higher_priority_success() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
 

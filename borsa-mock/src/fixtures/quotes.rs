@@ -39,5 +39,6 @@ fn q(sym: &str, name: &str, px: &str, prev: &str, exch: Exchange) -> Quote {
         ),
         exchange: Some(exch),
         market_state: None,
+        day_volume: None,
     }
 }

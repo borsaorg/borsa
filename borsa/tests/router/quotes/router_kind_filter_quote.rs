@@ -20,6 +20,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
 
@@ -34,6 +35,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
         .build();
 

@@ -12,6 +12,7 @@ async fn stream_quotes_fails_over_when_first_provider_ends() {
         price: Some(usd("100.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
+        volume: None,
     }];
     let p1 = MockConnector::builder()
         .name("P1")
@@ -26,12 +27,14 @@ async fn stream_quotes_fails_over_when_first_provider_ends() {
             price: Some(usd("101.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(AAPL).unwrap(),
             price: Some(usd("102.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),
+            volume: None,
         },
     ];
     let p2 = MockConnector::builder()

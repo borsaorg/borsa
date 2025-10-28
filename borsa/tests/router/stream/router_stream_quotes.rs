@@ -19,12 +19,14 @@ async fn stream_quotes_routes_to_streaming_connector() {
             price: Some(usd("200.0")),
             previous_close: Some(usd("198.0")),
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(AAPL).unwrap(),
             price: Some(usd("201.5")),
             previous_close: Some(usd("198.0")),
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
+            volume: None,
         },
     ];
     let b = MockConnector::builder()

@@ -11,9 +11,9 @@ async fn stream_monotonic_drops_older_and_allows_equal() {
     let t0_old = chrono::Utc.timestamp_opt(50, 0).unwrap();
 
     let updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.0")), previous_close: None, ts: t1 },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.1")), previous_close: None, ts: t2_eq },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("199.9")), previous_close: None, ts: t0_old },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.0")), previous_close: None, ts: t1, volume: None },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.1")), previous_close: None, ts: t2_eq, volume: None },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("199.9")), previous_close: None, ts: t0_old, volume: None },
     ];
 
     let c = MockConnector::builder()
@@ -50,8 +50,8 @@ async fn stream_monotonic_can_be_disabled() {
     let t0_old = chrono::Utc.timestamp_opt(50, 0).unwrap();
 
     let updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.0")), previous_close: None, ts: t1 },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("199.9")), previous_close: None, ts: t0_old },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.0")), previous_close: None, ts: t1, volume: None },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("199.9")), previous_close: None, ts: t0_old, volume: None },
     ];
 
     let c = MockConnector::builder()

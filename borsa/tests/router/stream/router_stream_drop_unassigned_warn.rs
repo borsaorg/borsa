@@ -8,8 +8,8 @@ use crate::helpers::MockConnector;
 async fn stream_quotes_drops_unassigned_symbol_updates() {
     // Provider X is assigned only AAPL but will try to send MSFT as well.
     let x_updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("10.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(1, 0).unwrap() },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("11.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(2, 0).unwrap() },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("10.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(1, 0).unwrap(), volume: None },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("11.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(2, 0).unwrap(), volume: None },
     ];
     let x = MockConnector::builder()
         .name("X")

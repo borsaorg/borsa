@@ -48,6 +48,7 @@ async fn stream_quotes_errors_when_one_kind_fails_to_start() {
         price: Some(usd("120.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(10, 0).unwrap(),
+        volume: None,
     }];
     let equities = MockConnector::builder()
         .name("equity_ok")

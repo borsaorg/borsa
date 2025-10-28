@@ -19,6 +19,7 @@ impl borsa_core::connector::QuoteProvider for InfoConnector {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
     }
 }
@@ -91,15 +92,15 @@ impl borsa_core::BorsaConnector for InfoConnector {
     fn as_analyst_price_target_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::AnalystPriceTargetProvider> {
-        Some(self)
+        None
     }
     fn as_recommendations_summary_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::RecommendationsSummaryProvider> {
-        Some(self)
+        None
     }
     fn as_esg_provider(&self) -> Option<&dyn borsa_core::connector::EsgProvider> {
-        Some(self)
+        None
     }
 }
 
@@ -126,10 +127,7 @@ async fn router_info_aggregates_data() {
     // sector not part of aggregates Info; ensure identity fields present
     assert_eq!(info.symbol.as_str(), "TEST");
     // From analysis
-    // analysis fields not part of aggregates Info; ensure previous_close passthrough optional
-    // no-op assertions retained minimal
-    // Check that partial failure results in None
-    // esg fields not part of aggregates Info
+    // analysis fields optional in Info; presence depends on provider coverage
 }
 
 #[tokio::test]
@@ -158,6 +156,7 @@ impl borsa_core::connector::QuoteProvider for QuoteOnlyConnector {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
     }
 }
@@ -210,7 +209,7 @@ impl borsa_core::BorsaConnector for FailingProfileAndPtConnector {
     fn as_analyst_price_target_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::AnalystPriceTargetProvider> {
-        Some(self)
+        None
     }
 }
 
@@ -250,6 +249,7 @@ impl borsa_core::connector::QuoteProvider for MinimalInfoConnector {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
     }
 }
@@ -319,15 +319,15 @@ impl borsa_core::BorsaConnector for MinimalInfoConnector {
     fn as_analyst_price_target_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::AnalystPriceTargetProvider> {
-        Some(self)
+        None
     }
     fn as_recommendations_summary_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::RecommendationsSummaryProvider> {
-        Some(self)
+        None
     }
     fn as_esg_provider(&self) -> Option<&dyn borsa_core::connector::EsgProvider> {
-        Some(self)
+        None
     }
     fn as_isin_provider(&self) -> Option<&dyn borsa_core::connector::IsinProvider> {
         Some(self)

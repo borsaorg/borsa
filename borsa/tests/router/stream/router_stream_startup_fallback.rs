@@ -22,6 +22,7 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
             ts: chrono::Utc
                 .timestamp_opt(ts(1970, 1, 1, 0, 0, 10), 0)
                 .unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(AAPL).unwrap(),
@@ -30,6 +31,7 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
             ts: chrono::Utc
                 .timestamp_opt(ts(1970, 1, 1, 0, 0, 11), 0)
                 .unwrap(),
+            volume: None,
         },
     ];
     let ok = MockConnector::builder()

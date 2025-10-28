@@ -26,6 +26,7 @@ impl borsa_core::connector::QuoteProvider for MapConnector {
                 previous_close: None,
                 exchange: None,
                 market_state: None,
+                day_volume: None,
             })
         } else {
             Err(BorsaError::not_found(format!(

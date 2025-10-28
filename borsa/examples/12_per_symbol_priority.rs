@@ -55,6 +55,7 @@ impl QuoteProvider for FastConnector {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
     }
 }
@@ -74,6 +75,7 @@ impl QuoteProvider for SlowConnector {
             previous_close: None,
             exchange: None,
             market_state: None,
+            day_volume: None,
         })
     }
 }

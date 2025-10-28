@@ -67,6 +67,7 @@ fn connector_with_quote(
             previous_close: None,
             exchange,
             market_state: None,
+            day_volume: None,
         })
         .build()
 }

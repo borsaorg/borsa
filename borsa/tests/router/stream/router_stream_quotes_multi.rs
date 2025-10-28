@@ -13,18 +13,21 @@ async fn stream_quotes_filters_symbols_and_emits_all() {
             price: Some(usd("120.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(10, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(MSFT).unwrap(),
             price: Some(usd("330.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(11, 0).unwrap(),
+            volume: None,
         },
         QuoteUpdate {
             symbol: borsa_core::Symbol::new(GOOG).unwrap(),
             price: Some(usd("140.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(12, 0).unwrap(),
+            volume: None,
         },
     ];
 

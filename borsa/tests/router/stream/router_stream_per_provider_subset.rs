@@ -8,8 +8,8 @@ use crate::helpers::MockConnector;
 async fn stream_quotes_assigns_symbols_per_provider() {
     // Provider X emits updates for AAPL and MSFT, but policy should assign only AAPL to X.
     let x_updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("10.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(1, 0).unwrap() },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("11.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(2, 0).unwrap() },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("10.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(1, 0).unwrap(), volume: None },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("11.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(2, 0).unwrap(), volume: None },
     ];
     let x = MockConnector::builder()
         .name("X")
@@ -19,7 +19,7 @@ async fn stream_quotes_assigns_symbols_per_provider() {
 
     // Provider Y emits MSFT; policy assigns MSFT to Y.
     let y_updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("20.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(3, 0).unwrap() },
+        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("20.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(3, 0).unwrap(), volume: None },
     ];
     let y = MockConnector::builder()
         .name("Y")
