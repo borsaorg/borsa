@@ -1,5 +1,8 @@
 use crate::Borsa;
-use borsa_core::{BorsaError, FastInfo, Info, InfoReport, Instrument, Isin, Profile};
+use borsa_core::{
+    BorsaError, EsgScores, FastInfo, Info, InfoReport, Instrument, Isin, PriceTarget, Profile,
+    RecommendationSummary,
+};
 
 type ProfileFields = (
     Option<String>,
@@ -13,6 +16,140 @@ type ProfileFields = (
 );
 
 impl Borsa {
+    fn push_actionable(errors: &mut Vec<BorsaError>, err: BorsaError) {
+        errors.extend(
+            err.flatten()
+                .into_iter()
+                .filter(borsa_core::BorsaError::is_actionable),
+        );
+    }
+
+    async fn collect_base(
+        &self,
+        inst: &Instrument,
+    ) -> (
+        Option<Profile>,
+        Option<borsa_core::Quote>,
+        Option<Isin>,
+        Vec<BorsaError>,
+    ) {
+        let (profile_res, quote_res, isin_res) =
+            tokio::join!(self.profile(inst), self.quote(inst), self.isin(inst));
+
+        let mut errors: Vec<BorsaError> = Vec::new();
+        let profile = match profile_res {
+            Ok(v) => Some(v),
+            Err(e) => {
+                Self::push_actionable(&mut errors, e);
+                None
+            }
+        };
+        let quote = match quote_res {
+            Ok(v) => Some(v),
+            Err(e) => {
+                Self::push_actionable(&mut errors, e);
+                None
+            }
+        };
+        let explicit_isin: Option<Isin> = match isin_res {
+            Ok(v) => v,
+            Err(e) => {
+                Self::push_actionable(&mut errors, e);
+                None
+            }
+        };
+        (profile, quote, explicit_isin, errors)
+    }
+
+    async fn collect_enrichments(
+        &self,
+        inst: &Instrument,
+    ) -> (
+        Option<PriceTarget>,
+        Option<RecommendationSummary>,
+        Option<EsgScores>,
+        Vec<BorsaError>,
+    ) {
+        let (pt_res, rs_res, esg_res) = tokio::join!(
+            self.analyst_price_target(inst),
+            self.recommendations_summary(inst),
+            self.sustainability(inst)
+        );
+
+        let mut errors: Vec<BorsaError> = Vec::new();
+        let mut price_target = match pt_res {
+            Ok(v) => Some(v),
+            Err(e) => {
+                Self::push_actionable(&mut errors, e);
+                None
+            }
+        };
+        let mut recommendation_summary = match rs_res {
+            Ok(v) => Some(v),
+            Err(e) => {
+                Self::push_actionable(&mut errors, e);
+                None
+            }
+        };
+        let mut esg_scores = match esg_res {
+            Ok(v) => Some(v),
+            Err(e) => {
+                Self::push_actionable(&mut errors, e);
+                None
+            }
+        };
+
+        if price_target.is_none()
+            && let Ok(v) = self.analyst_price_target(inst).await
+        {
+            price_target = Some(v);
+        }
+        if price_target.is_none() {
+            for c in self.ordered_for_kind(Some(*inst.kind())) {
+                if let Some(p) = c.as_analyst_price_target_provider()
+                    && let Ok(v) = p.analyst_price_target(inst).await
+                {
+                    price_target = Some(v);
+                    break;
+                }
+            }
+        }
+
+        if recommendation_summary.is_none()
+            && let Ok(v) = self.recommendations_summary(inst).await
+        {
+            recommendation_summary = Some(v);
+        }
+        if recommendation_summary.is_none() {
+            for c in self.ordered_for_kind(Some(*inst.kind())) {
+                if let Some(p) = c.as_recommendations_summary_provider()
+                    && let Ok(v) = p.recommendations_summary(inst).await
+                {
+                    recommendation_summary = Some(v);
+                    break;
+                }
+            }
+        }
+
+        if esg_scores.is_none()
+            && let Ok(v) = self.sustainability(inst).await
+        {
+            esg_scores = Some(v);
+        }
+        if esg_scores.is_none() {
+            for c in self.ordered_for_kind(Some(*inst.kind())) {
+                if let Some(p) = c.as_esg_provider()
+                    && let Ok(v) = p.sustainability(inst).await
+                {
+                    esg_scores = Some(v);
+                    break;
+                }
+            }
+        }
+
+        (price_target, recommendation_summary, esg_scores, errors)
+    }
+
     /// Build a comprehensive `Info` record by composing multiple data sources.
     ///
     /// Behavior and trade-offs:
@@ -26,42 +163,12 @@ impl Borsa {
     /// Returns an error only if task join fails unexpectedly.
     /// Otherwise, succeeds and includes per-source errors in the `errors` field.
     pub async fn info(&self, inst: &Instrument) -> Result<InfoReport, BorsaError> {
-        let (profile_res, quote_res, isin_res) =
-            tokio::join!(self.profile(inst), self.quote(inst), self.isin(inst));
+        let (profile, quote, explicit_isin, mut errors) = self.collect_base(inst).await;
+        let (price_target, recommendation_summary, esg_scores, mut extra) =
+            self.collect_enrichments(inst).await;
+        errors.append(&mut extra);
 
-        // Collect actionable errors uniformly using centralized helpers
-        let mut errors: Vec<BorsaError> = Vec::new();
-        let mut push_err = |e: BorsaError| {
-            errors.extend(
-                e.flatten()
-                    .into_iter()
-                    .filter(borsa_core::BorsaError::is_actionable),
-            );
-        };
-
-        let profile = match profile_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                push_err(e);
-                None
-            }
-        };
-        let quote = match quote_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                push_err(e);
-                None
-            }
-        };
-        let explicit_isin: Option<Isin> = match isin_res {
-            Ok(v) => v,
-            Err(e) => {
-                push_err(e);
-                None
-            }
-        };
         let isin_val = Self::pick_isin(profile.as_ref(), explicit_isin);
-
         let (name, _sector, _industry, _website, _summary, _address, _family, _fund_kind) =
             Self::pick_profile_fields(profile.as_ref());
 
@@ -90,7 +197,7 @@ impl Borsa {
                 day_range_high: None,
                 fifty_two_week_low: None,
                 fifty_two_week_high: None,
-                volume: None,
+                volume: quote.as_ref().and_then(|q| q.day_volume),
                 average_volume: None,
                 market_cap: None,
                 shares_outstanding: None,
@@ -99,6 +206,9 @@ impl Borsa {
                 dividend_yield: None,
                 ex_dividend_date: None,
                 as_of: None,
+                price_target,
+                recommendation_summary,
+                esg_scores,
             }),
             warnings: errors,
         })
@@ -167,6 +277,7 @@ impl Borsa {
             currency: Some(currency),
             last: Some(last),
             previous_close: q.previous_close,
+            volume: q.day_volume,
         })
     }
 }
