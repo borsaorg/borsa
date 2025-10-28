@@ -319,6 +319,13 @@ impl YfSearch for RealAdapter {
             );
         }
 
+        if let Some(lang) = req.lang() {
+            builder = builder.lang(lang);
+        }
+        if let Some(region) = req.region() {
+            builder = builder.region(region);
+        }
+
         let resp = builder
             .fetch()
             .await
