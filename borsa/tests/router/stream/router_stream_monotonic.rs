@@ -1,5 +1,5 @@
 use crate::helpers::{AAPL, usd};
-use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate};
+use borsa_core::{AssetKind, QuoteUpdate};
 use chrono::TimeZone;
 
 use crate::helpers::MockConnector;
@@ -11,9 +11,27 @@ async fn stream_monotonic_drops_older_and_allows_equal() {
     let t0_old = chrono::Utc.timestamp_opt(50, 0).unwrap();
 
     let updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.0")), previous_close: None, ts: t1, volume: None },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.1")), previous_close: None, ts: t2_eq, volume: None },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("199.9")), previous_close: None, ts: t0_old, volume: None },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            price: Some(usd("200.0")),
+            previous_close: None,
+            ts: t1,
+            volume: None,
+        },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            price: Some(usd("200.1")),
+            previous_close: None,
+            ts: t2_eq,
+            volume: None,
+        },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            price: Some(usd("199.9")),
+            previous_close: None,
+            ts: t0_old,
+            volume: None,
+        },
     ];
 
     let c = MockConnector::builder()
@@ -37,11 +55,13 @@ async fn stream_monotonic_drops_older_and_allows_equal() {
     let second = rx.recv().await.expect("second");
     assert_eq!(second.ts, t2_eq);
     // The third update (older ts) should be dropped; channel should close thereafter.
-    tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv())
+    if let Some(u) = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv())
         .await
         .ok()
         .and_then(|x| x)
-        .map(|u| panic!("unexpected extra update: {u:?}"));
+    {
+        panic!("unexpected extra update: {u:?}")
+    }
 }
 
 #[tokio::test]
@@ -50,8 +70,20 @@ async fn stream_monotonic_can_be_disabled() {
     let t0_old = chrono::Utc.timestamp_opt(50, 0).unwrap();
 
     let updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("200.0")), previous_close: None, ts: t1, volume: None },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("199.9")), previous_close: None, ts: t0_old, volume: None },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            price: Some(usd("200.0")),
+            previous_close: None,
+            ts: t1,
+            volume: None,
+        },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            price: Some(usd("199.9")),
+            previous_close: None,
+            ts: t0_old,
+            volume: None,
+        },
     ];
 
     let c = MockConnector::builder()
@@ -76,5 +108,3 @@ async fn stream_monotonic_can_be_disabled() {
     let second = rx.recv().await.expect("second");
     assert_eq!(second.ts, t0_old);
 }
-
-

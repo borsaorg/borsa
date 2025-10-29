@@ -3,7 +3,9 @@ use borsa_core::{AssetKind, BorsaError};
 
 #[tokio::test]
 async fn quote_returns_unsupported_when_no_connector_handles_capability() {
-    let c = crate::helpers::MockConnector::builder().name("no-quote").build();
+    let c = crate::helpers::MockConnector::builder()
+        .name("no-quote")
+        .build();
     let borsa = Borsa::builder().with_connector(c).build().unwrap();
 
     let inst = crate::helpers::instrument("X", AssetKind::Equity);
@@ -18,7 +20,11 @@ async fn quote_returns_unsupported_when_no_connector_handles_capability() {
 async fn quote_latency_strategy_still_signals_unsupported() {
     let borsa = Borsa::builder()
         .fetch_strategy(FetchStrategy::Latency)
-        .with_connector(crate::helpers::MockConnector::builder().name("no-quote").build())
+        .with_connector(
+            crate::helpers::MockConnector::builder()
+                .name("no-quote")
+                .build(),
+        )
         .build()
         .unwrap();
 

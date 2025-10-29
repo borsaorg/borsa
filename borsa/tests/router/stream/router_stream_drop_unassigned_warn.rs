@@ -1,4 +1,4 @@
-use crate::helpers::{instrument, AAPL, MSFT, usd};
+use crate::helpers::{AAPL, MSFT, instrument, usd};
 use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate, RoutingPolicyBuilder};
 use chrono::TimeZone;
 
@@ -8,8 +8,20 @@ use crate::helpers::MockConnector;
 async fn stream_quotes_drops_unassigned_symbol_updates() {
     // Provider X is assigned only AAPL but will try to send MSFT as well.
     let x_updates = vec![
-        QuoteUpdate { symbol: borsa_core::Symbol::new(AAPL).unwrap(), price: Some(usd("10.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(1, 0).unwrap(), volume: None },
-        QuoteUpdate { symbol: borsa_core::Symbol::new(MSFT).unwrap(), price: Some(usd("11.0")), previous_close: None, ts: chrono::Utc.timestamp_opt(2, 0).unwrap(), volume: None },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            price: Some(usd("10.0")),
+            previous_close: None,
+            ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
+            volume: None,
+        },
+        QuoteUpdate {
+            symbol: borsa_core::Symbol::new(MSFT).unwrap(),
+            price: Some(usd("11.0")),
+            previous_close: None,
+            ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
+            volume: None,
+        },
     ];
     let x = MockConnector::builder()
         .name("X")
@@ -29,7 +41,10 @@ async fn stream_quotes_drops_unassigned_symbol_updates() {
         .unwrap();
 
     let (_h, mut rx) = borsa
-        .stream_quotes(&[instrument(AAPL, AssetKind::Equity), instrument(MSFT, AssetKind::Equity)])
+        .stream_quotes(&[
+            instrument(AAPL, AssetKind::Equity),
+            instrument(MSFT, AssetKind::Equity),
+        ])
         .await
         .expect("stream started");
 
@@ -37,10 +52,10 @@ async fn stream_quotes_drops_unassigned_symbol_updates() {
     let mut got = Vec::new();
     while let Some(u) = rx.recv().await {
         got.push(u.symbol.as_str().to_string());
-        if got.len() >= 1 { break; }
+        if !got.is_empty() {
+            break;
+        }
     }
 
     assert_eq!(got, vec![AAPL.to_string()]);
 }
-
-

@@ -89,6 +89,8 @@ mod router_quote_not_found;
 mod router_quote_per_kind_priority;
 #[path = "router/quotes/router_quote_provider_hot_swap.rs"]
 mod router_quote_provider_hot_swap;
+#[path = "router/quotes/router_quote_unsupported.rs"]
+mod router_quote_unsupported;
 #[path = "router/quotes/router_quotes_fallback.rs"]
 mod router_quotes_fallback;
 #[path = "router/quotes/router_quotes_multi.rs"]
@@ -107,12 +109,18 @@ mod router_search_unsupported;
 mod router_stream_backoff;
 #[path = "router/stream/router_stream_downstream_drop.rs"]
 mod router_stream_downstream_drop;
+#[path = "router/stream/router_stream_drop_unassigned_warn.rs"]
+mod router_stream_drop_unassigned_warn;
 #[path = "router/stream/router_stream_failover_end.rs"]
 mod router_stream_failover_end;
 #[path = "router/stream/router_stream_kind_hint.rs"]
 mod router_stream_kind_hint;
+#[path = "router/stream/router_stream_monotonic.rs"]
+mod router_stream_monotonic;
 #[path = "router/stream/router_stream_no_provider.rs"]
 mod router_stream_no_provider;
+#[path = "router/stream/router_stream_per_provider_subset.rs"]
+mod router_stream_per_provider_subset;
 #[path = "router/stream/router_stream_quotes.rs"]
 mod router_stream_quotes;
 #[path = "router/stream/router_stream_quotes_multi.rs"]
@@ -121,5 +129,9 @@ mod router_stream_quotes_multi;
 mod router_stream_startup_all_fail;
 #[path = "router/stream/router_stream_startup_fallback.rs"]
 mod router_stream_startup_fallback;
+#[path = "router/stream/router_stream_strict_symbols_rejected.rs"]
+mod router_stream_strict_symbols_rejected;
 #[path = "router/stream/router_stream_symbol_filtering.rs"]
 mod router_stream_symbol_filtering;
+#[path = "router/stream/router_stream_unsupported.rs"]
+mod router_stream_unsupported;

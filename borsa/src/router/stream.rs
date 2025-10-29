@@ -122,41 +122,151 @@ impl Borsa {
                 }
             }
 
-            // Build per-provider instrument subsets and allow-sets
-            let mut provider_instruments: Vec<Vec<Instrument>> =
-                Vec::with_capacity(providers.len());
-            let mut provider_allow: Vec<HashSet<String>> = Vec::with_capacity(providers.len());
-            for allow in &provider_symbols {
-                let assigned = list
-                    .iter()
-                    .filter(|&inst| allow.contains(inst.symbol().as_str()))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                provider_instruments.push(assigned);
-                provider_allow.push(allow.clone());
+            // Decide mode: if any symbol in this group has an explicit provider preference
+            // (rank != usize::MAX), route per-symbol; otherwise, use group-level fallback.
+            let mut group_has_explicit: bool = false;
+            'outer: for inst in &list {
+                let sym = inst.symbol_str();
+                for p in &providers {
+                    let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
+                    if let Some((rank, _)) = self
+                        .cfg
+                        .routing_policy
+                        .providers
+                        .provider_rank(&ctx, &p.key())
+                        && rank != usize::MAX
+                    {
+                        group_has_explicit = true;
+                        break 'outer;
+                    }
+                }
             }
 
-            let min_backoff_ms = resolved_backoff.min_backoff_ms;
-            let max_backoff_ms = resolved_backoff.max_backoff_ms;
-            let factor = resolved_backoff.factor.max(1);
-            let jitter_percent = resolved_backoff.jitter_percent.min(100);
+            if group_has_explicit {
+                // Map instruments by symbol for quick lookup
+                let mut inst_by_sym: HashMap<String, Instrument> = HashMap::new();
+                for inst in &list {
+                    inst_by_sym.insert(inst.symbol().to_string(), inst.clone());
+                }
 
-            let (init_tx, init_rx) = oneshot::channel();
+                // For each requested symbol, compute its provider chain ordered by (rank, provider-order)
+                for sym in requested {
+                    if !union_symbols.contains(&sym) {
+                        // Symbol not eligible under current policy: do not start a stream for it.
+                        continue;
+                    }
+                    // Gather candidate providers that allow this symbol
+                    let mut candidates: Vec<(usize, Arc<dyn BorsaConnector>, usize)> = Vec::new();
+                    let mut has_explicit_preference_for_sym = false;
+                    for (idx, p) in providers.iter().cloned().enumerate() {
+                        if !provider_symbols
+                            .get(idx)
+                            .is_some_and(|set| set.contains(sym.as_str()))
+                        {
+                            continue;
+                        }
+                        let ctx = RoutingContext::new(Some(sym.as_str()), Some(kind), ex.clone());
+                        if let Some((rank, _strict)) = self
+                            .cfg
+                            .routing_policy
+                            .providers
+                            .provider_rank(&ctx, &p.key())
+                        {
+                            // store (rank, provider, providers_index) for tie-breaks
+                            candidates.push((rank, p, idx));
+                            if rank != usize::MAX {
+                                has_explicit_preference_for_sym = true;
+                            }
+                        }
+                    }
 
-            let params = KindSupervisorParams {
-                providers,
-                provider_instruments,
-                provider_allow,
-                min_backoff_ms,
-                max_backoff_ms,
-                factor,
-                jitter_percent: u32::from(jitter_percent),
-                initial_notify: Some(init_tx),
-                enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
-            };
-            let join = Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
-            joins.push(join);
-            init_receivers.push(init_rx);
+                    if candidates.is_empty() || !has_explicit_preference_for_sym {
+                        continue;
+                    }
+
+                    // Sort by (rank, providers_index) to ensure stable ordering
+                    candidates.sort_by_key(|(rank, _p, providers_idx)| (*rank, *providers_idx));
+
+                    // Build providers and per-provider assignments for this symbol
+                    let symbol_inst = match inst_by_sym.get(&sym) {
+                        Some(i) => i.clone(),
+                        None => continue,
+                    };
+
+                    let mut chain_providers: Vec<Arc<dyn BorsaConnector>> =
+                        Vec::with_capacity(candidates.len());
+                    let mut provider_instruments: Vec<Vec<Instrument>> =
+                        Vec::with_capacity(candidates.len());
+                    let mut provider_allow: Vec<HashSet<String>> =
+                        Vec::with_capacity(candidates.len());
+                    for _ in 0..candidates.len() {
+                        provider_instruments.push(vec![symbol_inst.clone()]);
+                        provider_allow.push(std::iter::once(sym.clone()).collect());
+                    }
+                    for (_rank, p, _idx) in candidates {
+                        chain_providers.push(p);
+                    }
+
+                    let min_backoff_ms = resolved_backoff.min_backoff_ms;
+                    let max_backoff_ms = resolved_backoff.max_backoff_ms;
+                    let factor = resolved_backoff.factor.max(1);
+                    let jitter_percent = resolved_backoff.jitter_percent.min(100);
+
+                    let (init_tx, init_rx) = oneshot::channel();
+                    let params = KindSupervisorParams {
+                        providers: chain_providers,
+                        provider_instruments,
+                        provider_allow,
+                        min_backoff_ms,
+                        max_backoff_ms,
+                        factor,
+                        jitter_percent: u32::from(jitter_percent),
+                        initial_notify: Some(init_tx),
+                        enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
+                    };
+                    let join =
+                        Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
+                    joins.push(join);
+                    init_receivers.push(init_rx);
+                }
+            } else {
+                // No explicit preferences for this group: use group-level supervisor (fallback allowed)
+                let mut provider_instruments: Vec<Vec<Instrument>> =
+                    Vec::with_capacity(providers.len());
+                let mut provider_allow: Vec<HashSet<String>> = Vec::with_capacity(providers.len());
+                for allow in &provider_symbols {
+                    let assigned = list
+                        .iter()
+                        .filter(|&inst| allow.contains(inst.symbol().as_str()))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    provider_instruments.push(assigned);
+                    provider_allow.push(allow.clone());
+                }
+
+                let min_backoff_ms = resolved_backoff.min_backoff_ms;
+                let max_backoff_ms = resolved_backoff.max_backoff_ms;
+                let factor = resolved_backoff.factor.max(1);
+                let jitter_percent = resolved_backoff.jitter_percent.min(100);
+
+                let (init_tx, init_rx) = oneshot::channel();
+
+                let params = KindSupervisorParams {
+                    providers,
+                    provider_instruments,
+                    provider_allow,
+                    min_backoff_ms,
+                    max_backoff_ms,
+                    factor,
+                    jitter_percent: u32::from(jitter_percent),
+                    initial_notify: Some(init_tx),
+                    enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
+                };
+                let join =
+                    Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
+                joins.push(join);
+                init_receivers.push(init_rx);
+            }
         }
 
         // Ensure at least one kind connected successfully before returning a handle.
@@ -318,9 +428,7 @@ impl Borsa {
                     let ctx = RoutingContext::new(
                         Some(inst.symbol_str()),
                         Some(kind),
-                        inst.exchange()
-                            .cloned()
-                            .or_else(|| exchange.cloned()),
+                        inst.exchange().cloned().or_else(|| exchange.cloned()),
                     );
                     let any_allowed = candidates.iter().any(|c| {
                         self.cfg

@@ -1,5 +1,5 @@
-use crate::helpers::{instrument, AAPL};
-use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
+use crate::helpers::{AAPL, instrument};
+use borsa_core::{AssetKind, RoutingPolicyBuilder};
 
 use crate::helpers::MockConnector;
 
@@ -15,7 +15,11 @@ async fn stream_quotes_strict_symbols_rejected_fails_fast() {
     // Strict rule for AAPL with an empty provider list: excludes all providers by policy.
     let policy = RoutingPolicyBuilder::new()
         .providers_rule(
-            borsa_core::Selector { symbol: Some(AAPL.to_string()), kind: Some(AssetKind::Equity), exchange: None },
+            borsa_core::Selector {
+                symbol: Some(AAPL.to_string()),
+                kind: Some(AssetKind::Equity),
+                exchange: None,
+            },
             &[],
             true,
         )
@@ -39,5 +43,3 @@ async fn stream_quotes_strict_symbols_rejected_fails_fast() {
         other => panic!("unexpected error: {other:?}"),
     }
 }
-
-
