@@ -1,7 +1,7 @@
 use crate::Borsa;
 use borsa_core::{
-    BorsaError, EsgScores, FastInfo, Info, InfoReport, Instrument, Isin, PriceTarget, Profile,
-    RecommendationSummary,
+    BorsaError, CallOrigin, EsgScores, FastInfo, Info, InfoReport, Instrument, Isin, PriceTarget,
+    Profile, RecommendationSummary,
 };
 
 type ProfileFields = (
@@ -33,32 +33,38 @@ impl Borsa {
         Option<Isin>,
         Vec<BorsaError>,
     ) {
-        let (profile_res, quote_res, isin_res) =
-            tokio::join!(self.profile(inst), self.quote(inst), self.isin(inst));
+        CallOrigin::scope(
+            CallOrigin::internal(None, "info.collect_base"),
+            async move {
+                let (profile_res, quote_res, isin_res) =
+                    tokio::join!(self.profile(inst), self.quote(inst), self.isin(inst));
 
-        let mut errors: Vec<BorsaError> = Vec::new();
-        let profile = match profile_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                Self::push_actionable(&mut errors, e);
-                None
-            }
-        };
-        let quote = match quote_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                Self::push_actionable(&mut errors, e);
-                None
-            }
-        };
-        let explicit_isin: Option<Isin> = match isin_res {
-            Ok(v) => v,
-            Err(e) => {
-                Self::push_actionable(&mut errors, e);
-                None
-            }
-        };
-        (profile, quote, explicit_isin, errors)
+                let mut errors: Vec<BorsaError> = Vec::new();
+                let profile = match profile_res {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        Self::push_actionable(&mut errors, e);
+                        None
+                    }
+                };
+                let quote = match quote_res {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        Self::push_actionable(&mut errors, e);
+                        None
+                    }
+                };
+                let explicit_isin: Option<Isin> = match isin_res {
+                    Ok(v) => v,
+                    Err(e) => {
+                        Self::push_actionable(&mut errors, e);
+                        None
+                    }
+                };
+                (profile, quote, explicit_isin, errors)
+            },
+        )
+        .await
     }
 
     async fn collect_enrichments(
@@ -70,84 +76,90 @@ impl Borsa {
         Option<EsgScores>,
         Vec<BorsaError>,
     ) {
-        let (pt_res, rs_res, esg_res) = tokio::join!(
-            self.analyst_price_target(inst),
-            self.recommendations_summary(inst),
-            self.sustainability(inst)
-        );
+        CallOrigin::scope(
+            CallOrigin::internal(None, "info.collect_enrichments"),
+            async move {
+                let (pt_res, rs_res, esg_res) = tokio::join!(
+                    self.analyst_price_target(inst),
+                    self.recommendations_summary(inst),
+                    self.sustainability(inst)
+                );
 
-        let mut errors: Vec<BorsaError> = Vec::new();
-        let mut price_target = match pt_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                Self::push_actionable(&mut errors, e);
-                None
-            }
-        };
-        let mut recommendation_summary = match rs_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                Self::push_actionable(&mut errors, e);
-                None
-            }
-        };
-        let mut esg_scores = match esg_res {
-            Ok(v) => Some(v),
-            Err(e) => {
-                Self::push_actionable(&mut errors, e);
-                None
-            }
-        };
+                let mut errors: Vec<BorsaError> = Vec::new();
+                let mut price_target = match pt_res {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        Self::push_actionable(&mut errors, e);
+                        None
+                    }
+                };
+                let mut recommendation_summary = match rs_res {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        Self::push_actionable(&mut errors, e);
+                        None
+                    }
+                };
+                let mut esg_scores = match esg_res {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        Self::push_actionable(&mut errors, e);
+                        None
+                    }
+                };
 
-        if price_target.is_none()
-            && let Ok(v) = self.analyst_price_target(inst).await
-        {
-            price_target = Some(v);
-        }
-        if price_target.is_none() {
-            for c in self.ordered_for_kind(Some(*inst.kind())) {
-                if let Some(p) = c.as_analyst_price_target_provider()
-                    && let Ok(v) = p.analyst_price_target(inst).await
+                if price_target.is_none()
+                    && let Ok(v) = self.analyst_price_target(inst).await
                 {
                     price_target = Some(v);
-                    break;
                 }
-            }
-        }
+                if price_target.is_none() {
+                    for c in self.ordered_for_kind(Some(*inst.kind())) {
+                        if let Some(p) = c.as_analyst_price_target_provider()
+                            && let Ok(v) = p.analyst_price_target(inst).await
+                        {
+                            price_target = Some(v);
+                            break;
+                        }
+                    }
+                }
 
-        if recommendation_summary.is_none()
-            && let Ok(v) = self.recommendations_summary(inst).await
-        {
-            recommendation_summary = Some(v);
-        }
-        if recommendation_summary.is_none() {
-            for c in self.ordered_for_kind(Some(*inst.kind())) {
-                if let Some(p) = c.as_recommendations_summary_provider()
-                    && let Ok(v) = p.recommendations_summary(inst).await
+                if recommendation_summary.is_none()
+                    && let Ok(v) = self.recommendations_summary(inst).await
                 {
                     recommendation_summary = Some(v);
-                    break;
                 }
-            }
-        }
+                if recommendation_summary.is_none() {
+                    for c in self.ordered_for_kind(Some(*inst.kind())) {
+                        if let Some(p) = c.as_recommendations_summary_provider()
+                            && let Ok(v) = p.recommendations_summary(inst).await
+                        {
+                            recommendation_summary = Some(v);
+                            break;
+                        }
+                    }
+                }
 
-        if esg_scores.is_none()
-            && let Ok(v) = self.sustainability(inst).await
-        {
-            esg_scores = Some(v);
-        }
-        if esg_scores.is_none() {
-            for c in self.ordered_for_kind(Some(*inst.kind())) {
-                if let Some(p) = c.as_esg_provider()
-                    && let Ok(v) = p.sustainability(inst).await
+                if esg_scores.is_none()
+                    && let Ok(v) = self.sustainability(inst).await
                 {
                     esg_scores = Some(v);
-                    break;
                 }
-            }
-        }
+                if esg_scores.is_none() {
+                    for c in self.ordered_for_kind(Some(*inst.kind())) {
+                        if let Some(p) = c.as_esg_provider()
+                            && let Ok(v) = p.sustainability(inst).await
+                        {
+                            esg_scores = Some(v);
+                            break;
+                        }
+                    }
+                }
 
-        (price_target, recommendation_summary, esg_scores, errors)
+                (price_target, recommendation_summary, esg_scores, errors)
+            },
+        )
+        .await
     }
 
     /// Build a comprehensive `Info` record by composing multiple data sources.

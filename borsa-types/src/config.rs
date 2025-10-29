@@ -1,8 +1,8 @@
 //! Configuration types shared across orchestrators and connectors.
 
 // no extra prelude imports
-use std::time::Duration;
 use std::collections::HashMap;
+use std::time::Duration;
 
 use crate::routing_policy::RoutingPolicy;
 use serde::{Deserialize, Serialize};
@@ -213,7 +213,11 @@ impl CacheConfig {
             .get(key)
             .copied()
             .unwrap_or(self.default_ttl_ms);
-        if ms == 0 { None } else { Some(Duration::from_millis(ms)) }
+        if ms == 0 {
+            None
+        } else {
+            Some(Duration::from_millis(ms))
+        }
     }
 
     /// Returns the capacity for a capability, falling back to `default_max_entries`.

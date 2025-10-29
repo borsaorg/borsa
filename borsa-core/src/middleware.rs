@@ -1,11 +1,109 @@
 //! Middleware trait for wrapping `BorsaConnector` implementations.
 
 use std::any::{Any, TypeId};
+use std::future::Future;
 use std::sync::Arc;
 
-use crate::BorsaError;
 use crate::connector::BorsaConnector;
+use crate::{BorsaError, Capability};
 use async_trait::async_trait;
+use tokio::task_local;
+
+task_local! {
+    static CALL_ORIGIN: CallOrigin;
+}
+
+/// Classification of who initiated a connector call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallOrigin {
+    /// End-user / public API invocation (default).
+    External,
+    /// Orchestrator-internal fan-out originating from another capability.
+    Internal {
+        /// Capability that triggered the internal call (if any).
+        parent: Option<Capability>,
+        /// Optional stage label for diagnostics.
+        stage: Arc<str>,
+    },
+}
+
+impl CallOrigin {
+    /// Construct an internal origin with a parent capability and stage label.
+    #[must_use]
+    pub fn internal<P>(parent: P, stage: impl Into<Arc<str>>) -> Self
+    where
+        P: Into<Option<Capability>>,
+    {
+        Self::Internal {
+            parent: parent.into(),
+            stage: stage.into(),
+        }
+    }
+
+    /// Return the currently scoped origin, defaulting to `External`.
+    #[must_use]
+    pub fn current() -> Self {
+        CALL_ORIGIN
+            .try_with(std::clone::Clone::clone)
+            .unwrap_or(Self::External)
+    }
+
+    /// Run a future within a scoped origin.
+    pub async fn scope<Fut, T>(origin: Self, fut: Fut) -> T
+    where
+        Fut: Future<Output = T>,
+    {
+        CALL_ORIGIN.scope(origin, fut).await
+    }
+
+    /// Access the parent capability for internal origins.
+    #[must_use]
+    pub const fn parent(&self) -> Option<Capability> {
+        match self {
+            Self::Internal { parent, .. } => *parent,
+            Self::External => None,
+        }
+    }
+
+    /// Access the stage label for internal origins.
+    #[must_use]
+    pub fn stage(&self) -> Option<&str> {
+        match self {
+            Self::Internal { stage, .. } => Some(stage.as_ref()),
+            Self::External => None,
+        }
+    }
+}
+
+/// Snapshot of the capability and origin for a pending provider call.
+#[derive(Debug, Clone)]
+pub struct CallContext {
+    capability: Capability,
+    origin: CallOrigin,
+}
+
+impl CallContext {
+    /// Create a new context for a capability using the currently scoped origin.
+    #[must_use]
+    pub fn new(capability: Capability) -> Self {
+        Self {
+            capability,
+            origin: CallOrigin::current(),
+        }
+    }
+
+    /// Capability being invoked.
+    #[must_use]
+    pub const fn capability(&self) -> Capability {
+        self.capability
+    }
+
+    /// Origin that triggered this call.
+    #[must_use]
+    pub const fn origin(&self) -> &CallOrigin {
+        &self.origin
+    }
+}
 
 /// Position requirement for middleware in the stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,7 +278,7 @@ pub trait Middleware: Send + Sync {
     /// external rate limit services, databases, etc.
     ///
     /// Default: Allow all calls through.
-    async fn pre_call(&self) -> Result<(), BorsaError> {
+    async fn pre_call(&self, _ctx: &CallContext) -> Result<(), BorsaError> {
         Ok(())
     }
 
@@ -191,7 +289,7 @@ pub trait Middleware: Send + Sync {
     /// because it's called within `.map_err()` closures.
     ///
     /// Default: Return errors unchanged.
-    fn map_error(&self, err: BorsaError) -> BorsaError {
+    fn map_error(&self, err: BorsaError, _ctx: &CallContext) -> BorsaError {
         err
     }
 }

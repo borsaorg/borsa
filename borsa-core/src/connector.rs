@@ -629,7 +629,8 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 req: $crate::HistoryRequest,
             ) -> Result<$crate::HistoryResponse, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::History);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_history_provider()
@@ -637,7 +638,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .history(instrument, req)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
             fn supported_history_intervals(
                 &self,
@@ -657,7 +658,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Quote, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Quote);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_quote_provider()
@@ -665,7 +667,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .quote(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -675,7 +677,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Earnings, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Earnings);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_earnings_provider()
@@ -683,7 +686,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .earnings(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -694,7 +697,8 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 quarterly: bool,
             ) -> Result<Vec<$crate::IncomeStatementRow>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::IncomeStatement);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_income_statement_provider()
@@ -702,7 +706,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .income_statement(instrument, quarterly)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -713,7 +717,8 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 quarterly: bool,
             ) -> Result<Vec<$crate::BalanceSheetRow>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::BalanceSheet);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_balance_sheet_provider()
@@ -721,7 +726,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .balance_sheet(instrument, quarterly)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -732,7 +737,8 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 quarterly: bool,
             ) -> Result<Vec<$crate::CashflowRow>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Cashflow);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_cashflow_provider()
@@ -740,7 +746,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .cashflow(instrument, quarterly)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -750,7 +756,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Calendar, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Calendar);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_calendar_provider()
@@ -758,7 +765,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .calendar(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -768,7 +775,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::RecommendationRow>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Recommendations);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_recommendations_provider()
@@ -776,7 +784,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .recommendations(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -786,7 +794,10 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::RecommendationSummary, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new(
+                    $crate::Capability::RecommendationsSummary,
+                );
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_recommendations_summary_provider()
@@ -794,7 +805,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .recommendations_summary(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -804,7 +815,9 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::UpgradeDowngradeRow>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::UpgradesDowngrades);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_upgrades_downgrades_provider()
@@ -812,7 +825,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .upgrades_downgrades(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -822,7 +835,9 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::PriceTarget, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::AnalystPriceTarget);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_analyst_price_target_provider()
@@ -830,7 +845,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .analyst_price_target(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -840,7 +855,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::MajorHolder>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::MajorHolders);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_major_holders_provider()
@@ -848,7 +864,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .major_holders(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -858,7 +874,9 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InstitutionalHolder>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::InstitutionalHolders);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_institutional_holders_provider()
@@ -866,7 +884,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .institutional_holders(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -876,7 +894,9 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InstitutionalHolder>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::MutualFundHolders);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_mutual_fund_holders_provider()
@@ -884,7 +904,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .mutual_fund_holders(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -894,7 +914,9 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InsiderTransaction>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::InsiderTransactions);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_insider_transactions_provider()
@@ -902,7 +924,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .insider_transactions(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -912,7 +934,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InsiderRosterHolder>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::InsiderRoster);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_insider_roster_holders_provider()
@@ -920,7 +943,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .insider_roster_holders(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -930,7 +953,10 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Option<$crate::NetSharePurchaseActivity>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new(
+                    $crate::Capability::NetSharePurchaseActivity,
+                );
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_net_share_purchase_activity_provider()
@@ -940,7 +966,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .net_share_purchase_activity(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -950,7 +976,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Profile, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Profile);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_profile_provider()
@@ -958,7 +985,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .profile(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -968,7 +995,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Option<$crate::Isin>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Isin);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_isin_provider()
@@ -976,7 +1004,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .isin(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -986,7 +1014,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 req: $crate::SearchRequest,
             ) -> Result<$crate::SearchResponse, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Search);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_search_provider()
@@ -994,7 +1023,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .search(req)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -1004,7 +1033,8 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::EsgScores, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Esg);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_esg_provider()
@@ -1012,7 +1042,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .sustainability(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -1023,7 +1053,8 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 req: $crate::NewsRequest,
             ) -> Result<Vec<$crate::types::NewsArticle>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::News);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_news_provider()
@@ -1031,7 +1062,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .news(instrument, req)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -1041,7 +1072,9 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<i64>, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::OptionsExpirations);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_options_expirations_provider()
@@ -1049,7 +1082,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .options_expirations(instrument)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -1060,7 +1093,8 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 date: Option<i64>,
             ) -> Result<$crate::OptionChain, $crate::BorsaError> {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::OptionChain);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_option_chain_provider()
@@ -1068,7 +1102,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .option_chain(instrument, date)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
 
@@ -1084,7 +1118,8 @@ macro_rules! borsa_delegate_provider_impls {
                 ),
                 $crate::BorsaError,
             > {
-                <Self as $crate::Middleware>::pre_call(self).await?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::StreamQuotes);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_stream_provider()
@@ -1092,7 +1127,7 @@ macro_rules! borsa_delegate_provider_impls {
                 inner
                     .stream_quotes(instruments)
                     .await
-                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e))
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }
         }
     };

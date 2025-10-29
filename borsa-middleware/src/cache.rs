@@ -2,18 +2,25 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use borsa_core::connector::{QuoteProvider, ProfileProvider, IsinProvider, HistoryProvider, EarningsProvider, IncomeStatementProvider, BalanceSheetProvider, CashflowProvider, CalendarProvider, RecommendationsProvider, RecommendationsSummaryProvider, UpgradesDowngradesProvider, AnalystPriceTargetProvider, MajorHoldersProvider, InstitutionalHoldersProvider, MutualFundHoldersProvider, InsiderTransactionsProvider, InsiderRosterHoldersProvider, NetSharePurchaseActivityProvider, EsgProvider, NewsProvider, StreamProvider, OptionsExpirationsProvider, OptionChainProvider, SearchProvider};
+use borsa_core::Exchange;
+use borsa_core::connector::{
+    AnalystPriceTargetProvider, BalanceSheetProvider, CalendarProvider, CashflowProvider,
+    EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
+    InsiderRosterHoldersProvider, InsiderTransactionsProvider, InstitutionalHoldersProvider,
+    IsinProvider, MajorHoldersProvider, MutualFundHoldersProvider,
+    NetSharePurchaseActivityProvider, NewsProvider, OptionChainProvider,
+    OptionsExpirationsProvider, ProfileProvider, QuoteProvider, RecommendationsProvider,
+    RecommendationsSummaryProvider, SearchProvider, StreamProvider, UpgradesDowngradesProvider,
+};
 use borsa_core::{
     AssetKind, BalanceSheetRow, BorsaConnector, BorsaError, Calendar, CashflowRow, Earnings,
     EsgScores, HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument, Interval, Isin,
-    NewsArticle, NewsRequest, NewsTab, OptionChain, PriceTarget, Profile, Quote,
+    NewsArticle, NewsRequest, NewsTab, OptionChain, PriceTarget, Profile, Quote, Range,
     RecommendationRow, RecommendationSummary, SearchRequest, SearchResponse, UpgradeDowngradeRow,
-    Range,
 };
-use borsa_core::{Exchange};
 use borsa_types::{CacheConfig, Capability};
-use tokio::sync::Mutex;
 use lru::LruCache;
+use tokio::sync::Mutex;
 
 /// Small helper: identity of an instrument for caching discrimination.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -38,10 +45,36 @@ struct HistoryKey {
     inst: InstrumentKey,
     interval: IntervalKey,
     range: RangeKey,
-    include_prepost: bool,
-    include_actions: bool,
-    auto_adjust: bool,
-    keepna: bool,
+    flags: u8,
+}
+
+impl HistoryKey {
+    const INCLUDE_PREPOST: u8 = 1 << 0;
+    const INCLUDE_ACTIONS: u8 = 1 << 1;
+    const AUTO_ADJUST: u8 = 1 << 2;
+    const KEEPNA: u8 = 1 << 3;
+
+    fn from_request(inst: &Instrument, req: &HistoryRequest) -> Self {
+        let mut flags = 0u8;
+        if req.include_prepost() {
+            flags |= Self::INCLUDE_PREPOST;
+        }
+        if req.include_actions() {
+            flags |= Self::INCLUDE_ACTIONS;
+        }
+        if req.auto_adjust() {
+            flags |= Self::AUTO_ADJUST;
+        }
+        if req.keepna() {
+            flags |= Self::KEEPNA;
+        }
+        Self {
+            inst: InstrumentKey::from(inst),
+            interval: IntervalKey(req.interval()),
+            range: RangeKey(req.range()),
+            flags,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -165,7 +198,10 @@ where
         // Avoid zero capacity panics
         let cap = capacity.max(1);
         let cap_nz = std::num::NonZeroUsize::new(cap).unwrap();
-        Self { inner: Mutex::new(LruCache::new(cap_nz)), ttl }
+        Self {
+            inner: Mutex::new(LruCache::new(cap_nz)),
+            ttl,
+        }
     }
 }
 
@@ -178,9 +214,10 @@ where
     async fn get(&self, key: &K) -> Option<V> {
         let mut guard = self.inner.lock().await;
         if let Some(entry) = guard.get_mut(key)
-            && std::time::Instant::now() <= entry.expires_at {
-                return Some(entry.value.clone());
-            }
+            && std::time::Instant::now() <= entry.expires_at
+        {
+            return Some(entry.value.clone());
+        }
         // If expired, remove it and return None
         guard.pop(key).and_then(|_| None)
     }
@@ -205,10 +242,13 @@ impl CacheMiddleware {
 
 impl borsa_core::Middleware for CacheMiddleware {
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
-        Arc::new(CachingConnector::new(inner, self.cfg))
+        let Self { cfg } = *self;
+        Arc::new(CachingConnector::new(inner, &cfg))
     }
 
-    fn name(&self) -> &'static str { "CachingMiddleware" }
+    fn name(&self) -> &'static str {
+        "CachingMiddleware"
+    }
 
     fn config_json(&self) -> serde_json::Value {
         serde_json::json!({
@@ -236,11 +276,17 @@ struct Stores {
     upgrades_downgrades: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<UpgradeDowngradeRow>>>>>,
     analyst_price_target: Option<Arc<dyn CacheStore<InstrumentKey, Arc<PriceTarget>>>>,
     major_holders: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::MajorHolder>>>>>,
-    institutional_holders: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InstitutionalHolder>>>>>,
-    mutual_fund_holders: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InstitutionalHolder>>>>>,
-    insider_transactions: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InsiderTransaction>>>>>,
-    insider_roster: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InsiderRosterHolder>>>>>,
-    net_share_purchase_activity: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Option<borsa_core::NetSharePurchaseActivity>>>>>,
+    institutional_holders:
+        Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InstitutionalHolder>>>>>,
+    mutual_fund_holders:
+        Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InstitutionalHolder>>>>>,
+    insider_transactions:
+        Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InsiderTransaction>>>>>,
+    insider_roster:
+        Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<borsa_core::InsiderRosterHolder>>>>>,
+    net_share_purchase_activity: Option<
+        Arc<dyn CacheStore<InstrumentKey, Arc<Option<borsa_core::NetSharePurchaseActivity>>>>,
+    >,
     esg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<EsgScores>>>>,
     news: Option<Arc<dyn CacheStore<NewsKey, Arc<Vec<NewsArticle>>>>>,
     options_expirations: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<i64>>>>>,
@@ -266,32 +312,35 @@ impl CachingConnector {
     }
 
     #[must_use]
-    pub fn new(inner: Arc<dyn BorsaConnector>, cfg: CacheConfig) -> Self {
+    pub fn new(inner: Arc<dyn BorsaConnector>, cfg: &CacheConfig) -> Self {
         let stores = Stores {
-            quote: Self::maybe_store(&cfg, Capability::Quote),
-            profile: Self::maybe_store(&cfg, Capability::Profile),
-            isin: Self::maybe_store(&cfg, Capability::Isin),
-            history: Self::maybe_store(&cfg, Capability::History),
-            earnings: Self::maybe_store(&cfg, Capability::Earnings),
-            income_stmt: Self::maybe_store(&cfg, Capability::IncomeStatement),
-            balance_sheet: Self::maybe_store(&cfg, Capability::BalanceSheet),
-            cashflow: Self::maybe_store(&cfg, Capability::Cashflow),
-            calendar: Self::maybe_store(&cfg, Capability::Calendar),
-            recommendations: Self::maybe_store(&cfg, Capability::Recommendations),
-            recommendations_summary: Self::maybe_store(&cfg, Capability::RecommendationsSummary),
-            upgrades_downgrades: Self::maybe_store(&cfg, Capability::UpgradesDowngrades),
-            analyst_price_target: Self::maybe_store(&cfg, Capability::AnalystPriceTarget),
-            major_holders: Self::maybe_store(&cfg, Capability::MajorHolders),
-            institutional_holders: Self::maybe_store(&cfg, Capability::InstitutionalHolders),
-            mutual_fund_holders: Self::maybe_store(&cfg, Capability::MutualFundHolders),
-            insider_transactions: Self::maybe_store(&cfg, Capability::InsiderTransactions),
-            insider_roster: Self::maybe_store(&cfg, Capability::InsiderRoster),
-            net_share_purchase_activity: Self::maybe_store(&cfg, Capability::NetSharePurchaseActivity),
-            esg: Self::maybe_store(&cfg, Capability::Esg),
-            news: Self::maybe_store(&cfg, Capability::News),
-            options_expirations: Self::maybe_store(&cfg, Capability::OptionsExpirations),
-            option_chain: Self::maybe_store(&cfg, Capability::OptionChain),
-            search: Self::maybe_store(&cfg, Capability::Search),
+            quote: Self::maybe_store(cfg, Capability::Quote),
+            profile: Self::maybe_store(cfg, Capability::Profile),
+            isin: Self::maybe_store(cfg, Capability::Isin),
+            history: Self::maybe_store(cfg, Capability::History),
+            earnings: Self::maybe_store(cfg, Capability::Earnings),
+            income_stmt: Self::maybe_store(cfg, Capability::IncomeStatement),
+            balance_sheet: Self::maybe_store(cfg, Capability::BalanceSheet),
+            cashflow: Self::maybe_store(cfg, Capability::Cashflow),
+            calendar: Self::maybe_store(cfg, Capability::Calendar),
+            recommendations: Self::maybe_store(cfg, Capability::Recommendations),
+            recommendations_summary: Self::maybe_store(cfg, Capability::RecommendationsSummary),
+            upgrades_downgrades: Self::maybe_store(cfg, Capability::UpgradesDowngrades),
+            analyst_price_target: Self::maybe_store(cfg, Capability::AnalystPriceTarget),
+            major_holders: Self::maybe_store(cfg, Capability::MajorHolders),
+            institutional_holders: Self::maybe_store(cfg, Capability::InstitutionalHolders),
+            mutual_fund_holders: Self::maybe_store(cfg, Capability::MutualFundHolders),
+            insider_transactions: Self::maybe_store(cfg, Capability::InsiderTransactions),
+            insider_roster: Self::maybe_store(cfg, Capability::InsiderRoster),
+            net_share_purchase_activity: Self::maybe_store(
+                cfg,
+                Capability::NetSharePurchaseActivity,
+            ),
+            esg: Self::maybe_store(cfg, Capability::Esg),
+            news: Self::maybe_store(cfg, Capability::News),
+            options_expirations: Self::maybe_store(cfg, Capability::OptionsExpirations),
+            option_chain: Self::maybe_store(cfg, Capability::OptionChain),
+            search: Self::maybe_store(cfg, Capability::Search),
         };
         Self { inner, stores }
     }
@@ -305,8 +354,12 @@ impl borsa_core::Middleware for CachingConnector {
     fn apply(self: Box<Self>, _inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
         unreachable!("CachingConnector is already applied")
     }
-    fn name(&self) -> &'static str { "CachingMiddleware" }
-    fn config_json(&self) -> serde_json::Value { serde_json::json!({}) }
+    fn name(&self) -> &'static str {
+        "CachingMiddleware"
+    }
+    fn config_json(&self) -> serde_json::Value {
+        serde_json::json!({})
+    }
 }
 
 #[async_trait]
@@ -314,7 +367,9 @@ impl QuoteProvider for CachingConnector {
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
         if let Some(store) = &self.stores.quote {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_quote_provider()
@@ -336,7 +391,9 @@ impl ProfileProvider for CachingConnector {
     async fn profile(&self, instrument: &Instrument) -> Result<Profile, BorsaError> {
         if let Some(store) = &self.stores.profile {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_profile_provider()
@@ -358,7 +415,9 @@ impl IsinProvider for CachingConnector {
     async fn isin(&self, instrument: &Instrument) -> Result<Option<Isin>, BorsaError> {
         if let Some(store) = &self.stores.isin {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_isin_provider()
@@ -383,16 +442,10 @@ impl HistoryProvider for CachingConnector {
         req: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
         if let Some(store) = &self.stores.history {
-            let key = HistoryKey {
-                inst: InstrumentKey::from(instrument),
-                interval: IntervalKey(req.interval()),
-                range: RangeKey(req.range()),
-                include_prepost: req.include_prepost(),
-                include_actions: req.include_actions(),
-                auto_adjust: req.auto_adjust(),
-                keepna: req.keepna(),
-            };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = HistoryKey::from_request(instrument, &req);
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_history_provider()
@@ -422,7 +475,9 @@ impl EarningsProvider for CachingConnector {
     async fn earnings(&self, instrument: &Instrument) -> Result<Earnings, BorsaError> {
         if let Some(store) = &self.stores.earnings {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_earnings_provider()
@@ -447,8 +502,13 @@ impl IncomeStatementProvider for CachingConnector {
         quarterly: bool,
     ) -> Result<Vec<IncomeStatementRow>, BorsaError> {
         if let Some(store) = &self.stores.income_stmt {
-            let key = BoolByInstrumentKey { inst: InstrumentKey::from(instrument), flag: quarterly };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = BoolByInstrumentKey {
+                inst: InstrumentKey::from(instrument),
+                flag: quarterly,
+            };
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_income_statement_provider()
@@ -473,8 +533,13 @@ impl BalanceSheetProvider for CachingConnector {
         quarterly: bool,
     ) -> Result<Vec<BalanceSheetRow>, BorsaError> {
         if let Some(store) = &self.stores.balance_sheet {
-            let key = BoolByInstrumentKey { inst: InstrumentKey::from(instrument), flag: quarterly };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = BoolByInstrumentKey {
+                inst: InstrumentKey::from(instrument),
+                flag: quarterly,
+            };
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_balance_sheet_provider()
@@ -499,8 +564,13 @@ impl CashflowProvider for CachingConnector {
         quarterly: bool,
     ) -> Result<Vec<CashflowRow>, BorsaError> {
         if let Some(store) = &self.stores.cashflow {
-            let key = BoolByInstrumentKey { inst: InstrumentKey::from(instrument), flag: quarterly };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = BoolByInstrumentKey {
+                inst: InstrumentKey::from(instrument),
+                flag: quarterly,
+            };
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_cashflow_provider()
@@ -522,7 +592,9 @@ impl CalendarProvider for CachingConnector {
     async fn calendar(&self, instrument: &Instrument) -> Result<Calendar, BorsaError> {
         if let Some(store) = &self.stores.calendar {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_calendar_provider()
@@ -541,10 +613,15 @@ impl CalendarProvider for CachingConnector {
 
 #[async_trait]
 impl RecommendationsProvider for CachingConnector {
-    async fn recommendations(&self, instrument: &Instrument) -> Result<Vec<RecommendationRow>, BorsaError> {
+    async fn recommendations(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<RecommendationRow>, BorsaError> {
         if let Some(store) = &self.stores.recommendations {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_recommendations_provider()
@@ -563,10 +640,15 @@ impl RecommendationsProvider for CachingConnector {
 
 #[async_trait]
 impl RecommendationsSummaryProvider for CachingConnector {
-    async fn recommendations_summary(&self, instrument: &Instrument) -> Result<RecommendationSummary, BorsaError> {
+    async fn recommendations_summary(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<RecommendationSummary, BorsaError> {
         if let Some(store) = &self.stores.recommendations_summary {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_recommendations_summary_provider()
@@ -585,10 +667,15 @@ impl RecommendationsSummaryProvider for CachingConnector {
 
 #[async_trait]
 impl UpgradesDowngradesProvider for CachingConnector {
-    async fn upgrades_downgrades(&self, instrument: &Instrument) -> Result<Vec<UpgradeDowngradeRow>, BorsaError> {
+    async fn upgrades_downgrades(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<UpgradeDowngradeRow>, BorsaError> {
         if let Some(store) = &self.stores.upgrades_downgrades {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_upgrades_downgrades_provider()
@@ -607,10 +694,15 @@ impl UpgradesDowngradesProvider for CachingConnector {
 
 #[async_trait]
 impl AnalystPriceTargetProvider for CachingConnector {
-    async fn analyst_price_target(&self, instrument: &Instrument) -> Result<PriceTarget, BorsaError> {
+    async fn analyst_price_target(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<PriceTarget, BorsaError> {
         if let Some(store) = &self.stores.analyst_price_target {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_analyst_price_target_provider()
@@ -629,10 +721,15 @@ impl AnalystPriceTargetProvider for CachingConnector {
 
 #[async_trait]
 impl MajorHoldersProvider for CachingConnector {
-    async fn major_holders(&self, instrument: &Instrument) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
+    async fn major_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
         if let Some(store) = &self.stores.major_holders {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_major_holders_provider()
@@ -651,10 +748,15 @@ impl MajorHoldersProvider for CachingConnector {
 
 #[async_trait]
 impl InstitutionalHoldersProvider for CachingConnector {
-    async fn institutional_holders(&self, instrument: &Instrument) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
+    async fn institutional_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
         if let Some(store) = &self.stores.institutional_holders {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_institutional_holders_provider()
@@ -673,10 +775,15 @@ impl InstitutionalHoldersProvider for CachingConnector {
 
 #[async_trait]
 impl MutualFundHoldersProvider for CachingConnector {
-    async fn mutual_fund_holders(&self, instrument: &Instrument) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
+    async fn mutual_fund_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
         if let Some(store) = &self.stores.mutual_fund_holders {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_mutual_fund_holders_provider()
@@ -695,10 +802,15 @@ impl MutualFundHoldersProvider for CachingConnector {
 
 #[async_trait]
 impl InsiderTransactionsProvider for CachingConnector {
-    async fn insider_transactions(&self, instrument: &Instrument) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
+    async fn insider_transactions(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
         if let Some(store) = &self.stores.insider_transactions {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_insider_transactions_provider()
@@ -717,10 +829,15 @@ impl InsiderTransactionsProvider for CachingConnector {
 
 #[async_trait]
 impl InsiderRosterHoldersProvider for CachingConnector {
-    async fn insider_roster_holders(&self, instrument: &Instrument) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
+    async fn insider_roster_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
         if let Some(store) = &self.stores.insider_roster {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_insider_roster_holders_provider()
@@ -739,10 +856,15 @@ impl InsiderRosterHoldersProvider for CachingConnector {
 
 #[async_trait]
 impl NetSharePurchaseActivityProvider for CachingConnector {
-    async fn net_share_purchase_activity(&self, instrument: &Instrument) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
+    async fn net_share_purchase_activity(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
         if let Some(store) = &self.stores.net_share_purchase_activity {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_net_share_purchase_activity_provider()
@@ -764,7 +886,9 @@ impl EsgProvider for CachingConnector {
     async fn sustainability(&self, instrument: &Instrument) -> Result<EsgScores, BorsaError> {
         if let Some(store) = &self.stores.esg {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_esg_provider()
@@ -783,10 +907,20 @@ impl EsgProvider for CachingConnector {
 
 #[async_trait]
 impl NewsProvider for CachingConnector {
-    async fn news(&self, instrument: &Instrument, req: NewsRequest) -> Result<Vec<NewsArticle>, BorsaError> {
+    async fn news(
+        &self,
+        instrument: &Instrument,
+        req: NewsRequest,
+    ) -> Result<Vec<NewsArticle>, BorsaError> {
         if let Some(store) = &self.stores.news {
-            let key = NewsKey { inst: InstrumentKey::from(instrument), count: req.count, tab: NewsTabKey(req.tab) };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = NewsKey {
+                inst: InstrumentKey::from(instrument),
+                count: req.count,
+                tab: NewsTabKey(req.tab),
+            };
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_news_provider()
@@ -828,7 +962,9 @@ impl OptionsExpirationsProvider for CachingConnector {
     async fn options_expirations(&self, instrument: &Instrument) -> Result<Vec<i64>, BorsaError> {
         if let Some(store) = &self.stores.options_expirations {
             let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_options_expirations_provider()
@@ -847,10 +983,19 @@ impl OptionsExpirationsProvider for CachingConnector {
 
 #[async_trait]
 impl OptionChainProvider for CachingConnector {
-    async fn option_chain(&self, instrument: &Instrument, date: Option<i64>) -> Result<OptionChain, BorsaError> {
+    async fn option_chain(
+        &self,
+        instrument: &Instrument,
+        date: Option<i64>,
+    ) -> Result<OptionChain, BorsaError> {
         if let Some(store) = &self.stores.option_chain {
-            let key = OptionChainKey { inst: InstrumentKey::from(instrument), date };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = OptionChainKey {
+                inst: InstrumentKey::from(instrument),
+                date,
+            };
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_option_chain_provider()
@@ -871,8 +1016,14 @@ impl OptionChainProvider for CachingConnector {
 impl SearchProvider for CachingConnector {
     async fn search(&self, req: SearchRequest) -> Result<SearchResponse, BorsaError> {
         if let Some(store) = &self.stores.search {
-            let key = SearchKey { query: req.query().to_string(), kind: req.kind(), limit: req.limit() };
-            if let Some(v) = store.get(&key).await { return Ok((*v).clone()); }
+            let key = SearchKey {
+                query: req.query().to_string(),
+                kind: req.kind(),
+                limit: req.limit(),
+            };
+            if let Some(v) = store.get(&key).await {
+                return Ok((*v).clone());
+            }
             let inner = self
                 .inner
                 .as_search_provider()
@@ -888,5 +1039,3 @@ impl SearchProvider for CachingConnector {
             .await
     }
 }
-
-

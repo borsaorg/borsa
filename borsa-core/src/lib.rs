@@ -18,7 +18,10 @@ pub mod timeseries;
 pub mod types;
 
 pub use connector::BorsaConnector;
-pub use middleware::{Middleware, MiddlewareDescriptor, MiddlewarePosition, ValidationContext};
+pub use middleware::{
+    CallContext, CallOrigin, Middleware, MiddlewareDescriptor, MiddlewarePosition,
+    ValidationContext,
+};
 pub use timeseries::infer::{estimate_step_seconds, is_subdaily};
 pub use timeseries::merge::{dedup_actions, merge_candles_by_priority, merge_history};
 pub use timeseries::resample::{resample_to_daily, resample_to_minutes, resample_to_weekly};

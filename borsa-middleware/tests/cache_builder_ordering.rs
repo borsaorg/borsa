@@ -6,7 +6,11 @@ use borsa_mock::MockConnector;
 use borsa_types::{CacheConfig, QuotaConfig, QuotaConsumptionStrategy};
 
 const fn default_quota() -> QuotaConfig {
-    QuotaConfig { limit: 10, window: std::time::Duration::from_secs(60), strategy: QuotaConsumptionStrategy::Unit }
+    QuotaConfig {
+        limit: 10,
+        window: std::time::Duration::from_secs(60),
+        strategy: QuotaConsumptionStrategy::Unit,
+    }
 }
 
 #[tokio::test]
@@ -25,6 +29,3 @@ async fn builder_ordering_policy_is_enforced() {
     assert_eq!(names[1], "BlacklistingMiddleware");
     assert_eq!(names[2], "QuotaAwareConnector");
 }
-
-
-

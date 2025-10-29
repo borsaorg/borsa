@@ -1,9 +1,14 @@
+//! Blacklisting middleware that temporarily gates connectors after rate-limit signals.
+//!
+//! Internal orchestrator calls flagged via [`CallOrigin::Internal`](borsa_core::CallOrigin)
+//! bypass blacklist enforcement so compositional fan-outs do not poison the budget.
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use borsa_core::connector::BorsaConnector;
-use borsa_core::{BorsaError, Middleware};
+use borsa_core::{BorsaError, CallContext, CallOrigin, Middleware};
 
 /// Middleware that blacklists its inner connector for a period upon quota exhaustion.
 pub struct BlacklistingMiddleware {
@@ -127,14 +132,21 @@ impl Middleware for BlacklistingMiddleware {
         })
     }
 
-    async fn pre_call(&self) -> Result<(), BorsaError> {
+    async fn pre_call(&self, ctx: &CallContext) -> Result<(), BorsaError> {
+        if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
+            return Ok(());
+        }
         if let Some(ms) = self.blacklist_remaining_ms() {
             return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         Ok(())
     }
 
-    fn map_error(&self, err: BorsaError) -> BorsaError {
-        self.handle_error(err)
+    fn map_error(&self, err: BorsaError, ctx: &CallContext) -> BorsaError {
+        if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
+            err
+        } else {
+            self.handle_error(err)
+        }
     }
 }

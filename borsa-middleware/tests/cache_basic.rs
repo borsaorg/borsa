@@ -1,9 +1,12 @@
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use borsa_core::{AssetKind, BorsaConnector, Instrument, connector::QuoteProvider};
 use borsa_middleware::ConnectorBuilder;
-use borsa_types::CacheConfig;
 use borsa_mock::MockConnector;
+use borsa_types::CacheConfig;
 
 struct CountingQuoteConnector {
     inner: Arc<dyn BorsaConnector>,
@@ -11,22 +14,39 @@ struct CountingQuoteConnector {
 }
 
 impl CountingQuoteConnector {
-    fn new(inner: Arc<dyn BorsaConnector>, count: Arc<AtomicUsize>) -> Self { Self { inner, count } }
+    fn new(inner: Arc<dyn BorsaConnector>, count: Arc<AtomicUsize>) -> Self {
+        Self { inner, count }
+    }
 }
 
 #[async_trait::async_trait]
 impl BorsaConnector for CountingQuoteConnector {
-    fn name(&self) -> &'static str { "counting" }
-    fn vendor(&self) -> &'static str { "test" }
-    fn supports_kind(&self, _k: AssetKind) -> bool { true }
-    fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> { Some(self as &dyn QuoteProvider) }
+    fn name(&self) -> &'static str {
+        "counting"
+    }
+    fn vendor(&self) -> &'static str {
+        "test"
+    }
+    fn supports_kind(&self, _k: AssetKind) -> bool {
+        true
+    }
+    fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> {
+        Some(self as &dyn QuoteProvider)
+    }
 }
 
 #[async_trait::async_trait]
 impl QuoteProvider for CountingQuoteConnector {
-    async fn quote(&self, instrument: &borsa_core::Instrument) -> Result<borsa_core::Quote, borsa_core::BorsaError> {
+    async fn quote(
+        &self,
+        instrument: &borsa_core::Instrument,
+    ) -> Result<borsa_core::Quote, borsa_core::BorsaError> {
         self.count.fetch_add(1, Ordering::SeqCst);
-        self.inner.as_quote_provider().unwrap().quote(instrument).await
+        self.inner
+            .as_quote_provider()
+            .unwrap()
+            .quote(instrument)
+            .await
     }
 }
 
@@ -50,7 +70,9 @@ async fn caches_quote_value_second_call_hits_cache() {
     let _ = q.quote(&inst).await.unwrap();
     let _ = q.quote(&inst).await.unwrap();
 
-    assert_eq!(count.load(Ordering::SeqCst), 1, "second call should be cached");
+    assert_eq!(
+        count.load(Ordering::SeqCst),
+        1,
+        "second call should be cached"
+    );
 }
-
-

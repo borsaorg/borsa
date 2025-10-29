@@ -32,6 +32,7 @@
 //! This convention matches [`MiddlewareStack`](borsa_types::MiddlewareStack) where
 //! `layers[0]` is the outermost layer.
 
+use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -40,7 +41,9 @@ use borsa_core::{
     BorsaError, Middleware,
     middleware::{MiddlewareDescriptor, ValidationContext},
 };
-use borsa_types::{CacheConfig, MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy};
+use borsa_types::{
+    CacheConfig, MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy,
+};
 use serde_json::json;
 
 /// Generic middleware builder for composing a connector with layered wrappers.
@@ -87,8 +90,10 @@ impl ConnectorBuilder {
     #[must_use]
     pub fn with_cache(mut self, cfg: &CacheConfig) -> Self {
         self.layers.retain(|d| d.name() != "CachingMiddleware");
-        self.layers
-            .insert(0, MiddlewareDescriptor::new(crate::cache::CacheMiddleware::new(cfg.clone())));
+        self.layers.insert(
+            0,
+            MiddlewareDescriptor::new(crate::cache::CacheMiddleware::new(cfg.clone())),
+        );
         self.enforce_ordering();
         self
     }
@@ -142,10 +147,9 @@ impl ConnectorBuilder {
     #[must_use]
     pub fn with_quota(mut self, cfg: &QuotaConfig) -> Self {
         self.layers.retain(|d| d.name() != "QuotaAwareConnector");
-        self.layers
-            .push(MiddlewareDescriptor::new(crate::quota::QuotaMiddleware::new(
-                cfg.clone(),
-            )));
+        self.layers.push(MiddlewareDescriptor::new(
+            crate::quota::QuotaMiddleware::new(cfg.clone()),
+        ));
         self.enforce_ordering();
         self
     }
@@ -253,7 +257,8 @@ impl ConnectorBuilder {
                         .config
                         .get("default_max_entries")
                         .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(2000) as usize;
+                        .and_then(|n| usize::try_from(n).ok())
+                        .unwrap_or(2000);
                     let per_cap_ttl = l
                         .config
                         .get("per_capability_ttl_ms")
@@ -266,17 +271,22 @@ impl ConnectorBuilder {
                         .and_then(serde_json::Value::as_object)
                         .cloned()
                         .unwrap_or_default();
-                    let mut cfg = CacheConfig::default();
-                    cfg.default_ttl_ms = default_ttl_ms;
-                    cfg.default_max_entries = default_max_entries;
-                    cfg.per_capability_ttl_ms = per_cap_ttl
-                        .into_iter()
-                        .filter_map(|(k, v)| v.as_u64().map(|ms| (k, ms)))
-                        .collect();
-                    cfg.per_capability_max_entries = per_cap_capacity
-                        .into_iter()
-                        .filter_map(|(k, v)| v.as_u64().map(|n| (k, n as usize)))
-                        .collect();
+                    let cfg = CacheConfig {
+                        default_ttl_ms,
+                        default_max_entries,
+                        per_capability_ttl_ms: per_cap_ttl
+                            .into_iter()
+                            .filter_map(|(k, v)| v.as_u64().map(|ms| (k, ms)))
+                            .collect(),
+                        per_capability_max_entries: per_cap_capacity
+                            .into_iter()
+                            .filter_map(|(k, v)| {
+                                v.as_u64()
+                                    .and_then(|n| usize::try_from(n).ok())
+                                    .map(|n| (k, n))
+                            })
+                            .collect(),
+                    };
                     layers.push(MiddlewareDescriptor::new(
                         crate::cache::CacheMiddleware::new(cfg),
                     ));

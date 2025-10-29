@@ -1,11 +1,14 @@
 //! Quota-aware connector wrapper and implementations.
+//!
+//! Calls executed under [`CallOrigin::Internal`](borsa_core::CallOrigin) bypass quota
+//! accounting so that orchestrator fan-outs do not consume end-user budget.
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use borsa_core::connector::BorsaConnector;
-use borsa_core::{BorsaError, Middleware};
+use borsa_core::{BorsaError, CallContext, CallOrigin, Middleware};
 use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
 /// Wrapper that enforces quotas.
@@ -233,12 +236,19 @@ impl Middleware for QuotaAwareConnector {
         serde_json::json!({})
     }
 
-    async fn pre_call(&self) -> Result<(), BorsaError> {
+    async fn pre_call(&self, ctx: &CallContext) -> Result<(), BorsaError> {
+        if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
+            return Ok(());
+        }
         self.should_allow_call()
     }
 
-    fn map_error(&self, err: BorsaError) -> BorsaError {
-        Self::translate_provider_error(err)
+    fn map_error(&self, err: BorsaError, ctx: &CallContext) -> BorsaError {
+        if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
+            err
+        } else {
+            Self::translate_provider_error(err)
+        }
     }
 }
 
