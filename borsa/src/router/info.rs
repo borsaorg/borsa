@@ -86,75 +86,27 @@ impl Borsa {
                 );
 
                 let mut errors: Vec<BorsaError> = Vec::new();
-                let mut price_target = match pt_res {
+                let price_target = match pt_res {
                     Ok(v) => Some(v),
                     Err(e) => {
                         Self::push_actionable(&mut errors, e);
                         None
                     }
                 };
-                let mut recommendation_summary = match rs_res {
+                let recommendation_summary = match rs_res {
                     Ok(v) => Some(v),
                     Err(e) => {
                         Self::push_actionable(&mut errors, e);
                         None
                     }
                 };
-                let mut esg_scores = match esg_res {
+                let esg_scores = match esg_res {
                     Ok(v) => Some(v),
                     Err(e) => {
                         Self::push_actionable(&mut errors, e);
                         None
                     }
                 };
-
-                if price_target.is_none()
-                    && let Ok(v) = self.analyst_price_target(inst).await
-                {
-                    price_target = Some(v);
-                }
-                if price_target.is_none() {
-                    for c in self.ordered_for_kind(Some(*inst.kind())) {
-                        if let Some(p) = c.as_analyst_price_target_provider()
-                            && let Ok(v) = p.analyst_price_target(inst).await
-                        {
-                            price_target = Some(v);
-                            break;
-                        }
-                    }
-                }
-
-                if recommendation_summary.is_none()
-                    && let Ok(v) = self.recommendations_summary(inst).await
-                {
-                    recommendation_summary = Some(v);
-                }
-                if recommendation_summary.is_none() {
-                    for c in self.ordered_for_kind(Some(*inst.kind())) {
-                        if let Some(p) = c.as_recommendations_summary_provider()
-                            && let Ok(v) = p.recommendations_summary(inst).await
-                        {
-                            recommendation_summary = Some(v);
-                            break;
-                        }
-                    }
-                }
-
-                if esg_scores.is_none()
-                    && let Ok(v) = self.sustainability(inst).await
-                {
-                    esg_scores = Some(v);
-                }
-                if esg_scores.is_none() {
-                    for c in self.ordered_for_kind(Some(*inst.kind())) {
-                        if let Some(p) = c.as_esg_provider()
-                            && let Ok(v) = p.sustainability(inst).await
-                        {
-                            esg_scores = Some(v);
-                            break;
-                        }
-                    }
-                }
 
                 (price_target, recommendation_summary, esg_scores, errors)
             },
