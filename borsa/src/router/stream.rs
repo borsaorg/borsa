@@ -253,6 +253,7 @@ impl Borsa {
                         providers: chain_providers,
                         provider_instruments,
                         provider_allow,
+                        required_symbols: std::iter::once(sym.clone()).collect(),
                         min_backoff_ms,
                         max_backoff_ms,
                         factor,
@@ -301,6 +302,7 @@ impl Borsa {
                         providers: providers.clone(),
                         provider_instruments,
                         provider_allow,
+                        required_symbols: symbols_without_explicit.clone(),
                         min_backoff_ms,
                         max_backoff_ms,
                         factor,
@@ -335,10 +337,17 @@ impl Borsa {
 
                 let (init_tx, init_rx) = oneshot::channel();
 
+                let required_symbols: HashSet<String> = list
+                    .iter()
+                    .filter(|inst| union_symbols.contains(inst.symbol().as_str()))
+                    .map(|inst| inst.symbol().to_string())
+                    .collect();
+
                 let params = KindSupervisorParams {
                     providers,
                     provider_instruments,
                     provider_allow,
+                    required_symbols,
                     min_backoff_ms,
                     max_backoff_ms,
                     factor,
@@ -433,6 +442,8 @@ struct KindSupervisorParams {
     provider_instruments: Vec<Vec<Instrument>>,
     /// Allowed symbol set per provider, aligned by index with `providers`.
     provider_allow: Vec<HashSet<String>>,
+    /// Full set of symbols that must be covered across all providers.
+    required_symbols: HashSet<String>,
     min_backoff_ms: u64,
     max_backoff_ms: u64,
     factor: u32,
@@ -570,6 +581,7 @@ impl Borsa {
                 providers,
                 provider_instruments,
                 provider_allow,
+                required_symbols,
                 min_backoff_ms,
                 max_backoff_ms,
                 factor,
@@ -585,6 +597,8 @@ impl Borsa {
                 String,
                 chrono::DateTime<chrono::Utc>,
             > = std::collections::HashMap::new();
+            // Track which symbols are currently covered by an active subscription.
+            let mut covered_symbols: HashSet<String> = HashSet::new();
             loop {
                 let mut connected = false;
                 let mut i = start_index;
@@ -593,21 +607,50 @@ impl Borsa {
                         i += 1;
                         continue;
                     };
-                    // Skip providers with no assigned instruments.
-                    if provider_instruments
-                        .get(i)
-                        .is_none_or(std::vec::Vec::is_empty)
-                    {
+                    // Calculate which symbols still need coverage from remaining providers.
+                    let needed_symbols: HashSet<String> = required_symbols
+                        .difference(&covered_symbols)
+                        .cloned()
+                        .collect();
+                    // If all symbols are already covered, we can stop trying new providers.
+                    if needed_symbols.is_empty() {
+                        break;
+                    }
+                    // Calculate which instruments from this provider are needed to cover
+                    // symbols that aren't yet covered.
+                    let provider_symbols = provider_allow.get(i);
+                    let needed_from_provider: Vec<Instrument> =
+                        provider_symbols.map_or_else(Vec::new, |allow_set| {
+                            provider_instruments
+                                .get(i)
+                                .unwrap_or(&Vec::new())
+                                .iter()
+                                .filter(|inst| {
+                                    let sym = inst.symbol().as_str();
+                                    needed_symbols.contains(sym) && allow_set.contains(sym)
+                                })
+                                .cloned()
+                                .collect()
+                        });
+                    // Skip providers that can't cover any needed symbols.
+                    if needed_from_provider.is_empty() {
                         i += 1;
                         continue;
                     }
-                    match sp.stream_quotes(&provider_instruments[i]).await {
+                    match sp.stream_quotes(&needed_from_provider).await {
                         Ok((handle, mut prx)) => {
                             connected = true;
                             if let Some(tx) = initial_notify.take() {
                                 let _ = tx.send(Ok(()));
                             }
                             initial_errors.clear();
+
+                            // Track which symbols we're covering with this provider.
+                            let symbols_covered_by_provider: HashSet<String> = needed_from_provider
+                                .iter()
+                                .map(|inst| inst.symbol().as_str().to_string())
+                                .collect();
+                            covered_symbols.extend(symbols_covered_by_provider.iter().cloned());
 
                             let mut provider_handle = Some(handle);
                             let allowed = provider_allow.get(i);
@@ -654,6 +697,11 @@ impl Borsa {
                                                 }
                                         } else {
                                             if let Some(h) = provider_handle.take() { h.abort(); }
+                                            // Connection dropped: clear symbols covered by this provider
+                                            // so they can be retried with remaining providers.
+                                            for sym in &symbols_covered_by_provider {
+                                                covered_symbols.remove(sym);
+                                            }
                                             break;
                                         }
                                     }
