@@ -302,6 +302,46 @@ impl Borsa {
         }
 
         if scored.is_empty() {
+            // If we have streaming-capable providers for this kind, check whether strict routing
+            // rules filtered out every requested symbol. Otherwise surface the original
+            // Unsupported error.
+            let candidates: Vec<&Arc<dyn BorsaConnector>> = self
+                .connectors
+                .iter()
+                .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
+                .collect();
+
+            if !candidates.is_empty() {
+                let mut strict_rejected: Vec<String> = Vec::new();
+                for inst in instruments {
+                    let sym = inst.symbol().to_string();
+                    let ctx = RoutingContext::new(
+                        Some(inst.symbol_str()),
+                        Some(kind),
+                        inst.exchange()
+                            .cloned()
+                            .or_else(|| exchange.cloned()),
+                    );
+                    let any_allowed = candidates.iter().any(|c| {
+                        self.cfg
+                            .routing_policy
+                            .providers
+                            .provider_rank(&ctx, &c.key())
+                            .is_some()
+                    });
+                    if !any_allowed {
+                        strict_rejected.push(sym);
+                    }
+                }
+                if !strict_rejected.is_empty() {
+                    strict_rejected.sort();
+                    strict_rejected.dedup();
+                    return Err(BorsaError::StrictSymbolsRejected {
+                        rejected: strict_rejected,
+                    });
+                }
+            }
+
             return Err(BorsaError::unsupported(
                 Capability::StreamQuotes.to_string(),
             ));
