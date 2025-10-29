@@ -2,6 +2,7 @@
 
 // no extra prelude imports
 use std::time::Duration;
+use std::collections::HashMap;
 
 use crate::routing_policy::RoutingPolicy;
 use serde::{Deserialize, Serialize};
@@ -167,4 +168,61 @@ impl Default for BorsaConfig {
 
 const fn default_true() -> bool {
     true
+}
+
+/// Configuration for per-capability response caching in middleware.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    /// Default time-to-live (TTL) in milliseconds for all capabilities not explicitly overridden.
+    ///
+    /// TTL = 0 disables caching for that capability.
+    pub default_ttl_ms: u64,
+    /// Per-capability TTL overrides in milliseconds keyed by capability string (see `Capability::as_str()`).
+    ///
+    /// Example keys: "quote", "profile", "history", ...
+    #[serde(default)]
+    pub per_capability_ttl_ms: HashMap<String, u64>,
+
+    /// Default max entries for each per-capability cache when not explicitly overridden.
+    pub default_max_entries: usize,
+    /// Per-capability max entries overrides keyed by capability string.
+    #[serde(default)]
+    pub per_capability_max_entries: HashMap<String, usize>,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            // Sensible default: 5 minutes
+            default_ttl_ms: 5 * 60 * 1000,
+            per_capability_ttl_ms: HashMap::new(),
+            // Sensible default capacity per capability
+            default_max_entries: 2000,
+            per_capability_max_entries: HashMap::new(),
+        }
+    }
+}
+
+impl CacheConfig {
+    /// Returns the TTL for a capability, or `None` if caching is disabled (TTL == 0).
+    #[must_use]
+    pub fn ttl_for(&self, cap: crate::Capability) -> Option<Duration> {
+        let key = cap.as_str();
+        let ms = self
+            .per_capability_ttl_ms
+            .get(key)
+            .copied()
+            .unwrap_or(self.default_ttl_ms);
+        if ms == 0 { None } else { Some(Duration::from_millis(ms)) }
+    }
+
+    /// Returns the capacity for a capability, falling back to `default_max_entries`.
+    #[must_use]
+    pub fn capacity_for(&self, cap: crate::Capability) -> usize {
+        let key = cap.as_str();
+        self.per_capability_max_entries
+            .get(key)
+            .copied()
+            .unwrap_or(self.default_max_entries)
+    }
 }

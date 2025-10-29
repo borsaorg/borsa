@@ -13,7 +13,7 @@ pub mod routing_policy;
 pub use attribution::{Attribution, Span};
 pub use capability::Capability;
 pub use config::{
-    BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, QuotaConfig,
+    BackoffConfig, BorsaConfig, CacheConfig, FetchStrategy, MergeStrategy, QuotaConfig,
     QuotaConsumptionStrategy, QuotaState, Resampling,
 };
 pub use connector::ConnectorKey;

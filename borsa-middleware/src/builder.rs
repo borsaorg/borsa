@@ -40,7 +40,7 @@ use borsa_core::{
     BorsaError, Middleware,
     middleware::{MiddlewareDescriptor, ValidationContext},
 };
-use borsa_types::{MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy};
+use borsa_types::{CacheConfig, MiddlewareLayer, MiddlewareStack, QuotaConfig, QuotaConsumptionStrategy};
 use serde_json::json;
 
 /// Generic middleware builder for composing a connector with layered wrappers.
@@ -67,6 +67,37 @@ impl ConnectorBuilder {
             raw,
             layers: Vec::new(),
         }
+    }
+
+    /// Reorder layers to satisfy helper ordering policy:
+    /// Cache (outermost) -> Blacklist -> Quota -> others (stable among themselves).
+    fn enforce_ordering(&mut self) {
+        self.layers.sort_by_key(|d| match d.name() {
+            "CachingMiddleware" => 0,
+            "BlacklistingMiddleware" => 1,
+            "QuotaAwareConnector" => 2,
+            _ => 3,
+        });
+    }
+
+    /// Add or replace cache configuration.
+    ///
+    /// Places cache at the outermost position by policy, and reorders existing
+    /// blacklist/quota to sit inside it.
+    #[must_use]
+    pub fn with_cache(mut self, cfg: &CacheConfig) -> Self {
+        self.layers.retain(|d| d.name() != "CachingMiddleware");
+        self.layers
+            .insert(0, MiddlewareDescriptor::new(crate::cache::CacheMiddleware::new(cfg.clone())));
+        self.enforce_ordering();
+        self
+    }
+
+    /// Remove cache if present.
+    #[must_use]
+    pub fn without_cache(mut self) -> Self {
+        self.layers.retain(|d| d.name() != "CachingMiddleware");
+        self
     }
 
     /// Internal: extract existing quota config from layers if present.
@@ -111,11 +142,11 @@ impl ConnectorBuilder {
     #[must_use]
     pub fn with_quota(mut self, cfg: &QuotaConfig) -> Self {
         self.layers.retain(|d| d.name() != "QuotaAwareConnector");
-        // Insert at position 0 to make this the outermost layer
-        self.layers.insert(
-            0,
-            MiddlewareDescriptor::new(crate::quota::QuotaMiddleware::new(cfg.clone())),
-        );
+        self.layers
+            .push(MiddlewareDescriptor::new(crate::quota::QuotaMiddleware::new(
+                cfg.clone(),
+            )));
+        self.enforce_ordering();
         self
     }
 
@@ -136,11 +167,10 @@ impl ConnectorBuilder {
     #[must_use]
     pub fn with_blacklist(mut self, duration: Duration) -> Self {
         self.layers.retain(|d| d.name() != "BlacklistingMiddleware");
-        // Insert at position 0 to make this the outermost layer
-        self.layers.insert(
-            0,
-            MiddlewareDescriptor::new(crate::blacklist::BlacklistMiddleware::new(duration)),
-        );
+        self.layers.push(MiddlewareDescriptor::new(
+            crate::blacklist::BlacklistMiddleware::new(duration),
+        ));
+        self.enforce_ordering();
         self
     }
 
@@ -213,6 +243,44 @@ impl ConnectorBuilder {
         let mut layers: Vec<MiddlewareDescriptor> = Vec::new();
         for l in &stack.layers {
             match l.name.as_str() {
+                "CachingMiddleware" => {
+                    let default_ttl_ms = l
+                        .config
+                        .get("default_ttl_ms")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(300_000);
+                    let default_max_entries = l
+                        .config
+                        .get("default_max_entries")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(2000) as usize;
+                    let per_cap_ttl = l
+                        .config
+                        .get("per_capability_ttl_ms")
+                        .and_then(serde_json::Value::as_object)
+                        .cloned()
+                        .unwrap_or_default();
+                    let per_cap_capacity = l
+                        .config
+                        .get("per_capability_max_entries")
+                        .and_then(serde_json::Value::as_object)
+                        .cloned()
+                        .unwrap_or_default();
+                    let mut cfg = CacheConfig::default();
+                    cfg.default_ttl_ms = default_ttl_ms;
+                    cfg.default_max_entries = default_max_entries;
+                    cfg.per_capability_ttl_ms = per_cap_ttl
+                        .into_iter()
+                        .filter_map(|(k, v)| v.as_u64().map(|ms| (k, ms)))
+                        .collect();
+                    cfg.per_capability_max_entries = per_cap_capacity
+                        .into_iter()
+                        .filter_map(|(k, v)| v.as_u64().map(|n| (k, n as usize)))
+                        .collect();
+                    layers.push(MiddlewareDescriptor::new(
+                        crate::cache::CacheMiddleware::new(cfg),
+                    ));
+                }
                 "QuotaAwareConnector" => {
                     let limit = l
                         .config
@@ -251,7 +319,9 @@ impl ConnectorBuilder {
                 _ => {}
             }
         }
-        Self { raw, layers }
+        let mut builder = Self { raw, layers };
+        builder.enforce_ordering();
+        builder
     }
 
     /// Validate the middleware stack without building.
