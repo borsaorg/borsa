@@ -149,9 +149,13 @@ impl Borsa {
                     inst_by_sym.insert(inst.symbol().to_string(), inst.clone());
                 }
 
-                // For each requested symbol, compute its provider chain ordered by (rank, provider-order)
-                for sym in requested {
-                    if !union_symbols.contains(&sym) {
+                // Partition symbols: those with explicit preferences get individual supervisors,
+                // those without get grouped via the fallback supervisor.
+                let mut symbols_with_explicit: Vec<String> = Vec::new();
+                let mut symbols_without_explicit: HashSet<String> = HashSet::new();
+
+                for sym in &requested {
+                    if !union_symbols.contains(sym) {
                         // Symbol not eligible under current policy: do not start a stream for it.
                         continue;
                     }
@@ -180,7 +184,39 @@ impl Borsa {
                         }
                     }
 
-                    if candidates.is_empty() || !has_explicit_preference_for_sym {
+                    if candidates.is_empty() {
+                        continue;
+                    }
+                    if has_explicit_preference_for_sym {
+                        symbols_with_explicit.push(sym.clone());
+                    } else {
+                        symbols_without_explicit.insert(sym.clone());
+                    }
+                }
+
+                // Handle symbols with explicit preferences individually
+                for sym in &symbols_with_explicit {
+                    // Gather candidate providers that allow this symbol
+                    let mut candidates: Vec<(usize, Arc<dyn BorsaConnector>, usize)> = Vec::new();
+                    for (idx, p) in providers.iter().cloned().enumerate() {
+                        if !provider_symbols
+                            .get(idx)
+                            .is_some_and(|set| set.contains(sym.as_str()))
+                        {
+                            continue;
+                        }
+                        let ctx = RoutingContext::new(Some(sym.as_str()), Some(kind), ex.clone());
+                        if let Some((rank, _strict)) = self
+                            .cfg
+                            .routing_policy
+                            .providers
+                            .provider_rank(&ctx, &p.key())
+                        {
+                            candidates.push((rank, p, idx));
+                        }
+                    }
+
+                    if candidates.is_empty() {
                         continue;
                     }
 
@@ -188,7 +224,7 @@ impl Borsa {
                     candidates.sort_by_key(|(rank, _p, providers_idx)| (*rank, *providers_idx));
 
                     // Build providers and per-provider assignments for this symbol
-                    let symbol_inst = match inst_by_sym.get(&sym) {
+                    let symbol_inst = match inst_by_sym.get(sym) {
                         Some(i) => i.clone(),
                         None => continue,
                     };
@@ -215,6 +251,54 @@ impl Borsa {
                     let (init_tx, init_rx) = oneshot::channel();
                     let params = KindSupervisorParams {
                         providers: chain_providers,
+                        provider_instruments,
+                        provider_allow,
+                        min_backoff_ms,
+                        max_backoff_ms,
+                        factor,
+                        jitter_percent: u32::from(jitter_percent),
+                        initial_notify: Some(init_tx),
+                        enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
+                    };
+                    let join =
+                        Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
+                    joins.push(join);
+                    init_receivers.push(init_rx);
+                }
+
+                // Handle symbols without explicit preferences via group-level supervisor
+                if !symbols_without_explicit.is_empty() {
+                    let mut provider_instruments: Vec<Vec<Instrument>> =
+                        Vec::with_capacity(providers.len());
+                    let mut provider_allow: Vec<HashSet<String>> =
+                        Vec::with_capacity(providers.len());
+                    for allow in &provider_symbols {
+                        let assigned = list
+                            .iter()
+                            .filter(|&inst| {
+                                allow.contains(inst.symbol().as_str())
+                                    && symbols_without_explicit.contains(inst.symbol().as_str())
+                            })
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        provider_instruments.push(assigned);
+                        let filtered_allow: HashSet<String> = allow
+                            .iter()
+                            .filter(|s| symbols_without_explicit.contains(s.as_str()))
+                            .cloned()
+                            .collect();
+                        provider_allow.push(filtered_allow);
+                    }
+
+                    let min_backoff_ms = resolved_backoff.min_backoff_ms;
+                    let max_backoff_ms = resolved_backoff.max_backoff_ms;
+                    let factor = resolved_backoff.factor.max(1);
+                    let jitter_percent = resolved_backoff.jitter_percent.min(100);
+
+                    let (init_tx, init_rx) = oneshot::channel();
+
+                    let params = KindSupervisorParams {
+                        providers: providers.clone(),
                         provider_instruments,
                         provider_allow,
                         min_backoff_ms,
