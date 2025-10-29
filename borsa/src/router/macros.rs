@@ -189,7 +189,7 @@ macro_rules! borsa_router_search {
                 ));
             }
 
-            Ok(borsa_core::SearchReport { response: Some(borsa_core::SearchResponse { results: merged }), warnings: Vec::new() })
+            Ok(borsa_core::SearchReport { response: Some(borsa_core::SearchResponse { results: merged }), warnings: errors })
         }
     };
 }
