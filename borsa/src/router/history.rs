@@ -244,17 +244,18 @@ impl Borsa {
                 msg: "Provider returned inconsistent currency data".to_string(),
             };
         }
-        let mut counts: HashMap<Currency, usize> = HashMap::new();
-        for v in per_provider_currency.values() {
-            if let CurrencyState::Consistent(cur) = v {
-                *counts.entry(cur.clone()).or_insert(0) += 1;
-            }
-        }
-        let majority = counts.into_iter().max_by_key(|(_, c)| *c).map(|(k, _)| k);
-        if let Some(maj) = majority
-            && let Some(bad_name) = per_provider_currency.iter().find_map(|(n, v)| match v {
-                CurrencyState::Consistent(cur) if cur != &maj => Some(*n),
+        let reference_currency = results.iter().find_map(|(name, _)| {
+            per_provider_currency.get(name).and_then(|v| match v {
+                CurrencyState::Consistent(cur) => Some(cur.clone()),
                 _ => None,
+            })
+        });
+        if let Some(ref_cur) = reference_currency
+            && let Some(bad_name) = results.iter().find_map(|(name, _)| {
+                per_provider_currency.get(name).and_then(|v| match v {
+                    CurrencyState::Consistent(cur) if *cur != ref_cur => Some(*name),
+                    _ => None,
+                })
             })
         {
             return BorsaError::Connector {
