@@ -18,8 +18,8 @@ impl YfConnector {
     pub fn rate_limited() -> YfConnectorBuilder {
         let raw: Arc<dyn BorsaConnector> = Arc::new(Self::new_default());
         let cfg = QuotaConfig {
-            // 12 per minute -> ~1 per 5 seconds when evenly spread
-            limit: 12,
+            // 15 per minute -> ~1 per 4 seconds when evenly spread
+            limit: 15,
             window: Duration::from_secs(60),
             strategy: QuotaConsumptionStrategy::EvenSpreadHourly,
         };
