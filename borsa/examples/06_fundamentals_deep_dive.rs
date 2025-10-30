@@ -1,19 +1,21 @@
 mod common;
 use borsa::Borsa;
-use borsa_core::{AssetKind, Instrument};
+use borsa_core::{AssetKind, Instrument, Money};
 use common::get_connector;
 
-fn fmt_money(v: &Option<borsa_core::Money>) -> String {
+fn fmt_money(v: Option<&Money>) -> String {
     v.as_ref()
-        .map(|m| m.format())
-        .unwrap_or_else(|| "<none>".to_string())
+        .map_or_else(|| "<none>".to_string(), |m| m.format())
 }
 
 fn fmt_date(ts: Option<chrono::DateTime<chrono::Utc>>) -> String {
-    ts.map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|| "<none>".to_string())
+    ts.map_or_else(
+        || "<none>".to_string(),
+        |d| d.format("%Y-%m-%d").to_string(),
+    )
 }
 
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1) Build Borsa with the examples connector (rate-limited YF by default; Mock in CI)
@@ -57,15 +59,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(
                     "Latest Annual ({}): revenue={}, earnings={}",
                     latest.year,
-                    fmt_money(&latest.revenue),
-                    fmt_money(&latest.earnings)
+                    fmt_money(latest.revenue.as_ref()),
+                    fmt_money(latest.earnings.as_ref())
                 );
             }
             if !e.quarterly_eps.is_empty() {
                 println!("Recent Quarterly EPS (actual vs estimate):");
                 for row in e.quarterly_eps.iter().rev().take(4) {
-                    let act = row.actual.as_ref().map(|m| m.format()).unwrap_or_else(|| "<none>".to_string());
-                    let est = row.estimate.as_ref().map(|m| m.format()).unwrap_or_else(|| "<none>".to_string());
+                    let act = row
+                        .actual
+                        .as_ref()
+                        .map_or_else(|| "<none>".to_string(), borsa_core::Money::format);
+                    let est = row
+                        .estimate
+                        .as_ref()
+                        .map_or_else(|| "<none>".to_string(), borsa_core::Money::format);
                     println!(" - {}: {} vs {}", row.period, act, est);
                 }
             }
@@ -81,26 +89,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(
                     "Annual (latest {}): revenue={}, gross_profit={}, operating_income={}, net_income={}",
                     latest.period,
-                    fmt_money(&latest.total_revenue),
-                    fmt_money(&latest.gross_profit),
-                    fmt_money(&latest.operating_income),
-                    fmt_money(&latest.net_income),
+                    fmt_money(latest.total_revenue.as_ref()),
+                    fmt_money(latest.gross_profit.as_ref()),
+                    fmt_money(latest.operating_income.as_ref()),
+                    fmt_money(latest.net_income.as_ref()),
                 );
             }
             if let Some(latest) = quarterly.first() {
                 println!(
                     "Quarterly (latest {}): revenue={}, gross_profit={}, operating_income={}, net_income={}",
                     latest.period,
-                    fmt_money(&latest.total_revenue),
-                    fmt_money(&latest.gross_profit),
-                    fmt_money(&latest.operating_income),
-                    fmt_money(&latest.net_income),
+                    fmt_money(latest.total_revenue.as_ref()),
+                    fmt_money(latest.gross_profit.as_ref()),
+                    fmt_money(latest.operating_income.as_ref()),
+                    fmt_money(latest.net_income.as_ref()),
                 );
             }
         }
         (a, q) => {
-            if let Err(e) = a { println!("(annual income statement unavailable: {e})"); }
-            if let Err(e) = q { println!("(quarterly income statement unavailable: {e})"); }
+            if let Err(e) = a {
+                println!("(annual income statement unavailable: {e})");
+            }
+            if let Err(e) = q {
+                println!("(quarterly income statement unavailable: {e})");
+            }
         }
     }
 
@@ -112,28 +124,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(
                     "Annual (latest {}): total_assets={}, total_liabilities={}, total_equity={}, cash={}, long_term_debt={}",
                     latest.period,
-                    fmt_money(&latest.total_assets),
-                    fmt_money(&latest.total_liabilities),
-                    fmt_money(&latest.total_equity),
-                    fmt_money(&latest.cash),
-                    fmt_money(&latest.long_term_debt),
+                    fmt_money(latest.total_assets.as_ref()),
+                    fmt_money(latest.total_liabilities.as_ref()),
+                    fmt_money(latest.total_equity.as_ref()),
+                    fmt_money(latest.cash.as_ref()),
+                    fmt_money(latest.long_term_debt.as_ref()),
                 );
             }
             if let Some(latest) = quarterly.first() {
                 println!(
                     "Quarterly (latest {}): total_assets={}, total_liabilities={}, total_equity={}, cash={}, long_term_debt={}",
                     latest.period,
-                    fmt_money(&latest.total_assets),
-                    fmt_money(&latest.total_liabilities),
-                    fmt_money(&latest.total_equity),
-                    fmt_money(&latest.cash),
-                    fmt_money(&latest.long_term_debt),
+                    fmt_money(latest.total_assets.as_ref()),
+                    fmt_money(latest.total_liabilities.as_ref()),
+                    fmt_money(latest.total_equity.as_ref()),
+                    fmt_money(latest.cash.as_ref()),
+                    fmt_money(latest.long_term_debt.as_ref()),
                 );
             }
         }
         (a, q) => {
-            if let Err(e) = a { println!("(annual balance sheet unavailable: {e})"); }
-            if let Err(e) = q { println!("(quarterly balance sheet unavailable: {e})"); }
+            if let Err(e) = a {
+                println!("(annual balance sheet unavailable: {e})");
+            }
+            if let Err(e) = q {
+                println!("(quarterly balance sheet unavailable: {e})");
+            }
         }
     }
 
@@ -145,26 +161,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(
                     "Annual (latest {}): operating_cashflow={}, capex={}, free_cash_flow={}, net_income={}",
                     latest.period,
-                    fmt_money(&latest.operating_cashflow),
-                    fmt_money(&latest.capital_expenditures),
-                    fmt_money(&latest.free_cash_flow),
-                    fmt_money(&latest.net_income),
+                    fmt_money(latest.operating_cashflow.as_ref()),
+                    fmt_money(latest.capital_expenditures.as_ref()),
+                    fmt_money(latest.free_cash_flow.as_ref()),
+                    fmt_money(latest.net_income.as_ref()),
                 );
             }
             if let Some(latest) = quarterly.first() {
                 println!(
                     "Quarterly (latest {}): operating_cashflow={}, capex={}, free_cash_flow={}, net_income={}",
                     latest.period,
-                    fmt_money(&latest.operating_cashflow),
-                    fmt_money(&latest.capital_expenditures),
-                    fmt_money(&latest.free_cash_flow),
-                    fmt_money(&latest.net_income),
+                    fmt_money(latest.operating_cashflow.as_ref()),
+                    fmt_money(latest.capital_expenditures.as_ref()),
+                    fmt_money(latest.free_cash_flow.as_ref()),
+                    fmt_money(latest.net_income.as_ref()),
                 );
             }
         }
         (a, q) => {
-            if let Err(e) = a { println!("(annual cash flow unavailable: {e})"); }
-            if let Err(e) = q { println!("(quarterly cash flow unavailable: {e})"); }
+            if let Err(e) = a {
+                println!("(annual cash flow unavailable: {e})");
+            }
+            if let Err(e) = q {
+                println!("(quarterly cash flow unavailable: {e})");
+            }
         }
     }
 
