@@ -1,175 +1,186 @@
 mod common;
-use async_trait::async_trait;
 use borsa::Borsa;
-use borsa_core::{
-    AssetKind, BorsaError, Candle, Currency, HistoryRequest, HistoryResponse, Instrument, Money,
-    connector::{BorsaConnector, HistoryProvider},
-};
+use borsa_core::{AssetKind, Instrument};
 use common::get_connector;
 
-use std::sync::Arc;
-
-/// A simple mock connector to demonstrate merging.
-/// It provides a short, predefined history for a specific symbol.
-struct MockConnector;
-
-#[async_trait]
-impl BorsaConnector for MockConnector {
-    fn name(&self) -> &'static str {
-        "mock-connector"
-    }
-
-    fn supports_kind(&self, _kind: AssetKind) -> bool {
-        true
-    }
-
-    fn as_history_provider(&self) -> Option<&dyn HistoryProvider> {
-        Some(self as &dyn HistoryProvider)
-    }
+fn fmt_money(v: &Option<borsa_core::Money>) -> String {
+    v.as_ref()
+        .map(|m| m.format())
+        .unwrap_or_else(|| "<none>".to_string())
 }
 
-#[async_trait]
-impl HistoryProvider for MockConnector {
-    async fn history(
-        &self,
-        _i: &Instrument,
-        _r: HistoryRequest,
-    ) -> Result<HistoryResponse, BorsaError> {
-        println!("-> MockConnector providing its historical data...");
-        Ok(HistoryResponse {
-            candles: {
-                // Generate two daily candles within the last 5 days (aligned to 00:00 UTC)
-                let today = chrono::Utc::now().date_naive();
-                let ts_a = today
-                    .checked_sub_days(chrono::Days::new(4))
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap()
-                    .and_utc();
-                let ts_b = today
-                    .checked_sub_days(chrono::Days::new(2))
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap()
-                    .and_utc();
-
-                vec![
-                    Candle {
-                        ts: ts_a,
-                        open: Money::from_canonical_str(
-                            "10.0",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        high: Money::from_canonical_str(
-                            "12.0",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        low: Money::from_canonical_str(
-                            "9.0",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        close: Money::from_canonical_str(
-                            "11.5",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        close_unadj: None,
-                        volume: Some(1000),
-                    },
-                    Candle {
-                        ts: ts_b,
-                        open: Money::from_canonical_str(
-                            "11.5",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        high: Money::from_canonical_str(
-                            "14.0",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        low: Money::from_canonical_str(
-                            "11.0",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        close: Money::from_canonical_str(
-                            "13.5",
-                            Currency::Iso(borsa_core::IsoCurrency::USD),
-                        )
-                        .unwrap(),
-                        close_unadj: None,
-                        volume: Some(1200),
-                    },
-                ]
-            },
-            actions: vec![],
-            adjusted: true,
-            meta: None,
-        })
-    }
-
-    fn supported_history_intervals(&self, _i: AssetKind) -> &'static [borsa_core::Interval] {
-        &[borsa_core::Interval::D1]
-    }
+fn fmt_date(ts: Option<chrono::DateTime<chrono::Utc>>) -> String {
+    ts.map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "<none>".to_string())
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Create instances of our connectors.
-    let yf_connector = get_connector();
-    let mock_connector = Arc::new(MockConnector);
+    // 1) Build Borsa with the examples connector (rate-limited YF by default; Mock in CI)
+    let connector = get_connector();
+    let borsa = Borsa::builder().with_connector(connector).build()?;
 
-    // 2. Build Borsa and set a priority order for history.
-    // We'll tell Borsa to prefer our mock connector for history data, then yfinance, then Alpha Vantage.
-    let borsa = Borsa::builder()
-        .with_connector(yf_connector.clone())
-        .with_connector(mock_connector.clone())
-        .routing_policy(
-            borsa_core::RoutingPolicyBuilder::new()
-                .providers_for_kind(
-                    AssetKind::Equity,
-                    &[mock_connector.key(), yf_connector.key()],
-                )
-                .build(),
-        )
-        .build()?;
+    // 2) Choose an instrument
+    let inst = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
+    println!("Fetching fundamentals for {}...", inst.symbol());
 
-    // 3. Define the instrument and a request for recent history.
-    let instrument =
-        Instrument::from_symbol("GOOG", AssetKind::Equity).expect("valid instrument symbol");
-    let req =
-        HistoryRequest::try_from_range(borsa_core::Range::D5, borsa_core::Interval::D1).unwrap();
+    // 3) Fetch all fundamentals concurrently
+    let (
+        earnings_res,
+        calendar_res,
+        inc_ann_res,
+        inc_q_res,
+        bs_ann_res,
+        bs_q_res,
+        cf_ann_res,
+        cf_q_res,
+    ) = tokio::join!(
+        borsa.earnings(&inst),
+        borsa.calendar(&inst),
+        borsa.income_statement(&inst, false),
+        borsa.income_statement(&inst, true),
+        borsa.balance_sheet(&inst, false),
+        borsa.balance_sheet(&inst, true),
+        borsa.cashflow(&inst, false),
+        borsa.cashflow(&inst, true),
+    );
 
-    println!("Fetching 5-day history for {}...", instrument.symbol());
-    println!("Priority: [mock-connector, borsa-yfinance]");
+    println!("\n========================================");
+    println!("Fundamentals Deep Dive for {}", inst.symbol());
+    println!("========================================\n");
 
-    // 4. Fetch history *with attribution* to see how Borsa merged the data.
-    let (history, attribution) = borsa.history_with_attribution(&instrument, req).await?;
-
-    // 5. Print the results.
-    println!("\n## Merged History ({} candles):", history.candles.len());
-    for candle in history.candles.iter().take(10) {
-        // Print first 10
-        println!(
-            " - TS: {}, Close: ${:.2}",
-            candle.ts.timestamp(),
-            candle.close.amount()
-        );
+    // Earnings
+    println!("## Earnings");
+    match earnings_res {
+        Ok(e) => {
+            if let Some(latest) = e.yearly.last() {
+                println!(
+                    "Latest Annual ({}): revenue={}, earnings={}",
+                    latest.year,
+                    fmt_money(&latest.revenue),
+                    fmt_money(&latest.earnings)
+                );
+            }
+            if !e.quarterly_eps.is_empty() {
+                println!("Recent Quarterly EPS (actual vs estimate):");
+                for row in e.quarterly_eps.iter().rev().take(4) {
+                    let act = row.actual.as_ref().map(|m| m.format()).unwrap_or_else(|| "<none>".to_string());
+                    let est = row.estimate.as_ref().map(|m| m.format()).unwrap_or_else(|| "<none>".to_string());
+                    println!(" - {}: {} vs {}", row.period, act, est);
+                }
+            }
+        }
+        Err(err) => println!("(earnings unavailable: {err})"),
     }
-    if history.candles.len() > 10 {
-        println!("... and more");
+
+    // Income Statement
+    println!("\n## Income Statement");
+    match (inc_ann_res, inc_q_res) {
+        (Ok(annual), Ok(quarterly)) => {
+            if let Some(latest) = annual.first() {
+                println!(
+                    "Annual (latest {}): revenue={}, gross_profit={}, operating_income={}, net_income={}",
+                    latest.period,
+                    fmt_money(&latest.total_revenue),
+                    fmt_money(&latest.gross_profit),
+                    fmt_money(&latest.operating_income),
+                    fmt_money(&latest.net_income),
+                );
+            }
+            if let Some(latest) = quarterly.first() {
+                println!(
+                    "Quarterly (latest {}): revenue={}, gross_profit={}, operating_income={}, net_income={}",
+                    latest.period,
+                    fmt_money(&latest.total_revenue),
+                    fmt_money(&latest.gross_profit),
+                    fmt_money(&latest.operating_income),
+                    fmt_money(&latest.net_income),
+                );
+            }
+        }
+        (a, q) => {
+            if let Err(e) = a { println!("(annual income statement unavailable: {e})"); }
+            if let Err(e) = q { println!("(quarterly income statement unavailable: {e})"); }
+        }
     }
 
-    println!("\n## Data Attribution:");
-    for (name, span) in &attribution.spans {
-        println!(
-            " - Connector '{}' provided data from TS {} to {}.",
-            name, span.start, span.end
-        );
+    // Balance Sheet
+    println!("\n## Balance Sheet");
+    match (bs_ann_res, bs_q_res) {
+        (Ok(annual), Ok(quarterly)) => {
+            if let Some(latest) = annual.first() {
+                println!(
+                    "Annual (latest {}): total_assets={}, total_liabilities={}, total_equity={}, cash={}, long_term_debt={}",
+                    latest.period,
+                    fmt_money(&latest.total_assets),
+                    fmt_money(&latest.total_liabilities),
+                    fmt_money(&latest.total_equity),
+                    fmt_money(&latest.cash),
+                    fmt_money(&latest.long_term_debt),
+                );
+            }
+            if let Some(latest) = quarterly.first() {
+                println!(
+                    "Quarterly (latest {}): total_assets={}, total_liabilities={}, total_equity={}, cash={}, long_term_debt={}",
+                    latest.period,
+                    fmt_money(&latest.total_assets),
+                    fmt_money(&latest.total_liabilities),
+                    fmt_money(&latest.total_equity),
+                    fmt_money(&latest.cash),
+                    fmt_money(&latest.long_term_debt),
+                );
+            }
+        }
+        (a, q) => {
+            if let Err(e) = a { println!("(annual balance sheet unavailable: {e})"); }
+            if let Err(e) = q { println!("(quarterly balance sheet unavailable: {e})"); }
+        }
+    }
+
+    // Cash Flow
+    println!("\n## Cash Flow");
+    match (cf_ann_res, cf_q_res) {
+        (Ok(annual), Ok(quarterly)) => {
+            if let Some(latest) = annual.first() {
+                println!(
+                    "Annual (latest {}): operating_cashflow={}, capex={}, free_cash_flow={}, net_income={}",
+                    latest.period,
+                    fmt_money(&latest.operating_cashflow),
+                    fmt_money(&latest.capital_expenditures),
+                    fmt_money(&latest.free_cash_flow),
+                    fmt_money(&latest.net_income),
+                );
+            }
+            if let Some(latest) = quarterly.first() {
+                println!(
+                    "Quarterly (latest {}): operating_cashflow={}, capex={}, free_cash_flow={}, net_income={}",
+                    latest.period,
+                    fmt_money(&latest.operating_cashflow),
+                    fmt_money(&latest.capital_expenditures),
+                    fmt_money(&latest.free_cash_flow),
+                    fmt_money(&latest.net_income),
+                );
+            }
+        }
+        (a, q) => {
+            if let Err(e) = a { println!("(annual cash flow unavailable: {e})"); }
+            if let Err(e) = q { println!("(quarterly cash flow unavailable: {e})"); }
+        }
+    }
+
+    // Calendar
+    println!("\n## Calendar");
+    match calendar_res {
+        Ok(c) => {
+            let next_earnings = c.earnings_dates.first().copied();
+            println!(
+                "Next Earnings: {}\nEx-Dividend: {}\nDividend Pay: {}",
+                fmt_date(next_earnings),
+                fmt_date(c.ex_dividend_date),
+                fmt_date(c.dividend_payment_date)
+            );
+        }
+        Err(err) => println!("(calendar unavailable: {err})"),
     }
 
     Ok(())
