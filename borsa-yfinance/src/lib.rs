@@ -692,6 +692,7 @@ impl NetSharePurchaseActivityProvider for YfConnector {
     }
 }
 
+// Currently disabled because the endpoint disappeared from the Yahoo Finance API.
 #[async_trait]
 impl EsgProvider for YfConnector {
     #[cfg_attr(
@@ -813,7 +814,9 @@ impl BorsaConnector for YfConnector {
     }
 
     fn as_esg_provider(&self) -> Option<&dyn borsa_core::connector::EsgProvider> {
-        Some(self as &dyn EsgProvider)
+        None
+        // Currently disabled because the endpoint disappeared from the Yahoo Finance API.
+        // Some(self as &dyn EsgProvider)
     }
 
     fn as_news_provider(&self) -> Option<&dyn borsa_core::connector::NewsProvider> {
