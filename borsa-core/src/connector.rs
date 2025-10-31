@@ -629,12 +629,12 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 req: $crate::HistoryRequest,
             ) -> Result<$crate::HistoryResponse, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::History);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_history_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("history"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::History);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .history(instrument, req)
                     .await
@@ -658,12 +658,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Quote, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Quote);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_quote_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("quote"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Quote);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .quote(instrument)
                     .await
@@ -677,12 +677,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Earnings, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Earnings);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_earnings_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("earnings"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Earnings);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .earnings(instrument)
                     .await
@@ -697,12 +697,12 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 quarterly: bool,
             ) -> Result<Vec<$crate::IncomeStatementRow>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::IncomeStatement);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_income_statement_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("income_statement"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::IncomeStatement);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .income_statement(instrument, quarterly)
                     .await
@@ -717,12 +717,12 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 quarterly: bool,
             ) -> Result<Vec<$crate::BalanceSheetRow>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::BalanceSheet);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_balance_sheet_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("balance_sheet"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::BalanceSheet);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .balance_sheet(instrument, quarterly)
                     .await
@@ -737,12 +737,12 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 quarterly: bool,
             ) -> Result<Vec<$crate::CashflowRow>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Cashflow);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_cashflow_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("cashflow"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Cashflow);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .cashflow(instrument, quarterly)
                     .await
@@ -756,12 +756,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Calendar, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Calendar);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_calendar_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("calendar"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Calendar);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .calendar(instrument)
                     .await
@@ -775,12 +775,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::RecommendationRow>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Recommendations);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_recommendations_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("recommendations"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Recommendations);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .recommendations(instrument)
                     .await
@@ -794,14 +794,14 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::RecommendationSummary, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new(
-                    $crate::Capability::RecommendationsSummary,
-                );
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_recommendations_summary_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("recommendations_summary"))?;
+                let ctx = $crate::middleware::CallContext::new(
+                    $crate::Capability::RecommendationsSummary,
+                );
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .recommendations_summary(instrument)
                     .await
@@ -815,13 +815,13 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::UpgradeDowngradeRow>, $crate::BorsaError> {
-                let ctx =
-                    $crate::middleware::CallContext::new($crate::Capability::UpgradesDowngrades);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_upgrades_downgrades_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("upgrades_downgrades"))?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::UpgradesDowngrades);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .upgrades_downgrades(instrument)
                     .await
@@ -835,13 +835,13 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::PriceTarget, $crate::BorsaError> {
-                let ctx =
-                    $crate::middleware::CallContext::new($crate::Capability::AnalystPriceTarget);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_analyst_price_target_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("analyst_price_target"))?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::AnalystPriceTarget);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .analyst_price_target(instrument)
                     .await
@@ -855,12 +855,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::MajorHolder>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::MajorHolders);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_major_holders_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("major_holders"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::MajorHolders);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .major_holders(instrument)
                     .await
@@ -874,13 +874,13 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InstitutionalHolder>, $crate::BorsaError> {
-                let ctx =
-                    $crate::middleware::CallContext::new($crate::Capability::InstitutionalHolders);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_institutional_holders_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("institutional_holders"))?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::InstitutionalHolders);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .institutional_holders(instrument)
                     .await
@@ -894,13 +894,13 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InstitutionalHolder>, $crate::BorsaError> {
-                let ctx =
-                    $crate::middleware::CallContext::new($crate::Capability::MutualFundHolders);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_mutual_fund_holders_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("mutual_fund_holders"))?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::MutualFundHolders);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .mutual_fund_holders(instrument)
                     .await
@@ -914,13 +914,13 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InsiderTransaction>, $crate::BorsaError> {
-                let ctx =
-                    $crate::middleware::CallContext::new($crate::Capability::InsiderTransactions);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_insider_transactions_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("insider_transactions"))?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::InsiderTransactions);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .insider_transactions(instrument)
                     .await
@@ -934,12 +934,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<$crate::InsiderRosterHolder>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::InsiderRoster);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_insider_roster_holders_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("insider_roster_holders"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::InsiderRoster);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .insider_roster_holders(instrument)
                     .await
@@ -953,16 +953,16 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Option<$crate::NetSharePurchaseActivity>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new(
-                    $crate::Capability::NetSharePurchaseActivity,
-                );
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_net_share_purchase_activity_provider()
                     .ok_or_else(|| {
                         $crate::BorsaError::unsupported("net_share_purchase_activity")
                     })?;
+                let ctx = $crate::middleware::CallContext::new(
+                    $crate::Capability::NetSharePurchaseActivity,
+                );
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .net_share_purchase_activity(instrument)
                     .await
@@ -976,12 +976,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::Profile, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Profile);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_profile_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("profile"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Profile);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .profile(instrument)
                     .await
@@ -995,12 +995,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Option<$crate::Isin>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Isin);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_isin_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("isin"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Isin);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .isin(instrument)
                     .await
@@ -1014,12 +1014,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 req: $crate::SearchRequest,
             ) -> Result<$crate::SearchResponse, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Search);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_search_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("search"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Search);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .search(req)
                     .await
@@ -1033,12 +1033,12 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<$crate::EsgScores, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::Esg);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_esg_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("sustainability"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::Esg);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .sustainability(instrument)
                     .await
@@ -1053,12 +1053,12 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 req: $crate::NewsRequest,
             ) -> Result<Vec<$crate::types::NewsArticle>, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::News);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_news_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("news"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::News);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .news(instrument, req)
                     .await
@@ -1072,13 +1072,13 @@ macro_rules! borsa_delegate_provider_impls {
                 &self,
                 instrument: &$crate::Instrument,
             ) -> Result<Vec<i64>, $crate::BorsaError> {
-                let ctx =
-                    $crate::middleware::CallContext::new($crate::Capability::OptionsExpirations);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_options_expirations_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("options_expirations"))?;
+                let ctx =
+                    $crate::middleware::CallContext::new($crate::Capability::OptionsExpirations);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .options_expirations(instrument)
                     .await
@@ -1093,12 +1093,12 @@ macro_rules! borsa_delegate_provider_impls {
                 instrument: &$crate::Instrument,
                 date: Option<i64>,
             ) -> Result<$crate::OptionChain, $crate::BorsaError> {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::OptionChain);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_option_chain_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("option_chain"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::OptionChain);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .option_chain(instrument, date)
                     .await
@@ -1118,12 +1118,12 @@ macro_rules! borsa_delegate_provider_impls {
                 ),
                 $crate::BorsaError,
             > {
-                let ctx = $crate::middleware::CallContext::new($crate::Capability::StreamQuotes);
-                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 let inner = self
                     .$inner
                     .as_stream_provider()
                     .ok_or_else(|| $crate::BorsaError::unsupported("stream_quotes"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::StreamQuotes);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .stream_quotes(instruments)
                     .await
