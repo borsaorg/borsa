@@ -19,6 +19,7 @@ use borsa_core::{
     },
 };
 use borsa_core::{NewsRequest, SearchRequest, SearchResponse, SearchResult};
+use tokio::sync::Mutex;
 use tokio::time::{Duration, sleep};
 
 /// Simple in-memory connector used by integration tests.
@@ -44,6 +45,8 @@ pub struct MockConnector {
     pub stream_updates: Option<Vec<borsa_core::QuoteUpdate>>,
     pub stream_start_error: Option<&'static str>,
     pub history_intervals: &'static [borsa_core::Interval],
+    // Optional scripted steps applied per stream_quotes call (in order).
+    pub stream_steps: Option<Arc<Mutex<Vec<StreamStep>>>>,
 
     // Optional closures to customize behavior per test
     pub quote_fn: Option<Arc<dyn Fn(&Instrument) -> Result<Quote, BorsaError> + Send + Sync>>,
@@ -112,6 +115,7 @@ impl Default for MockConnector {
             stream_updates: None,
             stream_start_error: None,
             history_intervals: DEFAULT_HISTORY_INTERVALS,
+            stream_steps: None,
 
             quote_fn: None,
             history_fn: None,
@@ -276,6 +280,12 @@ impl AnalystPriceTargetProvider for MockConnector {
     }
 }
 
+#[derive(Clone)]
+pub enum StreamStep {
+    StartError(&'static str),
+    Updates(Vec<borsa_core::QuoteUpdate>),
+}
+
 #[async_trait]
 impl StreamProvider for MockConnector {
     async fn stream_quotes(
@@ -288,26 +298,58 @@ impl StreamProvider for MockConnector {
         ),
         BorsaError,
     > {
-        if let Some(msg) = self.stream_start_error {
-            return Err(BorsaError::Other(msg.to_string()));
-        }
-        let updates = self
-            .stream_updates
-            .clone()
-            .ok_or_else(|| BorsaError::unsupported("stream"))?;
+        // Resolve scripted behavior first, falling back to static config
+        let resolved = if let Some(steps) = &self.stream_steps {
+            let mut guard = steps.lock().await;
+            if guard.is_empty() {
+                None
+            } else {
+                Some(guard.remove(0))
+            }
+        } else {
+            None
+        };
+
+        let updates = match resolved {
+            Some(StreamStep::StartError(msg)) => {
+                return Err(BorsaError::Other(msg.to_string()));
+            }
+            Some(StreamStep::Updates(u)) => u,
+            None => {
+                if let Some(msg) = self.stream_start_error {
+                    return Err(BorsaError::Other(msg.to_string()));
+                }
+                self.stream_updates
+                    .clone()
+                    .ok_or_else(|| BorsaError::unsupported("stream"))?
+            }
+        };
 
         let allow: std::collections::HashSet<String> =
             instruments.iter().map(|i| i.symbol().to_string()).collect();
 
         let (tx, rx) = tokio::sync::mpsc::channel::<borsa_core::QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let delay_ms = self.delay_ms;
         let join = tokio::spawn(async move {
             for u in updates {
                 if !allow.is_empty() && !allow.contains(u.symbol.as_str()) {
                     continue;
                 }
-                if tx.send(u).await.is_err() {
-                    return;
+                tokio::select! {
+                    biased;
+                    _ = &mut stop_rx => {
+                        return;
+                    }
+                    () = async {
+                        if delay_ms > 0 {
+                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        }
+                    } => {
+                        if tx.send(u).await.is_err() {
+                            return;
+                        }
+                    }
                 }
             }
             let _ = tokio::time::timeout(Duration::from_millis(50), &mut stop_rx).await;
@@ -632,6 +674,7 @@ pub struct MockConnectorBuilder {
         Option<Arc<dyn Fn(&Instrument) -> Result<PriceTarget, BorsaError> + Send + Sync>>,
     stream_updates: Option<Vec<borsa_core::QuoteUpdate>>,
     stream_start_error: Option<&'static str>,
+    stream_steps: Option<Arc<Mutex<Vec<StreamStep>>>>,
 
     // Analysis
     recommendations_fn: Option<
@@ -678,6 +721,7 @@ impl MockConnectorBuilder {
             analyst_price_target_fn: None,
             stream_updates: None,
             stream_start_error: None,
+            stream_steps: None,
 
             recommendations_fn: None,
             recommendations_summary_fn: None,
@@ -711,6 +755,10 @@ impl MockConnectorBuilder {
     }
     pub fn with_stream_updates(mut self, updates: Vec<borsa_core::QuoteUpdate>) -> Self {
         self.stream_updates = Some(updates);
+        self
+    }
+    pub fn with_stream_steps(mut self, steps: Vec<StreamStep>) -> Self {
+        self.stream_steps = Some(Arc::new(Mutex::new(steps)));
         self
     }
     pub fn will_fail_stream_start(mut self, msg: &'static str) -> Self {
@@ -955,6 +1003,7 @@ impl MockConnectorBuilder {
             stream_updates: self.stream_updates,
             stream_start_error: self.stream_start_error,
             history_intervals: self.history_intervals,
+            stream_steps: self.stream_steps,
             quote_fn: self.quote_fn,
             history_fn: self.history_fn,
             search_fn: self.search_fn,

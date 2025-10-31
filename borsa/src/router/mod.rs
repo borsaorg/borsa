@@ -15,4 +15,6 @@ pub mod stream;
 
 pub mod util;
 
+pub mod streaming;
+
 // re-export core for internal use if needed

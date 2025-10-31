@@ -1,15 +1,14 @@
+use crate::router::streaming::{
+    EligibleStreamProviders, KindSupervisorParams, collapse_stream_errors, spawn_kind_supervisor,
+};
 use crate::{BackoffConfig, Borsa};
 use borsa_core::{
-    AssetKind, BorsaConnector, BorsaError, Capability, Exchange, Instrument, QuoteUpdate,
-    RoutingContext, stream::StreamHandle,
+    AssetKind, BorsaConnector, BorsaError, Exchange, Instrument, QuoteUpdate, RoutingContext,
+    stream::StreamHandle,
 };
-use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio::task::JoinHandle;
-
-type StreamProviderScore = (usize, usize, Arc<dyn BorsaConnector>, HashSet<String>);
 
 impl Borsa {
     /// Start streaming quotes with automatic backoff and provider failover.
@@ -143,12 +142,6 @@ impl Borsa {
             }
 
             if group_has_explicit {
-                // Map instruments by symbol for quick lookup
-                let mut inst_by_sym: HashMap<String, Instrument> = HashMap::new();
-                for inst in &list {
-                    inst_by_sym.insert(inst.symbol().to_string(), inst.clone());
-                }
-
                 // Partition symbols: those with explicit preferences get individual supervisors,
                 // those without get grouped via the fallback supervisor.
                 let mut symbols_with_explicit: Vec<String> = Vec::new();
@@ -194,11 +187,12 @@ impl Borsa {
                     }
                 }
 
-                // Handle symbols with explicit preferences individually
+                // Group symbols with explicit preferences by their primary (best-ranked) provider
+                let mut primary_groups: HashMap<usize, Vec<String>> = HashMap::new();
                 for sym in &symbols_with_explicit {
                     // Gather candidate providers that allow this symbol
-                    let mut candidates: Vec<(usize, Arc<dyn BorsaConnector>, usize)> = Vec::new();
-                    for (idx, p) in providers.iter().cloned().enumerate() {
+                    let mut candidates: Vec<(usize, usize)> = Vec::new(); // (rank, providers_idx)
+                    for (idx, p) in providers.iter().enumerate() {
                         if !provider_symbols
                             .get(idx)
                             .is_some_and(|set| set.contains(sym.as_str()))
@@ -212,35 +206,55 @@ impl Borsa {
                             .providers
                             .provider_rank(&ctx, &p.key())
                         {
-                            candidates.push((rank, p, idx));
+                            candidates.push((rank, idx));
                         }
                     }
-
                     if candidates.is_empty() {
                         continue;
                     }
+                    candidates.sort_by_key(|(rank, providers_idx)| (*rank, *providers_idx));
+                    let (_best_rank, best_idx) = candidates[0];
+                    primary_groups
+                        .entry(best_idx)
+                        .or_default()
+                        .push(sym.clone());
+                }
 
-                    // Sort by (rank, providers_index) to ensure stable ordering
-                    candidates.sort_by_key(|(rank, _p, providers_idx)| (*rank, *providers_idx));
+                // For each primary provider group, spawn a single supervisor that multiplexes all its symbols
+                for (primary_idx, group_syms) in primary_groups {
+                    let group_syms_set: HashSet<String> = group_syms.iter().cloned().collect();
 
-                    // Build providers and per-provider assignments for this symbol
-                    let symbol_inst = match inst_by_sym.get(sym) {
-                        Some(i) => i.clone(),
-                        None => continue,
-                    };
+                    // Build provider chain starting with the primary, followed by the rest in stable order
+                    let mut chain_indices: Vec<usize> = Vec::with_capacity(providers.len());
+                    chain_indices.push(primary_idx);
+                    for j in 0..providers.len() {
+                        if j != primary_idx {
+                            chain_indices.push(j);
+                        }
+                    }
 
                     let mut chain_providers: Vec<Arc<dyn BorsaConnector>> =
-                        Vec::with_capacity(candidates.len());
+                        Vec::with_capacity(chain_indices.len());
                     let mut provider_instruments: Vec<Vec<Instrument>> =
-                        Vec::with_capacity(candidates.len());
+                        Vec::with_capacity(chain_indices.len());
                     let mut provider_allow: Vec<HashSet<String>> =
-                        Vec::with_capacity(candidates.len());
-                    for _ in 0..candidates.len() {
-                        provider_instruments.push(vec![symbol_inst.clone()]);
-                        provider_allow.push(std::iter::once(sym.clone()).collect());
-                    }
-                    for (_rank, p, _idx) in candidates {
-                        chain_providers.push(p);
+                        Vec::with_capacity(chain_indices.len());
+
+                    for &orig_idx in &chain_indices {
+                        chain_providers.push(providers[orig_idx].clone());
+                        let allow_full =
+                            provider_symbols.get(orig_idx).cloned().unwrap_or_default();
+                        let filtered_allow: HashSet<String> = allow_full
+                            .into_iter()
+                            .filter(|s| group_syms_set.contains(s))
+                            .collect();
+                        let assigned = list
+                            .iter()
+                            .filter(|&inst| filtered_allow.contains(inst.symbol().as_str()))
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        provider_instruments.push(assigned);
+                        provider_allow.push(filtered_allow);
                     }
 
                     let min_backoff_ms = resolved_backoff.min_backoff_ms;
@@ -248,12 +262,13 @@ impl Borsa {
                     let factor = resolved_backoff.factor.max(1);
                     let jitter_percent = resolved_backoff.jitter_percent.min(100);
 
+                    let required_symbols: HashSet<String> = group_syms_set.clone();
                     let (init_tx, init_rx) = oneshot::channel();
                     let params = KindSupervisorParams {
                         providers: chain_providers,
                         provider_instruments,
                         provider_allow,
-                        required_symbols: std::iter::once(sym.clone()).collect(),
+                        required_symbols,
                         min_backoff_ms,
                         max_backoff_ms,
                         factor,
@@ -261,8 +276,7 @@ impl Borsa {
                         initial_notify: Some(init_tx),
                         enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
                     };
-                    let join =
-                        Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
+                    let join = spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
                     joins.push(join);
                     init_receivers.push(init_rx);
                 }
@@ -310,8 +324,7 @@ impl Borsa {
                         initial_notify: Some(init_tx),
                         enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
                     };
-                    let join =
-                        Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
+                    let join = spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
                     joins.push(join);
                     init_receivers.push(init_rx);
                 }
@@ -355,8 +368,7 @@ impl Borsa {
                     initial_notify: Some(init_tx),
                     enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
                 };
-                let join =
-                    Self::spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
+                let join = spawn_kind_supervisor(params, stop_broadcast_rx.clone(), tx.clone());
                 joins.push(join);
                 init_receivers.push(init_rx);
             }
@@ -386,9 +398,14 @@ impl Borsa {
             return Err(err);
         }
 
-        // Supervisor to await stop and then abort all children
+        // Supervisor to await stop signal OR downstream closure and then stop all children
         let supervisor = tokio::spawn(async move {
-            let _ = stop_rx.await;
+            let mut stop_rx_inner = stop_rx;
+            tokio::select! {
+                _ = &mut stop_rx_inner => {}
+                // Downstream receiver dropped for the fan-in channel
+                () = async {}, if tx.is_closed() => {}
+            }
             let _ = stop_broadcast_tx.send(true);
             for j in joins {
                 let _ = j.await;
@@ -413,170 +430,32 @@ impl Borsa {
     }
 }
 
-fn jitter_wait(base_ms: u64, jitter_percent: u32) -> u64 {
-    let jitter_range = if jitter_percent == 0 {
-        1
-    } else {
-        std::cmp::max(1, (base_ms.saturating_mul(u64::from(jitter_percent))) / 100)
-    };
-    let mut rng = rand::rng();
-    base_ms + rng.random_range(0..jitter_range)
-}
-
-fn collapse_stream_errors(errors: Vec<BorsaError>) -> BorsaError {
-    let mut actionable: Vec<BorsaError> = errors
-        .into_iter()
-        .flat_map(borsa_core::BorsaError::flatten)
-        .filter(borsa_core::BorsaError::is_actionable)
-        .collect();
-    match actionable.len() {
-        0 => BorsaError::unsupported(borsa_core::Capability::StreamQuotes.to_string()),
-        1 => actionable.remove(0),
-        _ => BorsaError::AllProvidersFailed(actionable),
-    }
-}
-
-struct KindSupervisorParams {
-    providers: Vec<Arc<dyn BorsaConnector>>,
-    /// Assigned instruments per provider, aligned by index with `providers`.
-    provider_instruments: Vec<Vec<Instrument>>,
-    /// Allowed symbol set per provider, aligned by index with `providers`.
-    provider_allow: Vec<HashSet<String>>,
-    /// Full set of symbols that must be covered across all providers.
-    required_symbols: HashSet<String>,
-    min_backoff_ms: u64,
-    max_backoff_ms: u64,
-    factor: u32,
-    jitter_percent: u32,
-    initial_notify: Option<oneshot::Sender<Result<(), BorsaError>>>,
-    enforce_monotonic: bool,
-}
-
-struct EligibleStreamProviders {
-    /// Providers eligible for this (kind, exchange) group sorted by score and registration order
-    providers: Vec<Arc<dyn BorsaConnector>>,
-    /// Allowed symbols per provider, aligned with `providers`
-    provider_symbols: Vec<HashSet<String>>,
-    /// Union of all allowed symbols across providers
-    union_symbols: HashSet<String>,
-}
-
 impl Borsa {
-    fn eligible_stream_providers_for_context(
-        &self,
-        kind: AssetKind,
-        exchange: Option<&Exchange>,
-        instruments: &[Instrument],
-    ) -> Result<EligibleStreamProviders, BorsaError> {
-        // Score all connectors by the minimum per-symbol rank across the requested instruments,
-        // then sort by (min_rank, registration_index). Collect allowed symbols in the process.
-        let mut scored: Vec<StreamProviderScore> = Vec::new();
-
-        for (orig_idx, connector) in self.connectors.iter().cloned().enumerate() {
-            if connector.as_stream_provider().is_none() {
-                continue;
-            }
-            if !connector.supports_kind(kind) {
-                continue;
-            }
-
-            let mut allowed_syms: HashSet<String> = HashSet::new();
-            let mut min_rank: usize = usize::MAX;
-            for inst in instruments {
-                let ctx = RoutingContext::new(
-                    Some(inst.symbol_str()),
-                    Some(kind),
-                    inst.exchange().cloned().or_else(|| exchange.cloned()),
-                );
-                if let Some((rank, _strict)) = self
-                    .cfg
-                    .routing_policy
-                    .providers
-                    .provider_rank(&ctx, &connector.key())
-                {
-                    allowed_syms.insert(inst.symbol().to_string());
-                    if rank < min_rank {
-                        min_rank = rank;
-                    }
-                }
-            }
-
-            if !allowed_syms.is_empty() {
-                scored.push((min_rank, orig_idx, connector, allowed_syms));
-            }
-        }
-
-        if scored.is_empty() {
-            // If we have streaming-capable providers for this kind, check whether strict routing
-            // rules filtered out every requested symbol. Otherwise surface the original
-            // Unsupported error.
-            let candidates: Vec<&Arc<dyn BorsaConnector>> = self
-                .connectors
-                .iter()
-                .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
-                .collect();
-
-            if !candidates.is_empty() {
-                let mut strict_rejected: Vec<String> = Vec::new();
-                for inst in instruments {
-                    let sym = inst.symbol().to_string();
-                    let ctx = RoutingContext::new(
-                        Some(inst.symbol_str()),
-                        Some(kind),
-                        inst.exchange().cloned().or_else(|| exchange.cloned()),
-                    );
-                    let any_allowed = candidates.iter().any(|c| {
-                        self.cfg
-                            .routing_policy
-                            .providers
-                            .provider_rank(&ctx, &c.key())
-                            .is_some()
-                    });
-                    if !any_allowed {
-                        strict_rejected.push(sym);
-                    }
-                }
-                if !strict_rejected.is_empty() {
-                    strict_rejected.sort();
-                    strict_rejected.dedup();
-                    return Err(BorsaError::StrictSymbolsRejected {
-                        rejected: strict_rejected,
-                    });
-                }
-            }
-
-            return Err(BorsaError::unsupported(
-                Capability::StreamQuotes.to_string(),
-            ));
-        }
-
-        scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));
-
-        let mut providers: Vec<Arc<dyn BorsaConnector>> = Vec::new();
-        let mut provider_symbols: Vec<HashSet<String>> = Vec::new();
-        let mut union_symbols: HashSet<String> = HashSet::new();
-
-        for (_, _, c, syms) in scored {
-            union_symbols.extend(syms.iter().cloned());
-            providers.push(c);
-            provider_symbols.push(syms);
-        }
-
-        Ok(EligibleStreamProviders {
-            providers,
-            provider_symbols,
-            union_symbols,
-        })
-    }
-
+    #[cfg(any())]
     #[allow(clippy::too_many_lines)]
     fn spawn_kind_supervisor(
         params: KindSupervisorParams,
         mut stop_watch: watch::Receiver<bool>,
         tx_clone: mpsc::Sender<QuoteUpdate>,
     ) -> JoinHandle<()> {
+        #[derive(Debug)]
+        enum ProviderEvent {
+            SessionEnded {
+                provider_index: usize,
+                symbols: Arc<[String]>,
+            },
+        }
+
+        struct ActiveSession {
+            join: JoinHandle<()>,
+            symbols: Arc<[String]>,
+            stop_tx: Option<oneshot::Sender<()>>,
+        }
+
         tokio::spawn(async move {
+            use std::collections::hash_map::Entry;
             use tokio::time::{Duration, sleep};
+
             let KindSupervisorParams {
                 providers,
                 provider_instruments,
@@ -589,159 +468,317 @@ impl Borsa {
                 mut initial_notify,
                 enforce_monotonic,
             } = params;
+
+            if providers.is_empty() {
+                if let Some(tx) = initial_notify.take() {
+                    let err = collapse_stream_errors(Vec::new());
+                    let _ = tx.send(Err(err));
+                }
+                return;
+            }
+
             let mut start_index: usize = 0;
             let mut backoff_ms: u64 = min_backoff_ms;
             let mut initial_errors: Vec<BorsaError> = Vec::new();
-            // Track last timestamp per symbol across provider sessions for this kind group.
-            let mut last_ts_by_symbol: std::collections::HashMap<
-                String,
-                chrono::DateTime<chrono::Utc>,
-            > = std::collections::HashMap::new();
-            // Track which symbols are currently covered by an active subscription.
-            let mut covered_symbols: HashSet<String> = HashSet::new();
+            let mut coverage_counts: HashMap<String, usize> = HashMap::new();
+            let mut active_sessions: Vec<Option<ActiveSession>> =
+                Vec::with_capacity(providers.len());
+            active_sessions.resize_with(providers.len(), || None);
+            let last_ts_by_symbol = Arc::new(Mutex::new(HashMap::new()));
+            let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<ProviderEvent>();
+            // When a session ends for provider `p`, we skip attempting `p` until after
+            // one backoff sleep completes. This allows immediate failover to other
+            // providers without delaying reconnection attempts to `p`.
+            let mut cooldown_provider: Option<usize> = None;
+
             loop {
-                let mut connected = false;
-                let mut i = start_index;
-                while i < providers.len() {
+                // If downstream receiver is gone, terminate supervisor and all sessions
+                if tx_clone.is_closed() {
+                    for session in &mut active_sessions {
+                        if let Some(ActiveSession { join, .. }) = session.take() {
+                            let _ = join.await;
+                        }
+                    }
+                    return;
+                }
+                let mut connected_this_round = false;
+                let mut attempted_reconnect_this_round = false;
+
+                for offset in 0..providers.len() {
+                    let i = (start_index + offset) % providers.len();
+
+                    if active_sessions.get(i).and_then(|s| s.as_ref()).is_some() {
+                        continue;
+                    }
+
+                    if cooldown_provider.is_some() && cooldown_provider == Some(i) {
+                        continue;
+                    }
+
                     let Some(sp) = providers[i].as_stream_provider() else {
-                        i += 1;
                         continue;
                     };
-                    // Calculate which symbols still need coverage from remaining providers.
-                    let needed_symbols: HashSet<String> = required_symbols
-                        .difference(&covered_symbols)
-                        .cloned()
-                        .collect();
-                    // If all symbols are already covered, we can stop trying new providers.
-                    if needed_symbols.is_empty() {
-                        break;
-                    }
-                    // Calculate which instruments from this provider are needed to cover
-                    // symbols that aren't yet covered.
+
                     let provider_symbols = provider_allow.get(i);
+                    let provider_insts = provider_instruments.get(i);
                     let needed_from_provider: Vec<Instrument> =
-                        provider_symbols.map_or_else(Vec::new, |allow_set| {
-                            provider_instruments
-                                .get(i)
-                                .unwrap_or(&Vec::new())
+                        match (provider_symbols, provider_insts) {
+                            (Some(allow_set), Some(insts)) => insts
                                 .iter()
                                 .filter(|inst| {
                                     let sym = inst.symbol().as_str();
-                                    needed_symbols.contains(sym) && allow_set.contains(sym)
+                                    if !allow_set.contains(sym) || !required_symbols.contains(sym) {
+                                        return false;
+                                    }
+                                    let already_covered =
+                                        coverage_counts.get(sym).copied().unwrap_or(0) > 0;
+                                    if !already_covered {
+                                        // Fill gaps first
+                                        return true;
+                                    }
+                                    // Upgrade policy: if symbol is currently only covered by lower-priority
+                                    // sessions, attempt to connect this higher-priority provider `i` and later
+                                    // preempt overlapping lower-priority sessions.
+                                    !active_sessions.iter().enumerate().any(|(j, s)| {
+                                        j < i
+                                            && s.as_ref().is_some_and(|sess| {
+                                                sess.symbols.iter().any(|s2| s2 == sym)
+                                            })
+                                    })
                                 })
                                 .cloned()
-                                .collect()
-                        });
-                    // Skip providers that can't cover any needed symbols.
+                                .collect(),
+                            _ => Vec::new(),
+                        };
+
                     if needed_from_provider.is_empty() {
-                        i += 1;
                         continue;
                     }
+
+                    attempted_reconnect_this_round = true;
                     match sp.stream_quotes(&needed_from_provider).await {
                         Ok((handle, mut prx)) => {
-                            connected = true;
+                            connected_this_round = true;
                             if let Some(tx) = initial_notify.take() {
                                 let _ = tx.send(Ok(()));
                             }
                             initial_errors.clear();
 
-                            // Track which symbols we're covering with this provider.
-                            let symbols_covered_by_provider: HashSet<String> = needed_from_provider
+                            let symbols_vec: Vec<String> = needed_from_provider
                                 .iter()
                                 .map(|inst| inst.symbol().as_str().to_string())
                                 .collect();
-                            covered_symbols.extend(symbols_covered_by_provider.iter().cloned());
+                            let symbols_arc: Arc<[String]> =
+                                Arc::from(symbols_vec.into_boxed_slice());
+                            for sym in symbols_arc.iter() {
+                                *coverage_counts.entry(sym.clone()).or_insert(0) += 1;
+                            }
 
-                            let mut provider_handle = Some(handle);
-                            let allowed = provider_allow.get(i);
-                            loop {
-                                tokio::select! {
-                                    biased;
-                                    _ = stop_watch.changed() => {
-                                        if *stop_watch.borrow() {
-                                            if let Some(h) = provider_handle.take() { h.stop().await; }
-                                            return;
-                                        }
-                                    }
-                                    () = async {}, if *stop_watch.borrow() => {
-                                        if let Some(h) = provider_handle.take() { h.stop().await; }
-                                        return;
-                                    }
-                                    maybe_u = prx.recv() => {
-                                        if let Some(u) = maybe_u {
-                                            let mut pass = true;
-                                            if let Some(allowset) = allowed
-                                                && !allowset.contains(u.symbol.as_str()) {
-                                                    pass = false;
-                                                    #[cfg(feature = "tracing")]
-                                                    tracing::warn!(symbol = %u.symbol, provider_index = i, "dropping update for unassigned symbol");
+                            let allowed = provider_allow.get(i).cloned();
+                            let session_symbols = Arc::clone(&symbols_arc);
+                            let event_tx_clone = event_tx.clone();
+                            let tx_out = tx_clone.clone();
+                            let mut stop_watch_clone = stop_watch.clone();
+                            let last_ts = Arc::clone(&last_ts_by_symbol);
+                            let session_index = i;
+                            let (session_stop_tx, mut session_stop_rx) = oneshot::channel::<()>();
+
+                            let join = tokio::spawn(async move {
+                                let mut provider_handle = Some(handle);
+                                let mut notify_session_end = true;
+                                loop {
+                                    tokio::select! {
+                                        biased;
+                                        _ = stop_watch_clone.changed() => {
+                                            if *stop_watch_clone.borrow() {
+                                                if let Some(h) = provider_handle.take() {
+                                                    h.stop().await;
                                                 }
-                                            if pass && enforce_monotonic {
-                                                let sym = u.symbol.as_str().to_string();
-                                                if let Some(prev) = last_ts_by_symbol.get(&sym)
-                                                    && u.ts < *prev {
-                                                        pass = false;
-                                                        #[cfg(feature = "tracing")]
-                                                        tracing::warn!(symbol = %u.symbol, prev_ts = %prev, ts = %u.ts, provider_index = i, "dropping out-of-order stream update (ts older than last seen)");
-                                                    }
-                                                if pass {
-                                                    last_ts_by_symbol
-                                                        .entry(sym)
-                                                        .and_modify(|p| { if u.ts > *p { *p = u.ts; } })
-                                                        .or_insert(u.ts);
-                                                }
+                                                break;
                                             }
-                                            if pass && tx_clone.send(u).await.is_err() {
-                                                    if let Some(h) = provider_handle.take() { h.abort(); }
-                                                    return;
-                                                }
-                                        } else {
-                                            if let Some(h) = provider_handle.take() { h.abort(); }
-                                            // Connection dropped: clear symbols covered by this provider
-                                            // so they can be retried with remaining providers.
-                                            for sym in &symbols_covered_by_provider {
-                                                covered_symbols.remove(sym);
+                                        }
+                                        () = async {}, if *stop_watch_clone.borrow() => {
+                                            if let Some(h) = provider_handle.take() {
+                                                h.stop().await;
                                             }
                                             break;
                                         }
+                                        Ok(()) = &mut session_stop_rx => {
+                                            if let Some(h) = provider_handle.take() {
+                                                h.stop().await;
+                                            }
+                                            break;
+                                        }
+                                        maybe_u = prx.recv() => {
+                                            if let Some(u) = maybe_u {
+                                                let mut pass = true;
+                                                if let Some(ref allowset) = allowed
+                                                    && !allowset.contains(u.symbol.as_str()) {
+                                                        pass = false;
+                                                        #[cfg(feature = "tracing")]
+                                                        tracing::warn!(symbol = %u.symbol, provider_index = session_index, "dropping update for unassigned symbol");
+                                                    }
+
+                                                if pass && enforce_monotonic {
+                                                    let sym = u.symbol.as_str().to_string();
+                                                    let mut guard = last_ts.lock().await;
+                                                    let mut older_than_last: Option<chrono::DateTime<chrono::Utc>> = None;
+                                                    match guard.entry(sym.clone()) {
+                                                        Entry::Occupied(mut entry) => {
+                                                            let prev = *entry.get();
+                                                            if u.ts < prev {
+                                                                older_than_last = Some(prev);
+                                                                pass = false;
+                                                            } else if u.ts > prev {
+                                                                *entry.get_mut() = u.ts;
+                                                            }
+                                                        }
+                                                        Entry::Vacant(entry) => {
+                                                            entry.insert(u.ts);
+                                                        }
+                                                    }
+                                                    drop(guard);
+                                                    if let Some(prev) = older_than_last {
+                                                        #[cfg(feature = "tracing")]
+                                                        tracing::warn!(symbol = %u.symbol, prev_ts = %prev, ts = %u.ts, provider_index = session_index, "dropping out-of-order stream update (ts older than last seen)");
+                                                    }
+                                                }
+
+                                                if pass
+                                                    && tx_out.send(u).await.is_err() {
+                                                        // Downstream receiver dropped: terminate without notifying supervisor
+                                                        notify_session_end = false;
+                                                        if let Some(h) = provider_handle.take() {
+                                                            h.stop().await;
+                                                        }
+                                                        break;
+                                                    }
+                                            } else {
+                                                if let Some(h) = provider_handle.take() {
+                                                    h.stop().await;
+                                                }
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if notify_session_end {
+                                    let _ = event_tx_clone.send(ProviderEvent::SessionEnded {
+                                        provider_index: session_index,
+                                        symbols: session_symbols,
+                                    });
+                                }
+                            });
+
+                            active_sessions[i] = Some(ActiveSession {
+                                join,
+                                symbols: Arc::clone(&symbols_arc),
+                                stop_tx: Some(session_stop_tx),
+                            });
+                            start_index = (i + 1) % providers.len();
+
+                            // Preempt lower-priority sessions that overlap on any of these symbols
+                            for j in (i + 1)..providers.len() {
+                                if let Some(sess) =
+                                    active_sessions.get_mut(j).and_then(|s| s.as_mut())
+                                {
+                                    let overlaps = sess
+                                        .symbols
+                                        .iter()
+                                        .any(|s| symbols_arc.iter().any(|t| t == s));
+                                    if overlaps && let Some(tx) = sess.stop_tx.take() {
+                                        let _ = tx.send(());
                                     }
                                 }
                             }
-
-                            start_index = (i + 1) % providers.len();
-                            break;
                         }
                         Err(err) => {
                             if initial_notify.is_some() {
                                 initial_errors.push(crate::core::tag_err(providers[i].name(), err));
                             }
-                            i += 1;
                         }
                     }
                 }
 
-                // Apply backoff after each cycle to avoid rapid reconnect loops.
                 let base_ms = backoff_ms;
                 let wait_ms = jitter_wait(base_ms, jitter_percent);
 
+                let mut woke_by_sleep: bool = false;
                 tokio::select! {
-                    _ = stop_watch.changed() => { if *stop_watch.borrow() { return; } }
-                    () = sleep(Duration::from_millis(wait_ms)) => {}
-                }
-
-                if connected {
-                    // Successful session: reset backoff to minimum before retrying.
-                    backoff_ms = min_backoff_ms;
-                } else {
-                    if let Some(tx) = initial_notify.take() {
-                        let err = collapse_stream_errors(std::mem::take(&mut initial_errors));
-                        let _ = tx.send(Err(err));
+                    _ = stop_watch.changed() => {
+                        if *stop_watch.borrow() {
+                            for session in &mut active_sessions {
+                                if let Some(ActiveSession { join, .. }) = session.take() {
+                                    let _ = join.await;
+                                }
+                            }
+                            return;
+                        }
+                    }
+                    () = async {}, if *stop_watch.borrow() => {
+                        for session in &mut active_sessions {
+                            if let Some(ActiveSession { join, .. }) = session.take() {
+                                let _ = join.await;
+                            }
+                        }
                         return;
                     }
-                    // No provider connected: increase backoff and restart from the first provider.
-                    backoff_ms =
-                        std::cmp::min(max_backoff_ms, base_ms.saturating_mul(u64::from(factor)));
-                    start_index = 0;
+                    // Downstream receiver dropped: terminate supervisor and all sessions
+                    () = async {}, if tx_clone.is_closed() => {
+                        for session in &mut active_sessions {
+                            if let Some(ActiveSession { join, .. }) = session.take() {
+                                let _ = join.await;
+                            }
+                        }
+                        return;
+                    }
+                    Some(event) = event_rx.recv() => {
+                        match event {
+                            ProviderEvent::SessionEnded { provider_index, symbols } => {
+                                if let Some(ActiveSession { join, .. }) = active_sessions
+                                    .get_mut(provider_index)
+                                    .and_then(std::option::Option::take)
+                                {
+                                    let _ = join.await;
+                                }
+                                for sym in symbols.iter() {
+                                    if let Entry::Occupied(mut entry) = coverage_counts.entry(sym.clone()) {
+                                        if *entry.get() > 1 {
+                                            *entry.get_mut() -= 1;
+                                        } else {
+                                            entry.remove();
+                                        }
+                                    }
+                                }
+                                // Enforce a backoff delay before attempting reconnection to this provider
+                                cooldown_provider = Some(provider_index);
+                            }
+                        }
+                    }
+                    () = sleep(Duration::from_millis(wait_ms)) => { woke_by_sleep = true; cooldown_provider = None; }
+                }
+
+                if connected_this_round {
+                    backoff_ms = min_backoff_ms;
+                } else if woke_by_sleep && attempted_reconnect_this_round {
+                    if active_sessions.iter().all(std::option::Option::is_none) {
+                        if let Some(tx) = initial_notify.take() {
+                            let err = collapse_stream_errors(std::mem::take(&mut initial_errors));
+                            let _ = tx.send(Err(err));
+                            return;
+                        }
+                        backoff_ms = std::cmp::min(
+                            max_backoff_ms,
+                            base_ms.saturating_mul(u64::from(factor)),
+                        );
+                        start_index = 0;
+                    } else {
+                        backoff_ms = std::cmp::min(
+                            max_backoff_ms,
+                            base_ms.saturating_mul(u64::from(factor)),
+                        );
+                    }
                 }
             }
         })

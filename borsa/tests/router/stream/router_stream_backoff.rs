@@ -144,7 +144,6 @@ async fn stream_backoff_jitter_bounds() {
         attempts: attempts.clone(),
         events: events.clone(),
     });
-
     let backoff = BackoffConfig {
         min_backoff_ms: 100,
         max_backoff_ms: 10_000,

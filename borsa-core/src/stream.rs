@@ -113,6 +113,12 @@ impl StreamHandle {
             inner.abort();
         }
     }
+
+    /// Return `true` if the underlying task has completed.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.inner.as_ref().is_none_or(JoinHandle::is_finished)
+    }
 }
 
 impl Drop for StreamHandle {
