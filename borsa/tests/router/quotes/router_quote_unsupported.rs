@@ -1,5 +1,6 @@
 use borsa::{Borsa, FetchStrategy};
 use borsa_core::{AssetKind, BorsaError};
+use crate::helpers::X;
 
 #[tokio::test]
 async fn quote_returns_unsupported_when_no_connector_handles_capability() {
@@ -8,7 +9,7 @@ async fn quote_returns_unsupported_when_no_connector_handles_capability() {
         .build();
     let borsa = Borsa::builder().with_connector(c).build().unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa.quote(&inst).await.unwrap_err();
     match err {
         BorsaError::Unsupported { capability } => assert_eq!(capability, "quote"),
@@ -28,7 +29,7 @@ async fn quote_latency_strategy_still_signals_unsupported() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa.quote(&inst).await.unwrap_err();
     match err {
         BorsaError::Unsupported { capability } => assert_eq!(capability, "quote"),

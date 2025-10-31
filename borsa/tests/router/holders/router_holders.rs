@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{MockConnector, MSFT};
 use borsa::Borsa;
 use borsa_core::{AssetKind, MajorHolder};
 
@@ -22,7 +22,7 @@ async fn holders_falls_back_and_succeeds() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("MSFT", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&MSFT, AssetKind::Equity);
     let rows = borsa.major_holders(&inst).await.unwrap();
     assert_eq!(rows.len(), 1);
     assert!((rows[0].value - 0.0).abs() < f64::EPSILON);

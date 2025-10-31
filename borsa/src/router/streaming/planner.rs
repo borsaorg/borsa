@@ -3,19 +3,19 @@ use std::sync::Arc;
 
 use crate::Borsa;
 use borsa_core::{
-    AssetKind, BorsaConnector, BorsaError, Capability, Exchange, Instrument, RoutingContext,
+    AssetKind, BorsaConnector, BorsaError, Capability, Exchange, Instrument, RoutingContext, Symbol,
 };
 
 /// Providers eligible for this (kind, exchange) group sorted by score and registration order
 pub struct EligibleStreamProviders {
     pub providers: Vec<Arc<dyn BorsaConnector>>,
     /// Allowed symbols per provider, aligned with `providers`
-    pub provider_symbols: Vec<HashSet<String>>,
+    pub provider_symbols: Vec<HashSet<Symbol>>,
     /// Union of all allowed symbols across providers
-    pub union_symbols: HashSet<String>,
+    pub union_symbols: HashSet<Symbol>,
 }
 
-type StreamProviderScore = (usize, usize, Arc<dyn BorsaConnector>, HashSet<String>);
+type StreamProviderScore = (usize, usize, Arc<dyn BorsaConnector>, HashSet<Symbol>);
 
 impl Borsa {
     pub(crate) fn eligible_stream_providers_for_context(
@@ -36,11 +36,11 @@ impl Borsa {
                 continue;
             }
 
-            let mut allowed_syms: HashSet<String> = HashSet::new();
+            let mut allowed_syms: HashSet<Symbol> = HashSet::new();
             let mut min_rank: usize = usize::MAX;
             for inst in instruments {
                 let ctx = RoutingContext::new(
-                    Some(inst.symbol_str()),
+                    Some(inst.symbol()),
                     Some(kind),
                     inst.exchange().cloned().or_else(|| exchange.cloned()),
                 );
@@ -50,7 +50,7 @@ impl Borsa {
                     .providers
                     .provider_rank(&ctx, &connector.key())
                 {
-                    allowed_syms.insert(inst.symbol().to_string());
+                    allowed_syms.insert(inst.symbol().clone());
                     if rank < min_rank {
                         min_rank = rank;
                     }
@@ -73,11 +73,11 @@ impl Borsa {
                 .collect();
 
             if !candidates.is_empty() {
-                let mut strict_rejected: Vec<String> = Vec::new();
+                let mut strict_rejected: Vec<Symbol> = Vec::new();
                 for inst in instruments {
-                    let sym = inst.symbol().to_string();
+                    let sym = inst.symbol();
                     let ctx = RoutingContext::new(
-                        Some(inst.symbol_str()),
+                        Some(inst.symbol()),
                         Some(kind),
                         inst.exchange().cloned().or_else(|| exchange.cloned()),
                     );
@@ -89,7 +89,7 @@ impl Borsa {
                             .is_some()
                     });
                     if !any_allowed {
-                        strict_rejected.push(sym);
+                        strict_rejected.push(sym.clone());
                     }
                 }
                 if !strict_rejected.is_empty() {
@@ -109,8 +109,8 @@ impl Borsa {
         scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));
 
         let mut providers: Vec<Arc<dyn BorsaConnector>> = Vec::new();
-        let mut provider_symbols: Vec<HashSet<String>> = Vec::new();
-        let mut union_symbols: HashSet<String> = HashSet::new();
+        let mut provider_symbols: Vec<HashSet<Symbol>> = Vec::new();
+        let mut union_symbols: HashSet<Symbol> = HashSet::new();
 
         for (_, _, c, syms) in scored {
             union_symbols.extend(syms.iter().cloned());

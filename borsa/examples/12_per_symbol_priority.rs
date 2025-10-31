@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use borsa::Borsa;
 use borsa_core::{
     AssetKind, BorsaConnector, BorsaError, Currency, Instrument, Money, Quote,
-    RoutingPolicyBuilder, connector::QuoteProvider,
+    RoutingPolicyBuilder, Symbol, connector::QuoteProvider,
 };
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
@@ -82,14 +82,15 @@ impl QuoteProvider for SlowConnector {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Setup our mock connectors.
+    // 1. Setup our mock connectors.s
     let fast_conn = Arc::new(FastConnector);
     let slow_conn = Arc::new(SlowConnector);
 
     // 2. Build Borsa with a default priority and a per-symbol override.
+    let special = Symbol::new("SPECIAL").unwrap();
     let policy = RoutingPolicyBuilder::new()
         .providers_for_kind(AssetKind::Equity, &[fast_conn.key(), slow_conn.key()])
-        .providers_for_symbol("SPECIAL", &[slow_conn.key(), fast_conn.key()])
+        .providers_for_symbol(&special, &[slow_conn.key(), fast_conn.key()])
         .build();
     let borsa = Borsa::builder()
         .with_connector(fast_conn.clone())

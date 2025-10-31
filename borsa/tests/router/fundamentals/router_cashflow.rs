@@ -1,5 +1,5 @@
-use crate::helpers::MockConnector;
-use crate::helpers::{GOOG, dt, usd};
+use crate::helpers::{MockConnector, GOOG};
+use crate::helpers::{dt, usd};
 use borsa::Borsa;
 use borsa_core::{AssetKind, CashflowRow, Period};
 use rust_decimal::Decimal;
@@ -39,7 +39,7 @@ async fn cashflow_falls_back_and_succeeds() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument(GOOG, AssetKind::Equity);
+    let inst = crate::helpers::instrument(&GOOG, AssetKind::Equity);
     let rows = borsa.cashflow(&inst, true).await.unwrap();
 
     assert_eq!(rows.len(), 2);

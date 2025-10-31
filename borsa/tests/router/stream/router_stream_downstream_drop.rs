@@ -9,7 +9,7 @@ async fn stream_quotes_exits_when_downstream_drops() {
     // Provider that would emit many updates
     let updates = (0..50)
         .map(|i| QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd(&(100 + i).to_string())),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(i64::from(i), 0).unwrap(),
@@ -26,7 +26,7 @@ async fn stream_quotes_exits_when_downstream_drops() {
     let borsa = borsa::Borsa::builder().with_connector(p).build().unwrap();
 
     let (handle, mut rx) = borsa
-        .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect("stream started");
 

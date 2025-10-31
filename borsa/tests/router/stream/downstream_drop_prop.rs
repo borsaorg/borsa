@@ -11,7 +11,7 @@ proptest! {
         tokio_test::block_on(async move {
             let updates: Vec<QuoteUpdate> = (1..=num_updates as i64)
                 .map(|t| QuoteUpdate {
-                    symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+                    symbol: AAPL.clone(),
                     price: Some(usd("123.0")),
                     previous_close: None,
                     ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),

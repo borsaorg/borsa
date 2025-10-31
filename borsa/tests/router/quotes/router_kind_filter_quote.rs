@@ -1,7 +1,7 @@
 use borsa::Borsa;
 
-use crate::helpers::usd;
-use borsa_core::{AssetKind, Quote, Symbol};
+use crate::helpers::{X, usd};
+use borsa_core::{AssetKind, Quote};
 use rust_decimal::Decimal;
 
 // Bring in the MockConnector directly to control kind support.
@@ -14,7 +14,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
         .name("A")
         .supports_kind(AssetKind::Equity)
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("1.0")),
             previous_close: None,
@@ -29,7 +29,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
         .name("B")
         .supports_kind(AssetKind::Fund)
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("99.0")),
             previous_close: None,
@@ -44,8 +44,8 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
         .with_connector(b)
         .build()
         .unwrap();
-
-    let inst = crate::helpers::instrument("X", AssetKind::Fund);
+    
+    let inst = crate::helpers::instrument(&X, AssetKind::Fund);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.as_ref().map(borsa_core::Money::amount).unwrap(),

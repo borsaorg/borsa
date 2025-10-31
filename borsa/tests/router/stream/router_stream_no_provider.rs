@@ -1,6 +1,6 @@
 use borsa_core::AssetKind;
 
-use crate::helpers::MockConnector;
+use crate::helpers::{AAPL, MockConnector};
 
 #[tokio::test]
 async fn stream_quotes_errors_when_no_stream_connector() {
@@ -11,7 +11,7 @@ async fn stream_quotes_errors_when_no_stream_connector() {
 
     let borsa = borsa::Borsa::builder().with_connector(c).build().unwrap();
     let res = borsa
-        .stream_quotes(&[crate::helpers::instrument("AAPL", AssetKind::Equity)])
+        .stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
         .await;
     assert!(res.is_err());
 }

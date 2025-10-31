@@ -9,21 +9,21 @@ async fn stream_quotes_filters_symbols_and_emits_all() {
     // Streaming connector emits mixed symbols; router should return only requested ones
     let updates = vec![
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("120.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(10, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(MSFT).unwrap(),
+            symbol: MSFT.clone(),
             price: Some(usd("330.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(11, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(GOOG).unwrap(),
+            symbol: GOOG.clone(),
             price: Some(usd("140.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(12, 0).unwrap(),
@@ -41,15 +41,15 @@ async fn stream_quotes_filters_symbols_and_emits_all() {
 
     let (_h, mut rx) = borsa
         .stream_quotes(&[
-            crate::helpers::instrument(AAPL, AssetKind::Equity),
-            crate::helpers::instrument(MSFT, AssetKind::Equity),
+            crate::helpers::instrument(&AAPL, AssetKind::Equity),
+            crate::helpers::instrument(&MSFT, AssetKind::Equity),
         ])
         .await
         .unwrap();
 
     let mut got = Vec::new();
     while let Some(u) = rx.recv().await {
-        got.push(u.symbol.as_str().to_string());
+        got.push(u.symbol.clone().to_string());
         if got.len() >= 2 {
             break;
         }

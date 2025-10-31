@@ -1,10 +1,10 @@
 use borsa::{Borsa, FetchStrategy};
 
 use crate::helpers::usd;
-use borsa_core::{AssetKind, Quote, Symbol};
+use borsa_core::{AssetKind, Quote};
 use rust_decimal::Decimal;
 
-use crate::helpers::MockConnector;
+use crate::helpers::{MockConnector, X};
 use tokio::time::{Duration, advance};
 
 #[tokio::test]
@@ -13,7 +13,7 @@ async fn strategy_latency_returns_fastest_success() {
         .name("fast")
         .delay(std::time::Duration::from_millis(10))
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("11.0")),
             previous_close: None,
@@ -26,7 +26,7 @@ async fn strategy_latency_returns_fastest_success() {
         .name("slow")
         .delay(std::time::Duration::from_millis(100))
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("99.0")),
             previous_close: None,
@@ -42,8 +42,8 @@ async fn strategy_latency_returns_fastest_success() {
         .fetch_strategy(FetchStrategy::Latency)
         .build()
         .unwrap();
-
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.as_ref().map(borsa_core::Money::amount),
@@ -63,7 +63,7 @@ async fn strategy_latency_ignores_faster_failure_and_returns_first_success() {
         .name("slow_ok")
         .delay(std::time::Duration::from_millis(20))
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("77.0")),
             previous_close: None,
@@ -80,7 +80,7 @@ async fn strategy_latency_ignores_faster_failure_and_returns_first_success() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.as_ref().map(borsa_core::Money::amount),
@@ -95,7 +95,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .name("first")
         .delay(std::time::Duration::from_millis(200))
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("1000.0")),
             previous_close: None,
@@ -108,7 +108,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .name("second")
         .delay(std::time::Duration::from_millis(10))
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("42.0")),
             previous_close: None,
@@ -126,7 +126,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let handle = tokio::spawn({
         let inst = inst.clone();
         async move { borsa.quote(&inst).await }

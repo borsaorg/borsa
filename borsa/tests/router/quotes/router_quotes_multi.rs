@@ -8,18 +8,18 @@ async fn router_quotes_multi_groups_by_provider() {
     // Provider 'a' is preferred for AAPL and returns a specific price.
     let conn_a = MockConnector::builder()
         .name("a")
-        .returns_quote_ok(quote_fixture(AAPL, "100.0"))
+        .returns_quote_ok(quote_fixture(&AAPL, "100.0"))
         .build();
 
     // Provider 'b' is preferred for MSFT and returns a different price.
     let conn_b = MockConnector::builder()
         .name("b")
-        .returns_quote_ok(quote_fixture(MSFT, "200.0"))
+        .returns_quote_ok(quote_fixture(&MSFT, "200.0"))
         .build();
 
     let policy = RoutingPolicyBuilder::new()
-        .providers_for_symbol(AAPL, &[conn_a.key(), conn_b.key()])
-        .providers_for_symbol(MSFT, &[conn_b.key(), conn_a.key()])
+        .providers_for_symbol(&AAPL, &[conn_a.key(), conn_b.key()])
+        .providers_for_symbol(&MSFT, &[conn_b.key(), conn_a.key()])
         .build();
 
     let borsa = Borsa::builder()
@@ -30,8 +30,8 @@ async fn router_quotes_multi_groups_by_provider() {
         .unwrap();
 
     let instruments = &[
-        crate::helpers::instrument(AAPL, AssetKind::Equity),
-        crate::helpers::instrument(MSFT, AssetKind::Equity),
+        crate::helpers::instrument(&AAPL, AssetKind::Equity),
+        crate::helpers::instrument(&MSFT, AssetKind::Equity),
     ];
 
     let (quotes, errs) = borsa.quotes(instruments).await.unwrap();
@@ -39,11 +39,11 @@ async fn router_quotes_multi_groups_by_provider() {
 
     assert_eq!(quotes.len(), 2);
 
-    let by_symbol: HashMap<_, _> = quotes.iter().map(|q| (q.symbol.as_str(), q)).collect();
+    let by_symbol: HashMap<_, _> = quotes.iter().map(|q| (q.symbol.clone(), q)).collect();
 
     assert_eq!(
         by_symbol
-            .get(AAPL)
+            .get(&AAPL)
             .unwrap()
             .price
             .as_ref()
@@ -53,7 +53,7 @@ async fn router_quotes_multi_groups_by_provider() {
     );
     assert_eq!(
         by_symbol
-            .get(MSFT)
+            .get(&MSFT)
             .unwrap()
             .price
             .as_ref()

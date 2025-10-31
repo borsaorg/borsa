@@ -3,7 +3,7 @@ use borsa_core::{AssetKind, HistoryRequest, Interval, Range};
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 
-use crate::helpers::m_hist;
+use crate::helpers::{BTC_USD, m_hist};
 
 #[tokio::test]
 async fn merges_adjacent_ranges() {
@@ -16,7 +16,7 @@ async fn merges_adjacent_ranges() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let req = HistoryRequest::try_from_range(Range::D5, Interval::D1).unwrap();
 
     let merged = borsa.history(&inst, req).await.unwrap();
@@ -36,7 +36,7 @@ async fn prefers_first_on_overlap() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let req = HistoryRequest::try_from_range(Range::D5, Interval::D1).unwrap();
 
     let merged = borsa.history(&inst, req).await.unwrap();

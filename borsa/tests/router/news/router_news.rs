@@ -19,7 +19,7 @@ async fn news_succeeds_and_passes_request() {
 
     let borsa = Borsa::builder().with_connector(ok).build().unwrap();
 
-    let inst = crate::helpers::instrument(TSLA, AssetKind::Equity);
+    let inst = crate::helpers::instrument(&TSLA, AssetKind::Equity);
     let req = NewsRequest {
         count: 5,
         ..Default::default()

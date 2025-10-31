@@ -1,7 +1,7 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
 
-use crate::helpers::m_quote;
+use crate::helpers::{m_quote, X};
 
 #[tokio::test]
 async fn last_defined_rule_wins_on_equal_specificity() {
@@ -11,8 +11,8 @@ async fn last_defined_rule_wins_on_equal_specificity() {
     // Define two symbol-level rules with equal specificity for the same symbol.
     // The latter should take precedence.
     let policy = RoutingPolicyBuilder::new()
-        .providers_for_symbol("X", &[a.key(), b.key()])
-        .providers_for_symbol("X", &[b.key(), a.key()])
+        .providers_for_symbol(&X, &[a.key(), b.key()])
+        .providers_for_symbol(&X, &[b.key(), a.key()])
         .build();
 
     let borsa = Borsa::builder()
@@ -22,7 +22,7 @@ async fn last_defined_rule_wins_on_equal_specificity() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     // Expect provider 'b' to be first due to last-defined rule taking precedence.
     assert_eq!(q.price.unwrap().amount().to_string(), "99.0");
@@ -36,7 +36,7 @@ async fn symbol_rule_beats_exchange_rule_even_if_defined_first() {
     let nasdaq = borsa_core::Exchange::try_from_str("NASDAQ").unwrap();
 
     let policy = RoutingPolicyBuilder::new()
-        .providers_for_symbol("X", &[sym.key(), ex.key()])
+        .providers_for_symbol(&X, &[sym.key(), ex.key()])
         .providers_for_exchange(nasdaq.clone(), &[ex.key(), sym.key()])
         .build();
 
@@ -47,7 +47,7 @@ async fn symbol_rule_beats_exchange_rule_even_if_defined_first() {
         .build()
         .unwrap();
 
-    let inst = borsa_core::Instrument::from_symbol_and_exchange("X", nasdaq, AssetKind::Equity)
+    let inst = borsa_core::Instrument::from_symbol_and_exchange(&X, nasdaq, AssetKind::Equity)
         .unwrap();
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(q.price.unwrap().amount().to_string(), "42.0");

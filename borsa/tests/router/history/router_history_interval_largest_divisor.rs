@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{ETH_USD, MockConnector};
 use crate::helpers::usd;
 use borsa::Borsa;
 use borsa_core::{AssetKind, Candle, HistoryRequest, HistoryResponse, Interval};
@@ -41,7 +41,7 @@ async fn picks_largest_divisor_and_resamples_to_requested() {
         })
         .build();
     let borsa = Borsa::builder().with_connector(c).build().unwrap();
-    let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&ETH_USD, AssetKind::Crypto);
 
     // Request 90-minute bars
     let req = HistoryRequest::try_from_range(borsa_core::Range::D1, Interval::I90m).unwrap();

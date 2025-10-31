@@ -28,7 +28,7 @@
 //!   order.
 
 use crate::connector::ConnectorKey;
-use paft::domain::{AssetKind, Exchange};
+use paft::domain::{AssetKind, Exchange, Symbol};
 use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,7 @@ pub enum ScopeKey {
     /// Preference bound to a specific asset kind.
     Kind(AssetKind),
     /// Preference bound to a specific symbol string.
-    Symbol(String),
+    Symbol(Symbol),
 }
 
 /// Ranked list of values with cached index positions for stable sort keys.
@@ -149,7 +149,7 @@ where
 {
     global: Option<RankedList<T>>,
     by_kind: HashMap<AssetKind, RankedList<T>>,
-    by_symbol: HashMap<String, RankedList<T>>,
+    by_symbol: HashMap<Symbol, RankedList<T>>,
 }
 
 impl<T> Default for Preference<T>
@@ -207,7 +207,11 @@ where
     /// Resolve the highest-precedence list for `(symbol, kind)` following the
     /// Symbol > Kind > Global ordering. Returns `None` if no preference exists.
     #[must_use]
-    pub fn resolve<'a>(&'a self, symbol: Option<&str>, kind: Option<AssetKind>) -> Option<&'a [T]> {
+    pub fn resolve<'a>(
+        &'a self,
+        symbol: Option<&Symbol>,
+        kind: Option<AssetKind>,
+    ) -> Option<&'a [T]> {
         if let Some(sym) = symbol
             && let Some(list) = self.by_symbol.get(sym)
         {
@@ -226,7 +230,7 @@ where
     #[must_use]
     pub fn resolve_rank_map(
         &self,
-        symbol: Option<&str>,
+        symbol: Option<&Symbol>,
         kind: Option<AssetKind>,
     ) -> Option<&HashMap<T, usize>> {
         if let Some(sym) = symbol
@@ -273,7 +277,7 @@ where
         struct PrefSerde<T> {
             global: Option<Vec<T>>,
             by_kind: Option<HashMap<AssetKind, Vec<T>>>,
-            by_symbol: Option<HashMap<String, Vec<T>>>,
+            by_symbol: Option<HashMap<Symbol, Vec<T>>>,
         }
         let tmp = PrefSerde::deserialize(deserializer)?;
         let global = tmp.global.map(|v| RankedList::new(&v));
@@ -305,7 +309,7 @@ where
     global: Option<&'a RankedList<T>>,
     yielded_global: bool,
     by_kind: std::collections::hash_map::Iter<'a, AssetKind, RankedList<T>>,
-    by_symbol: std::collections::hash_map::Iter<'a, String, RankedList<T>>,
+    by_symbol: std::collections::hash_map::Iter<'a, Symbol, RankedList<T>>,
 }
 
 impl<'a, T> Iterator for PreferenceScopeIter<'a, T>
@@ -327,10 +331,7 @@ where
         }
 
         if let Some((symbol, list)) = self.by_symbol.next() {
-            return Some(PreferenceScope::Symbol(
-                symbol.as_str(),
-                PreferenceValues::new(list),
-            ));
+            return Some(PreferenceScope::Symbol(symbol, PreferenceValues::new(list)));
         }
 
         None
@@ -345,7 +346,7 @@ pub enum PreferenceScope<'a, T> {
     /// Preference values for a specific asset kind.
     Kind(AssetKind, PreferenceValues<'a, T>),
     /// Preference values for a specific symbol.
-    Symbol(&'a str, PreferenceValues<'a, T>),
+    Symbol(&'a Symbol, PreferenceValues<'a, T>),
 }
 
 impl<'a, T> PreferenceScope<'a, T>
@@ -358,7 +359,7 @@ where
         match self {
             PreferenceScope::Global(_) => ScopeKey::Global,
             PreferenceScope::Kind(kind, _) => ScopeKey::Kind(*kind),
-            PreferenceScope::Symbol(symbol, _) => ScopeKey::Symbol((*symbol).to_string()),
+            PreferenceScope::Symbol(symbol, _) => ScopeKey::Symbol((**symbol).clone()),
         }
     }
 
@@ -418,7 +419,7 @@ where
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Selector {
     /// Optional symbol constraint for a rule. When set, the rule applies only to this symbol.
-    pub symbol: Option<String>,
+    pub symbol: Option<Symbol>,
     /// Optional asset kind constraint. When set, the rule applies only to this kind.
     pub kind: Option<AssetKind>,
     /// Optional exchange constraint. When set, the rule applies only to this exchange.
@@ -469,7 +470,7 @@ impl ProviderPolicy {
         let mut best: Option<BestState<'_>> = None;
         for (idx, r) in self.rules.iter().enumerate() {
             let s = &r.selector;
-            if s.symbol.is_some() && s.symbol.as_deref() != ctx.symbol {
+            if s.symbol.is_some() && s.symbol != ctx.symbol.cloned() {
                 continue;
             }
             if s.kind.is_some() && s.kind != ctx.kind {
@@ -676,9 +677,9 @@ impl RoutingPolicyBuilder {
     /// Symbol rules are more specific than kind or exchange-only rules and
     /// therefore take precedence when they match the current context.
     #[must_use]
-    pub fn providers_for_symbol(mut self, symbol: &str, list: &[ConnectorKey]) -> Self {
+    pub fn providers_for_symbol(mut self, symbol: &Symbol, list: &[ConnectorKey]) -> Self {
         let selector = Selector {
-            symbol: Some(symbol.to_string()),
+            symbol: Some(symbol.clone()),
             kind: None,
             exchange: None,
         };
@@ -736,10 +737,10 @@ impl RoutingPolicyBuilder {
 
     /// Set exchange ordering for a specific symbol.
     #[must_use]
-    pub fn exchanges_for_symbol(mut self, symbol: &str, list: &[Exchange]) -> Self {
+    pub fn exchanges_for_symbol(mut self, symbol: &Symbol, list: &[Exchange]) -> Self {
         self.policy
             .exchanges
-            .set(ScopeKey::Symbol(symbol.to_string()), list);
+            .set(ScopeKey::Symbol(symbol.clone()), list);
         self
     }
 
@@ -754,7 +755,7 @@ impl RoutingPolicyBuilder {
 #[derive(Debug, Clone)]
 pub struct RoutingContext<'a> {
     /// Optional symbol under consideration.
-    pub symbol: Option<&'a str>,
+    pub symbol: Option<&'a Symbol>,
     /// Optional asset kind under consideration.
     pub kind: Option<AssetKind>,
     /// Optional exchange under consideration.
@@ -765,7 +766,7 @@ impl<'a> RoutingContext<'a> {
     /// Construct a new context from optional `symbol` and `kind`.
     #[must_use]
     pub const fn new(
-        symbol: Option<&'a str>,
+        symbol: Option<&'a Symbol>,
         kind: Option<AssetKind>,
         exchange: Option<Exchange>,
     ) -> Self {

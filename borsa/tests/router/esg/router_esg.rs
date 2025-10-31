@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{MockConnector, MSFT};
 use borsa::Borsa;
 use borsa_core::{AssetKind, EsgScores};
 
@@ -14,7 +14,7 @@ async fn esg_succeeds() {
         .build();
     let borsa = Borsa::builder().with_connector(ok).build().unwrap();
 
-    let inst = crate::helpers::instrument("MSFT", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&MSFT, AssetKind::Equity);
     let scores = borsa.sustainability(&inst).await.unwrap();
     assert_eq!(scores.environmental, Some(10.0));
 }

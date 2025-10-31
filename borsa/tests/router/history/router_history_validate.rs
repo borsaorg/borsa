@@ -3,14 +3,14 @@ use borsa_core::{AssetKind, HistoryRequest, Interval, Range};
 // use chrono::TimeZone; // no longer needed
 use crate::helpers::dt;
 
-use crate::helpers::m_hist;
+use crate::helpers::{BTC_USD, m_hist};
 
 #[tokio::test]
 async fn history_with_valid_range_succeeds() {
     let a = m_hist("A", &[1, 2, 3]);
     let borsa = Borsa::builder().with_connector(a).build().unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
 
     let req = HistoryRequest::try_from_range(Range::M6, Interval::D1).unwrap();
     // With paft types, invalid (both range and period) cannot be constructed.

@@ -5,20 +5,20 @@ use crate::helpers::usd;
 use crate::helpers::{AAPL, GOOG, MSFT};
 use async_trait::async_trait;
 use borsa::Borsa;
-use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument, Quote};
+use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument, Quote, Symbol};
 use rust_decimal::Decimal;
 
 /// Connector that returns quotes only for symbols present in `ok_prices`.
 /// Missing symbols return `NotFound`.
 struct MapConnector {
     name: &'static str,
-    ok_prices: HashMap<String, f64>,
+    ok_prices: HashMap<Symbol, f64>,
 }
 
 #[async_trait]
 impl borsa_core::connector::QuoteProvider for MapConnector {
     async fn quote(&self, inst: &Instrument) -> Result<Quote, BorsaError> {
-        if let Some(&p) = self.ok_prices.get(inst.symbol_str()) {
+        if let Some(&p) = self.ok_prices.get(inst.symbol()) {
             Ok(Quote {
                 symbol: inst.symbol().clone(),
                 shortname: None,
@@ -54,17 +54,17 @@ impl BorsaConnector for MapConnector {
 #[tokio::test]
 async fn quotes_per_symbol_fallback_succeeds() {
     // Top provider serves AAPL/MSFT but not GOOG.
-    let mut top_map = HashMap::new();
-    top_map.insert(AAPL.into(), 100.0);
-    top_map.insert(MSFT.into(), 200.0);
+    let mut top_map: HashMap<Symbol, f64> = HashMap::new();
+    top_map.insert(AAPL.clone(), 100.0);
+    top_map.insert(MSFT.clone(), 200.0);
     let top = Arc::new(MapConnector {
         name: "top",
         ok_prices: top_map,
     });
 
     // Backup provider serves GOOG.
-    let mut backup_map = HashMap::new();
-    backup_map.insert(GOOG.into(), 300.0);
+    let mut backup_map: HashMap<Symbol, f64> = HashMap::new();
+    backup_map.insert(GOOG.clone(), 300.0);
     let backup = Arc::new(MapConnector {
         name: "backup",
         ok_prices: backup_map,
@@ -78,9 +78,9 @@ async fn quotes_per_symbol_fallback_succeeds() {
         .unwrap();
 
     let insts = &[
-        crate::helpers::instrument(AAPL, AssetKind::Equity),
-        crate::helpers::instrument(MSFT, AssetKind::Equity),
-        crate::helpers::instrument(GOOG, AssetKind::Equity),
+        crate::helpers::instrument(&AAPL, AssetKind::Equity),
+        crate::helpers::instrument(&MSFT, AssetKind::Equity),
+        crate::helpers::instrument(&GOOG, AssetKind::Equity),
     ];
 
     let (out, errs) = borsa.quotes(insts).await.expect("quotes ok");
@@ -90,10 +90,10 @@ async fn quotes_per_symbol_fallback_succeeds() {
     assert_eq!(out.len(), 3);
 
     let by_symbol: std::collections::HashMap<_, _> =
-        out.iter().map(|q| (q.symbol.as_str(), q)).collect();
+        out.iter().map(|q| (q.symbol.clone(), q)).collect();
     assert_eq!(
         by_symbol
-            .get(AAPL)
+            .get(&AAPL)
             .unwrap()
             .price
             .as_ref()
@@ -103,7 +103,7 @@ async fn quotes_per_symbol_fallback_succeeds() {
     );
     assert_eq!(
         by_symbol
-            .get(MSFT)
+            .get(&MSFT)
             .unwrap()
             .price
             .as_ref()
@@ -113,7 +113,7 @@ async fn quotes_per_symbol_fallback_succeeds() {
     );
     assert_eq!(
         by_symbol
-            .get(GOOG)
+            .get(&GOOG)
             .unwrap()
             .price
             .as_ref()

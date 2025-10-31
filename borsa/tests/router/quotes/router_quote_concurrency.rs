@@ -1,7 +1,7 @@
 use borsa::Borsa;
-use borsa_core::{AssetKind, BorsaConnector, Quote, RoutingPolicyBuilder, Symbol};
+use borsa_core::{AssetKind, BorsaConnector, Quote, RoutingPolicyBuilder};
 
-use crate::helpers::{m_quote, mock_connector::MockConnector, usd};
+use crate::helpers::{m_quote, mock_connector::MockConnector, X, usd};
 use std::time::Duration;
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn faster_lower_priority_does_not_beat_higher_priority_success() {
         .name("high")
         .delay(Duration::from_millis(80))
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            symbol: X.clone(),
             shortname: None,
             price: Some(usd("99.0")),
             previous_close: None,
@@ -20,9 +20,9 @@ async fn faster_lower_priority_does_not_beat_higher_priority_success() {
             day_volume: None,
         })
         .build();
-
+    
     let policy = RoutingPolicyBuilder::new()
-        .providers_for_symbol("X", &[high.key(), low.key()])
+        .providers_for_symbol(&X, &[high.key(), low.key()])
         .build();
 
     let borsa = Borsa::builder()
@@ -32,7 +32,7 @@ async fn faster_lower_priority_does_not_beat_higher_priority_success() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(q.price.unwrap().amount().to_string(), "99.0");
 }

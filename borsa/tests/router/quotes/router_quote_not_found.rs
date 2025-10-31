@@ -3,7 +3,7 @@ use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaError};
 use rust_decimal::Decimal;
 
-use crate::helpers::{MockConnector, m_quote};
+use crate::helpers::{MockConnector, m_quote, X};
 
 #[tokio::test]
 async fn all_not_found_returns_not_found() {
@@ -13,7 +13,7 @@ async fn all_not_found_returns_not_found() {
         .build();
     let borsa = Borsa::builder().with_connector(nf).build().unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa.quote(&inst).await.expect_err("should error");
     assert!(matches!(err, BorsaError::NotFound { .. }));
 }
@@ -30,7 +30,7 @@ async fn not_found_does_not_block_success() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.as_ref().map(borsa_core::Money::amount).unwrap(),

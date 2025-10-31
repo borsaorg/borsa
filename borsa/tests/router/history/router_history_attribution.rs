@@ -1,7 +1,7 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, HistoryRequest, Interval, Range};
 
-use crate::helpers::m_hist;
+use crate::helpers::{BTC_USD, m_hist};
 
 #[tokio::test]
 async fn history_with_attribution_marks_provider_spans() {
@@ -15,7 +15,7 @@ async fn history_with_attribution_marks_provider_spans() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let req = HistoryRequest::try_from_range(Range::D5, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();

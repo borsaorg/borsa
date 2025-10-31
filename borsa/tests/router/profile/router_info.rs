@@ -1,6 +1,6 @@
-use crate::helpers::usd;
+use crate::helpers::{X, usd};
 use borsa::Borsa;
-use borsa_core::{AssetKind, BorsaError, Instrument, Isin, Profile};
+use borsa_core::{AssetKind, BorsaError, Instrument, Isin, Profile, Symbol};
 use borsa_core::{CompanyProfile, PriceTarget, Quote, RecommendationSummary};
 use rust_decimal::Decimal;
 use std::sync::Arc;
@@ -110,7 +110,8 @@ async fn router_info_aggregates_data() {
         .with_connector(Arc::new(InfoConnector))
         .build()
         .unwrap();
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();
     let info = report.info.unwrap();
@@ -136,7 +137,8 @@ async fn router_fast_info_works() {
         .with_connector(Arc::new(InfoConnector))
         .build()
         .unwrap();
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
 
     let fast_info = borsa.fast_info(&inst).await.unwrap();
     assert_eq!(fast_info.last.unwrap().amount(), Decimal::from(150u8));
@@ -220,7 +222,8 @@ async fn router_info_partial_failures_quote_ok_profile_and_target_fail() {
         .with_connector(Arc::new(FailingProfileAndPtConnector))
         .build()
         .unwrap();
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();
     let info = report.info.unwrap();
@@ -242,8 +245,9 @@ struct MinimalInfoConnector;
 #[async_trait::async_trait]
 impl borsa_core::connector::QuoteProvider for MinimalInfoConnector {
     async fn quote(&self, _i: &Instrument) -> Result<Quote, BorsaError> {
+        let inst = crate::helpers::instrument(&X, AssetKind::Equity);
         Ok(Quote {
-            symbol: borsa_core::Symbol::new("X").unwrap(),
+            symbol: inst.symbol().clone(),
             shortname: Some("Minimal Inc.".into()),
             price: Some(usd("42.0")),
             previous_close: None,
@@ -340,7 +344,7 @@ async fn router_info_ignores_unused_capabilities() {
         .with_connector(Arc::new(MinimalInfoConnector))
         .build()
         .unwrap();
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();
     assert!(
@@ -363,7 +367,8 @@ async fn router_info_suppresses_optional_warnings() {
         .with_connector(Arc::new(InfoConnector))
         .build()
         .unwrap();
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
 
     let report = borsa.info(&inst).await.unwrap();
     assert!(

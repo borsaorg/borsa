@@ -21,7 +21,7 @@ async fn stream_quotes_errors_when_all_providers_fail_to_start() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument(AAPL, AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
 
     let err = borsa.stream_quotes(&[inst]).await.unwrap_err();
 
@@ -44,7 +44,7 @@ async fn stream_quotes_errors_when_all_providers_fail_to_start() {
 #[tokio::test]
 async fn stream_quotes_errors_when_one_kind_fails_to_start() {
     let equity_updates = vec![QuoteUpdate {
-        symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+        symbol: AAPL.clone(),
         price: Some(usd("120.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(10, 0).unwrap(),
@@ -67,8 +67,8 @@ async fn stream_quotes_errors_when_one_kind_fails_to_start() {
         .build()
         .unwrap();
 
-    let equity = crate::helpers::instrument(AAPL, AssetKind::Equity);
-    let crypto = crate::helpers::instrument(BTC_USD, AssetKind::Crypto);
+    let equity = crate::helpers::instrument(&AAPL, AssetKind::Equity);
+    let crypto = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
 
     let err = borsa.stream_quotes(&[equity, crypto]).await.unwrap_err();
 

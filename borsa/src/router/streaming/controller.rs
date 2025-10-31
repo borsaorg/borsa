@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use borsa_core::{BorsaConnector, BorsaError, Instrument, QuoteUpdate};
+use borsa_core::{BorsaConnector, BorsaError, Instrument, QuoteUpdate, Symbol};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
@@ -15,9 +15,9 @@ pub struct KindSupervisorParams {
     /// Assigned instruments per provider, aligned by index with `providers`.
     pub provider_instruments: Vec<Vec<Instrument>>,
     /// Allowed symbol set per provider, aligned by index with `providers`.
-    pub provider_allow: Vec<HashSet<String>>,
+    pub provider_allow: Vec<HashSet<Symbol>>,
     /// Full set of symbols that must be covered across all providers.
-    pub required_symbols: HashSet<String>,
+    pub required_symbols: HashSet<Symbol>,
     pub min_backoff_ms: u64,
     pub max_backoff_ms: u64,
     pub factor: u32,
@@ -26,6 +26,7 @@ pub struct KindSupervisorParams {
     pub enforce_monotonic: bool,
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn spawn_kind_supervisor(
     params: KindSupervisorParams,
     mut stop_watch: watch::Receiver<bool>,
@@ -33,7 +34,7 @@ pub fn spawn_kind_supervisor(
 ) -> JoinHandle<()> {
     struct ActiveSession {
         join: JoinHandle<()>,
-        symbols: Arc<[String]>,
+        symbols: Arc<[Symbol]>,
         stop_tx: Option<oneshot::Sender<()>>,
     }
 
@@ -64,12 +65,12 @@ pub fn spawn_kind_supervisor(
         let mut start_index: usize = 0;
         let mut backoff_ms: u64 = min_backoff_ms;
         let mut initial_errors: Vec<BorsaError> = Vec::new();
-        let mut coverage_counts: HashMap<String, usize> = HashMap::new();
+        let mut coverage_counts: HashMap<Symbol, usize> = HashMap::new();
         let mut active_sessions: Vec<Option<ActiveSession>> = Vec::with_capacity(providers.len());
         active_sessions.resize_with(providers.len(), || None);
         let monotonic_gate = Arc::new(MonotonicGate::new());
         let (event_tx, mut event_rx) =
-            tokio::sync::mpsc::unbounded_channel::<(usize, Arc<[String]>)>();
+            tokio::sync::mpsc::unbounded_channel::<(usize, Arc<[Symbol]>)>();
         let mut cooldown_providers: HashSet<usize> = HashSet::new();
 
         loop {
@@ -89,6 +90,7 @@ pub fn spawn_kind_supervisor(
                 }
                 return;
             }
+
             let mut reconnected_from_cooldown = false;
             let mut attempted_reconnect_this_round = false;
             let cooldown_snapshot = cooldown_providers.clone();
@@ -115,7 +117,7 @@ pub fn spawn_kind_supervisor(
                     (Some(allow_set), Some(insts)) => insts
                         .iter()
                         .filter(|inst| {
-                            let sym = inst.symbol().as_str();
+                            let sym = inst.symbol();
                             if !allow_set.contains(sym) || !required_symbols.contains(sym) {
                                 return false;
                             }
@@ -152,11 +154,11 @@ pub fn spawn_kind_supervisor(
                         }
                         initial_errors.clear();
 
-                        let symbols_vec: Vec<String> = needed_from_provider
+                        let symbols_vec: Vec<Symbol> = needed_from_provider
                             .iter()
-                            .map(|inst| inst.symbol().as_str().to_string())
+                            .map(|inst| inst.symbol().clone())
                             .collect();
-                        let symbols_arc: Arc<[String]> = Arc::from(symbols_vec.into_boxed_slice());
+                        let symbols_arc: Arc<[Symbol]> = Arc::from(symbols_vec.into_boxed_slice());
                         for sym in symbols_arc.iter() {
                             *coverage_counts.entry(sym.clone()).or_insert(0) += 1;
                         }

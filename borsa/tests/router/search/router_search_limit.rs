@@ -4,18 +4,22 @@ use borsa_core::{AssetKind, SearchRequest, SearchResult, Symbol};
 use crate::helpers::m_search;
 
 #[tokio::test]
+#[allow(clippy::similar_names)]
 async fn search_applies_limit_after_merge() {
+    let aaa = Symbol::new("AAA").expect("valid symbol");
+    let aab = Symbol::new("AAB").expect("valid symbol");
+    let aac = Symbol::new("AAC").expect("valid symbol");
     let a = m_search(
         "a",
         vec![
             SearchResult {
-                symbol: Symbol::new("AAA").unwrap(),
+                symbol: aaa.clone(),
                 name: None,
                 exchange: None,
                 kind: AssetKind::Equity,
             },
             SearchResult {
-                symbol: Symbol::new("AAB").unwrap(),
+                symbol: aab.clone(),
                 name: None,
                 exchange: None,
                 kind: AssetKind::Equity,
@@ -25,7 +29,7 @@ async fn search_applies_limit_after_merge() {
     let b = m_search(
         "b",
         vec![SearchResult {
-            symbol: Symbol::new("AAC").unwrap(),
+            symbol: aac.clone(),
             name: None,
             exchange: None,
             kind: AssetKind::Equity,

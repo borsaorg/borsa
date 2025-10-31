@@ -2,7 +2,7 @@ use borsa::Borsa;
 
 use borsa_core::{AssetKind, HistoryRequest, HistoryResponse};
 
-use crate::helpers::candle;
+use crate::helpers::{BTC_USD, candle};
 use crate::helpers::mock_connector::MockConnector;
 
 #[tokio::test]
@@ -27,7 +27,7 @@ async fn history_falls_back_when_first_errors() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let out = borsa
         .history(
             &inst,

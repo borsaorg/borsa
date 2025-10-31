@@ -1,6 +1,6 @@
-use crate::helpers::m_hist;
+use crate::helpers::{AAPL, MSFT, m_hist};
 use borsa::Borsa;
-use borsa_core::{AssetKind, Instrument, Range};
+use borsa_core::{AssetKind, Instrument, Range, Symbol};
 
 // A mock that can respond differently based on symbol
 struct MultiSymbolHist;
@@ -49,10 +49,13 @@ async fn download_builder_fetches_for_multiple_instruments() {
         .build()
         .unwrap();
 
+    let a = Symbol::new("A").expect("valid symbol");
+    let b = Symbol::new("B").expect("valid symbol");
+    let c = Symbol::new("C").expect("valid symbol");
     let instruments = &[
-        crate::helpers::instrument("A", AssetKind::Equity),
-        crate::helpers::instrument("B", AssetKind::Equity),
-        crate::helpers::instrument("C", AssetKind::Equity),
+        crate::helpers::instrument(&a, AssetKind::Equity),
+        crate::helpers::instrument(&b, AssetKind::Equity),
+        crate::helpers::instrument(&c, AssetKind::Equity),
     ];
 
     let result = borsa
@@ -110,11 +113,11 @@ async fn download_builder_rejects_duplicate_symbols_in_instruments() {
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
         .build()
         .unwrap();
-
+     
     let instruments_with_duplicates = &[
-        crate::helpers::instrument("AAPL", AssetKind::Equity),
-        crate::helpers::instrument("MSFT", AssetKind::Equity),
-        crate::helpers::instrument("AAPL", AssetKind::Equity), // Duplicate!
+        crate::helpers::instrument(&AAPL, AssetKind::Equity),
+        crate::helpers::instrument(&MSFT, AssetKind::Equity),
+        crate::helpers::instrument(&AAPL, AssetKind::Equity), // Duplicate!
     ];
 
     let result = borsa.download().instruments(instruments_with_duplicates);
@@ -134,11 +137,12 @@ async fn download_builder_rejects_duplicate_symbols_in_add_instrument() {
         .build()
         .unwrap();
 
+    let aapl = Symbol::new("AAPL").expect("valid symbol");
     let result = borsa
         .download()
-        .instruments(&[crate::helpers::instrument("AAPL", AssetKind::Equity)])
+        .instruments(&[crate::helpers::instrument(&aapl, AssetKind::Equity)])
         .unwrap()
-        .add_instrument(crate::helpers::instrument("AAPL", AssetKind::Equity));
+        .add_instrument(crate::helpers::instrument(&aapl, AssetKind::Equity));
 
     match result {
         Ok(_) => panic!("Expected error for duplicate symbol in add_instrument"),
@@ -159,11 +163,13 @@ async fn download_builder_allows_different_symbols() {
         .build()
         .unwrap();
 
+    let a = Symbol::new("A").expect("valid symbol");
+    let b = Symbol::new("B").expect("valid symbol");
     let result = borsa
         .download()
-        .instruments(&[crate::helpers::instrument("A", AssetKind::Equity)])
+        .instruments(&[crate::helpers::instrument(&a, AssetKind::Equity)])
         .unwrap()
-        .add_instrument(crate::helpers::instrument("B", AssetKind::Equity))
+        .add_instrument(crate::helpers::instrument(&b, AssetKind::Equity))
         .unwrap()
         .range(Range::D5)
         .run()

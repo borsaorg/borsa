@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument, Quote};
 
-use crate::helpers::MockConnector;
+use crate::helpers::{MockConnector, X};
 
 struct HotSwapQuoteConnector {
     inner: Arc<MockConnector>,
@@ -21,7 +21,7 @@ async fn quote_capability_hot_swap_returns_error_not_panic() {
     // remove it after the macro's pre-check to simulate a hot-swap.
     let base = crate::helpers::MockConnector::builder()
         .name("hot")
-        .returns_quote_ok(crate::helpers::quote_fixture("X", "1.00"))
+        .returns_quote_ok(crate::helpers::quote_fixture(&X, "1.00"))
         .build();
 
     let hs = Arc::new(HotSwapQuoteConnector {
@@ -37,7 +37,7 @@ async fn quote_capability_hot_swap_returns_error_not_panic() {
     let borsa = Borsa::builder().with_connector(hs_arc).build().unwrap();
 
     // First call: ensure success to confirm capability present
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let ok = borsa.quote(&inst).await;
     assert!(ok.is_ok());
 

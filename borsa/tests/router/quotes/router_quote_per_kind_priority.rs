@@ -1,7 +1,7 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
 
-use crate::helpers::m_quote;
+use crate::helpers::{m_quote, X};
 
 #[tokio::test]
 async fn per_kind_priority_applies_to_quotes() {
@@ -19,7 +19,7 @@ async fn per_kind_priority_applies_to_quotes() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.unwrap().amount(),

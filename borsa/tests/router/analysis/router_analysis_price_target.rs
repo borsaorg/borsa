@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{AAPL, MockConnector};
 use crate::helpers::usd;
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, PriceTarget, RoutingPolicyBuilder};
@@ -40,7 +40,7 @@ async fn price_target_respects_per_kind_priority() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa.analyst_price_target(&inst).await.unwrap();
     assert_eq!(out.high.map(|m| m.amount()), Some(Decimal::from(250u8)));
     assert_eq!(out.number_of_analysts, Some(42));

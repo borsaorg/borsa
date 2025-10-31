@@ -3,7 +3,9 @@ use std::convert::TryFrom;
 use std::sync::Arc;
 
 use borsa_core::types::{BackoffConfig, BorsaConfig, FetchStrategy, MergeStrategy, Resampling};
-use borsa_core::{AssetKind, BorsaConnector, BorsaError, Capability, Instrument, RoutingContext};
+use borsa_core::{
+    AssetKind, BorsaConnector, BorsaError, Capability, Instrument, RoutingContext, Symbol,
+};
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashSet;
 use std::mem;
@@ -287,12 +289,9 @@ impl Borsa {
         merged: Vec<borsa_core::SearchResult>,
     ) -> Vec<borsa_core::SearchResult> {
         use std::collections::HashMap;
-        let mut grouped: HashMap<String, Vec<(usize, borsa_core::SearchResult)>> = HashMap::new();
+        let mut grouped: HashMap<Symbol, Vec<(usize, borsa_core::SearchResult)>> = HashMap::new();
         for (i, r) in merged.into_iter().enumerate() {
-            grouped
-                .entry(r.symbol.as_str().to_string())
-                .or_default()
-                .push((i, r));
+            grouped.entry(r.symbol.clone()).or_default().push((i, r));
         }
         // Preserve overall provider order by selecting the best per symbol, then sorting by first-seen index.
         let mut selected: Vec<(usize, borsa_core::SearchResult)> =
@@ -408,7 +407,7 @@ impl Borsa {
 
     pub(crate) fn ordered(&self, inst: &Instrument) -> Vec<Arc<dyn BorsaConnector>> {
         let ctx = RoutingContext::new(
-            Some(inst.symbol_str()),
+            Some(inst.symbol()),
             Some(*inst.kind()),
             inst.exchange().cloned(),
         );

@@ -1,7 +1,8 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, ConnectorKey, HistoryRequest, RoutingPolicyBuilder};
 
-use crate::helpers::m_hist;
+use crate::helpers::{BTC_USD, m_hist};
+use crate::helpers::X;
 
 #[tokio::test]
 async fn per_kind_priority_is_applied() {
@@ -18,7 +19,7 @@ async fn per_kind_priority_is_applied() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let req =
         HistoryRequest::try_from_range(borsa_core::Range::D1, borsa_core::Interval::D1).unwrap();
     let merged = borsa.history(&inst, req).await.unwrap();
@@ -67,7 +68,7 @@ async fn routing_policy_global_strict_excludes_unlisted() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let req =
         HistoryRequest::try_from_range(borsa_core::Range::D1, borsa_core::Interval::D1).unwrap();
     let merged = borsa.history(&inst, req).await.unwrap();

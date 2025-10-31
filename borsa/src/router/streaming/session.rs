@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use borsa_core::Symbol;
 use borsa_core::{QuoteUpdate, stream::StreamHandle};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
@@ -20,13 +21,13 @@ impl SessionManager {
         session_index: usize,
         handle: StreamHandle,
         mut prx: mpsc::Receiver<QuoteUpdate>,
-        allowed: Option<HashSet<String>>,
+        allowed: Option<HashSet<Symbol>>,
         mut stop_watch: watch::Receiver<bool>,
         enforce_monotonic: bool,
         monotonic_gate: Arc<MonotonicGate>,
         tx_out: mpsc::Sender<QuoteUpdate>,
-        event_tx: tokio::sync::mpsc::UnboundedSender<(usize, Arc<[String]>)>,
-        session_symbols: Arc<[String]>,
+        event_tx: tokio::sync::mpsc::UnboundedSender<(usize, Arc<[Symbol]>)>,
+        session_symbols: Arc<[Symbol]>,
     ) -> SpawnedSession {
         let (session_stop_tx, mut session_stop_rx) = oneshot::channel::<()>();
 
@@ -53,7 +54,7 @@ impl SessionManager {
                     maybe_u = prx.recv() => {
                         if let Some(u) = maybe_u {
                             if let Some(ref allowset) = allowed
-                                && !allowset.contains(u.symbol.as_str()) {
+                                && !allowset.contains(&u.symbol) {
                                     #[cfg(feature = "tracing")]
                                     tracing::warn!(symbol = %u.symbol, provider_index = session_index, "dropping update for unassigned symbol");
                                     continue;

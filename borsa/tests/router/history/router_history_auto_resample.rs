@@ -1,7 +1,9 @@
 use borsa::{Borsa, Resampling};
 use borsa_core::{AssetKind, HistoryRequest, Interval, Range};
 
-use crate::helpers::m_hist;
+use crate::helpers::{AAPL, m_hist};
+use crate::helpers::BTC_USD;
+use crate::helpers::ETH_USD;
 
 #[tokio::test]
 async fn auto_resamples_when_series_is_subdaily() {
@@ -14,7 +16,7 @@ async fn auto_resamples_when_series_is_subdaily() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let out = borsa
         .history(
             &inst,
@@ -40,7 +42,7 @@ async fn auto_does_not_trigger_for_daily_series() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&ETH_USD, AssetKind::Crypto);
     let out = borsa
         .history(
             &inst,
@@ -65,7 +67,7 @@ async fn explicit_daily_or_weekly_overrides_auto() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out_d = borsa_daily
         .history(
             &inst,

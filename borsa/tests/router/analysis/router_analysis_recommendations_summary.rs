@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{AAPL, MockConnector};
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, RecommendationSummary, RoutingPolicyBuilder};
 use tokio::time::Duration;
@@ -43,8 +43,8 @@ async fn recommendations_summary_respects_per_kind_priority() {
         .routing_policy(policy)
         .build()
         .unwrap();
-
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa.recommendations_summary(&inst).await.unwrap();
 
     assert_eq!(out.latest_period, Some("2024-08".parse().unwrap()));

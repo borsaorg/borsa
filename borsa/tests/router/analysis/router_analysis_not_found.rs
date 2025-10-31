@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use borsa::Borsa;
 use borsa_core::connector::{BorsaConnector, RecommendationsSummaryProvider};
 use borsa_core::{AssetKind, BorsaError, Instrument};
+use crate::helpers::X;
 
 struct NF;
 #[async_trait]
@@ -37,7 +38,7 @@ async fn all_not_found_returns_not_found() {
         .with_connector(std::sync::Arc::new(NF))
         .build()
         .unwrap();
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa.recommendations_summary(&inst).await.err().unwrap();
     assert!(matches!(err, BorsaError::NotFound { .. }));
 }

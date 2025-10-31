@@ -3,7 +3,8 @@ pub mod mock_connector;
 
 pub use mock_connector::{MockConnector, candle, m_hist, m_quote, m_search};
 
-use borsa_core::{AssetKind, Instrument};
+use borsa_core::{AssetKind, Instrument, Symbol};
+use std::sync::LazyLock;
 
 #[doc(hidden)]
 pub const INTERVALS: &[borsa_core::Interval] = &[
@@ -18,16 +19,13 @@ pub const INTERVALS: &[borsa_core::Interval] = &[
 
 // ---------- Lightweight fixtures and helpers for tests ----------
 
-/// Common symbol constants used across tests.
-pub const AAPL: &str = "AAPL";
-pub const MSFT: &str = "MSFT";
-pub const TSLA: &str = "TSLA";
-pub const X: &str = "X";
-pub const GOOG: &str = "GOOG";
-#[allow(dead_code)]
-pub const BTC_USD: &str = "BTC-USD";
-#[allow(dead_code)]
-pub const ETH_USD: &str = "ETH-USD";
+pub static AAPL: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("AAPL").expect("valid symbol"));
+pub static MSFT: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("MSFT").expect("valid symbol"));
+pub static TSLA: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("TSLA").expect("valid symbol"));
+pub static X: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("X").expect("valid symbol"));
+pub static GOOG: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("GOOG").expect("valid symbol"));
+pub static BTC_USD: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("BTC-USD").expect("valid symbol"));
+pub static ETH_USD: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("ETH-USD").expect("valid symbol"));
 
 /// Construct a UTC `DateTime` from components for readability in tests.
 pub const fn dt(
@@ -60,14 +58,14 @@ pub fn usd(amount: &str) -> borsa_core::Money {
 }
 
 /// Construct an `Instrument` for test usage with infallible expectations.
-pub fn instrument(symbol: &str, kind: AssetKind) -> Instrument {
+pub fn instrument(symbol: &Symbol, kind: AssetKind) -> Instrument {
     Instrument::from_symbol(symbol, kind).expect("valid static test symbol")
 }
 
 /// Create a minimal Quote with only `symbol` and `price` populated.
-pub fn quote_fixture(symbol: &str, price: &str) -> borsa_core::Quote {
+pub fn quote_fixture(symbol: &Symbol, price: &str) -> borsa_core::Quote {
     borsa_core::Quote {
-        symbol: borsa_core::Symbol::new(symbol).expect("valid test symbol"),
+        symbol: symbol.clone(),
         shortname: None,
         price: Some(usd(price)),
         previous_close: None,

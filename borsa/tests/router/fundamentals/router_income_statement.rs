@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{AAPL, MockConnector};
 use crate::helpers::{dt, usd};
 use borsa::Borsa;
 use borsa_core::{AssetKind, IncomeStatementRow, Period};
@@ -31,7 +31,7 @@ async fn income_statement_falls_back_and_succeeds() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let rows = borsa.income_statement(&inst, false).await.unwrap();
 
     assert_eq!(rows.len(), 1);

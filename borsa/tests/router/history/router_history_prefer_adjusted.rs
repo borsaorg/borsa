@@ -4,7 +4,7 @@ use borsa_core::{AssetKind, Candle, Currency, HistoryRequest, HistoryResponse, M
 use chrono::TimeZone;
 use std::collections::HashMap;
 
-use crate::helpers::MockConnector;
+use crate::helpers::{AAPL, MockConnector};
 
 fn candles(ts: &[i64], base: f64) -> Vec<Candle> {
     ts.iter()
@@ -67,7 +67,7 @@ async fn prefers_adjusted_series_over_non_adjusted_on_overlap() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa
         .history(
             &inst,
@@ -111,7 +111,7 @@ async fn default_behavior_keeps_priority_if_flag_not_set() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa
         .history(
             &inst,
@@ -157,7 +157,7 @@ async fn prefer_adjusted_drops_unadjusted_even_when_non_overlapping() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa
         .history(
             &inst,
@@ -201,7 +201,7 @@ async fn no_preference_keeps_first_series_adjustedness_even_when_non_overlapping
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa
         .history(
             &inst,

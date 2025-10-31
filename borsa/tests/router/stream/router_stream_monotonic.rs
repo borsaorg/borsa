@@ -12,21 +12,21 @@ async fn stream_monotonic_drops_older_and_allows_equal() {
 
     let updates = vec![
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("200.0")),
             previous_close: None,
             ts: t1,
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("200.1")),
             previous_close: None,
             ts: t2_eq,
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("199.9")),
             previous_close: None,
             ts: t0_old,
@@ -46,7 +46,7 @@ async fn stream_monotonic_drops_older_and_allows_equal() {
         .unwrap();
 
     let (_handle, mut rx) = borsa
-        .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect("stream started");
 
@@ -71,14 +71,14 @@ async fn stream_monotonic_can_be_disabled() {
 
     let updates = vec![
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("200.0")),
             previous_close: None,
             ts: t1,
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("199.9")),
             previous_close: None,
             ts: t0_old,
@@ -99,7 +99,7 @@ async fn stream_monotonic_can_be_disabled() {
         .unwrap();
 
     let (_handle, mut rx) = borsa
-        .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect("stream started");
 

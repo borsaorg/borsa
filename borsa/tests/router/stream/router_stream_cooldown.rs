@@ -9,7 +9,7 @@ async fn cooldown_skips_provider_until_after_backoff_tick() {
     // High-priority provider emits one update, then ends; later becomes available again
     let p1_steps = vec![
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -17,7 +17,7 @@ async fn cooldown_skips_provider_until_after_backoff_tick() {
         }]),
         // After cooldown/backoff we will return again
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("150.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(150, 0).unwrap(),
@@ -33,21 +33,21 @@ async fn cooldown_skips_provider_until_after_backoff_tick() {
     // Lower-priority provider provides a few fast updates
     let p2_updates = vec![
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("101.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("102.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("103.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(4, 0).unwrap(),
@@ -101,7 +101,7 @@ async fn cooldown_handles_consecutive_provider_failures_without_immediate_retry(
     // P0: connect, emit 1 update, end; later will return again after cooldown
     let p0_steps = vec![
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -109,7 +109,7 @@ async fn cooldown_handles_consecutive_provider_failures_without_immediate_retry(
         }]),
         // Next attempt should occur only after backoff tick
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("200.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(200, 0).unwrap(),
@@ -124,7 +124,7 @@ async fn cooldown_handles_consecutive_provider_failures_without_immediate_retry(
 
     // P1: connect, emit 1 update, end
     let p1_steps = vec![StreamStep::Updates(vec![QuoteUpdate {
-        symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+        symbol: AAPL.clone(),
         price: Some(usd("110.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),

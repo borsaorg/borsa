@@ -1,6 +1,6 @@
 use crate::helpers::MockConnector;
 use borsa::Borsa;
-use borsa_core::AssetKind;
+use borsa_core::{AssetKind, Symbol};
 
 #[tokio::test]
 async fn expirations_falls_back_and_succeeds() {
@@ -21,7 +21,8 @@ async fn expirations_falls_back_and_succeeds() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let aapl = Symbol::new("AAPL").expect("valid symbol");
+    let inst = crate::helpers::instrument(&aapl, AssetKind::Equity);
     let out = borsa.options_expirations(&inst).await.unwrap();
     assert_eq!(out.len(), 2);
     assert_eq!(out[0], 1_725_813_600);

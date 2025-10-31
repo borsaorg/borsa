@@ -16,7 +16,7 @@ async fn stream_quotes_strict_symbols_rejected_fails_fast() {
     let policy = RoutingPolicyBuilder::new()
         .providers_rule(
             borsa_core::Selector {
-                symbol: Some(AAPL.to_string()),
+                symbol: Some(AAPL.clone()),
                 kind: Some(AssetKind::Equity),
                 exchange: None,
             },
@@ -32,13 +32,13 @@ async fn stream_quotes_strict_symbols_rejected_fails_fast() {
         .unwrap();
 
     let err = borsa
-        .stream_quotes(&[instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect_err("strict rejection should error");
 
     match err {
         borsa_core::BorsaError::StrictSymbolsRejected { rejected } => {
-            assert_eq!(rejected, vec![AAPL.to_string()]);
+            assert_eq!(rejected, vec![AAPL.clone()]);
         }
         other => panic!("unexpected error: {other:?}"),
     }

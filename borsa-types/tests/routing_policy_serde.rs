@@ -1,5 +1,5 @@
 use borsa_types::{ConnectorKey, RoutingContext, RoutingPolicy, RoutingPolicyBuilder};
-use paft::domain::{AssetKind, Exchange};
+use paft::domain::{AssetKind, Exchange, Symbol};
 
 fn ex(name: &str) -> Exchange {
     Exchange::try_from_str(name).unwrap()
@@ -11,7 +11,7 @@ fn policy_fixture() -> RoutingPolicy {
 
     RoutingPolicyBuilder::new()
         .providers_for_kind(AssetKind::Equity, &[slow.clone(), fast.clone()])
-        .providers_for_symbol("AAPL", &[fast, slow.clone()])
+        .providers_for_symbol(&Symbol::new("AAPL").unwrap(), &[fast, slow.clone()])
         .providers_rule(
             borsa_types::routing_policy::Selector {
                 symbol: None,
@@ -23,7 +23,7 @@ fn policy_fixture() -> RoutingPolicy {
         )
         .exchanges_global(&[ex("NASDAQ"), ex("NYSE")])
         .exchanges_for_kind(AssetKind::Equity, &[ex("LSE"), ex("NYSE")])
-        .exchanges_for_symbol("RIO", &[ex("LSE")])
+        .exchanges_for_symbol(&Symbol::new("RIO").unwrap(), &[ex("LSE")])
         .build()
 }
 
@@ -37,7 +37,8 @@ fn routing_policy_roundtrip_preserves_behavior() {
     let de: RoutingPolicy = serde_json::from_str(&json).expect("deserialize policy");
 
     // 1) Symbol override (AAPL) prefers fast over slow
-    let ctx_aapl = RoutingContext::new(Some("AAPL"), Some(AssetKind::Equity), None);
+    let aapl = Symbol::new("AAPL").unwrap();
+    let ctx_aapl = RoutingContext::new(Some(&aapl), Some(AssetKind::Equity), None);
     let (r_fast, _) = de
         .providers
         .provider_rank(&ctx_aapl, &fast)
@@ -52,7 +53,8 @@ fn routing_policy_roundtrip_preserves_behavior() {
     );
 
     // 2) Kind-level rule (MSFT equity) prefers slow over fast
-    let ctx_msft = RoutingContext::new(Some("MSFT"), Some(AssetKind::Equity), None);
+    let msft = Symbol::new("MSFT").unwrap();
+    let ctx_msft = RoutingContext::new(Some(&msft), Some(AssetKind::Equity), None);
     let (r_slow2, _) = de
         .providers
         .provider_rank(&ctx_msft, &slow)
@@ -64,12 +66,14 @@ fn routing_policy_roundtrip_preserves_behavior() {
     assert!(r_slow2 < r_fast2, "kind rule should prefer slow over fast");
 
     // 3) Strict rule for Crypto: only slow is eligible
-    let ctx_btc = RoutingContext::new(Some("BTC-USD"), Some(AssetKind::Crypto), None);
+    let btc = Symbol::new("BTC-USD").unwrap();
+    let ctx_btc = RoutingContext::new(Some(&btc), Some(AssetKind::Crypto), None);
     assert!(de.providers.provider_rank(&ctx_btc, &slow).is_some());
     assert!(de.providers.provider_rank(&ctx_btc, &fast).is_none());
 
     // 4) Exchange preference for symbol RIO: LSE ranks over NYSE
-    let ctx_rio = RoutingContext::new(Some("RIO"), Some(AssetKind::Equity), None);
+    let rio = Symbol::new("RIO").unwrap();
+    let ctx_rio = RoutingContext::new(Some(&rio), Some(AssetKind::Equity), None);
     let lse = ex("LSE");
     let nyse = ex("NYSE");
     let k_lse = de.exchange_sort_key(&ctx_rio, Some(&lse), 0).0;
@@ -80,7 +84,8 @@ fn routing_policy_roundtrip_preserves_behavior() {
     );
 
     // 5) Exchange preference for kind-only (DUAL): LSE ranks over NYSE
-    let ctx_dual = RoutingContext::new(Some("DUAL"), Some(AssetKind::Equity), None);
+    let dual = Symbol::new("DUAL").unwrap();
+    let ctx_dual = RoutingContext::new(Some(&dual), Some(AssetKind::Equity), None);
     let k_lse2 = de.exchange_sort_key(&ctx_dual, Some(&lse), 0).0;
     let k_nyse2 = de.exchange_sort_key(&ctx_dual, Some(&nyse), 1).0;
     assert!(
@@ -109,12 +114,13 @@ fn precedence_prefers_more_fields_over_symbol_only() {
             &[slow.clone(), fast.clone()],
             false,
         )
-        .providers_for_symbol("AAPL", &[fast.clone(), slow.clone()])
+        .providers_for_symbol(&Symbol::new("AAPL").unwrap(), &[fast.clone(), slow.clone()])
         .build();
 
     // Context matches both rules: symbol=AAPL, kind=Equity, exchange=NYSE.
     // With count-first precedence, kind+exchange (2 fields) beats symbol-only (1 field).
-    let ctx = RoutingContext::new(Some("AAPL"), Some(AssetKind::Equity), Some(nyse));
+    let aapl = Symbol::new("AAPL").unwrap();
+    let ctx = RoutingContext::new(Some(&aapl), Some(AssetKind::Equity), Some(nyse));
 
     let (r_slow, _) = policy
         .providers
@@ -167,7 +173,9 @@ fn borsa_config_roundtrip_serde() {
     // Sanity-check provider behavior survives roundtrip
     let fast = ConnectorKey::new("fast");
     let slow = ConnectorKey::new("slow");
-    let ctx_aapl = RoutingContext::new(Some("AAPL"), Some(AssetKind::Equity), None);
+
+    let aapl = Symbol::new("AAPL").unwrap();
+    let ctx_aapl = RoutingContext::new(Some(&aapl), Some(AssetKind::Equity), None);
     let (r_fast, _) = de
         .routing_policy
         .providers

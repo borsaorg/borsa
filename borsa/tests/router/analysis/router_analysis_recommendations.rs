@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{AAPL, MockConnector};
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, RecommendationRow, RoutingPolicyBuilder};
 use tokio::time::Duration;
@@ -39,8 +39,8 @@ async fn recommendations_respects_per_kind_priority() {
         .routing_policy(policy)
         .build()
         .unwrap();
-
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa.recommendations(&inst).await.unwrap();
 
     // Should come from "high" despite being slower.

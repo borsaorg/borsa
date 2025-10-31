@@ -1,6 +1,6 @@
 use crate::helpers::{MockConnector, m_hist};
 use borsa::{Borsa, MergeStrategy};
-use borsa_core::{AssetKind, HistoryRequest, Interval, Range};
+use borsa_core::{AssetKind, HistoryRequest, Interval, Range, Symbol};
 
 #[tokio::test]
 async fn merge_strategy_deep_fetches_all_providers() {
@@ -17,7 +17,8 @@ async fn merge_strategy_deep_fetches_all_providers() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();
@@ -51,7 +52,8 @@ async fn merge_strategy_fallback_stops_at_first_success() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();
@@ -87,8 +89,9 @@ async fn merge_strategy_fallback_continues_on_empty_data() {
         .merge_history_strategy(MergeStrategy::Fallback)
         .build()
         .unwrap();
-
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();
@@ -117,7 +120,8 @@ async fn merge_strategy_fallback_handles_errors_gracefully() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();
@@ -143,7 +147,8 @@ async fn merge_strategy_default_is_deep() {
         .build()
         .unwrap(); // No explicit strategy set
 
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();
@@ -170,7 +175,8 @@ async fn merge_strategy_fallback_with_overlapping_data() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("TEST", AssetKind::Equity);
+    let test = Symbol::new("TEST").expect("valid symbol");
+    let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();
 
     let (merged, attr) = borsa.history_with_attribution(&inst, req).await.unwrap();

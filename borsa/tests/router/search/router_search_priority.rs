@@ -113,6 +113,7 @@ async fn search_respects_exchange_priority_kind_and_symbol_override() {
         ],
     );
 
+    let rio = Symbol::new("RIO").expect("valid symbol");
     let policy = RoutingPolicyBuilder::new()
         .exchanges_for_kind(
             AssetKind::Equity,
@@ -121,7 +122,7 @@ async fn search_respects_exchange_priority_kind_and_symbol_override() {
                 Exchange::try_from_str("NYSE").unwrap(),
             ],
         )
-        .exchanges_for_symbol("RIO", &[Exchange::try_from_str("NYSE").unwrap()])
+        .exchanges_for_symbol(&rio, &[Exchange::try_from_str("NYSE").unwrap()])
         .build();
     let borsa = Borsa::builder()
         .with_connector(low.clone())

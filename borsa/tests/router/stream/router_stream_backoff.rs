@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use borsa::{BackoffConfig, Borsa};
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
+use crate::helpers::X;
 
 struct CountingFailStreamConnector {
     attempts: Arc<AtomicUsize>,
@@ -83,7 +84,7 @@ async fn stream_backoff_exponential_no_jitter() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let (handle, _rx) = borsa
         .stream_quotes_with_backoff(&[inst], None)
         .await
@@ -156,7 +157,7 @@ async fn stream_backoff_jitter_bounds() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let (handle, _rx) = borsa
         .stream_quotes_with_backoff(&[inst], None)
         .await

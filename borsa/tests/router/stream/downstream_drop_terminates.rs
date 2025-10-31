@@ -8,7 +8,7 @@ async fn downstream_drop_terminates_supervisors_and_handle() {
     // Streaming connector that would emit a handful of updates
     let updates: Vec<QuoteUpdate> = (1..=5)
         .map(|t| QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
+            symbol: AAPL.clone(),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),

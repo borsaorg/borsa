@@ -1,6 +1,6 @@
 use borsa::Borsa;
 
-use crate::helpers::MockConnector;
+use crate::helpers::{MockConnector, X};
 use borsa_core::{AssetKind, BorsaError, HistoryRequest};
 
 #[tokio::test]
@@ -21,7 +21,7 @@ async fn all_not_found_returns_not_found() {
         .build();
     let borsa = Borsa::builder().with_connector(nf).build().unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa
         .history(
             &inst,
@@ -58,7 +58,7 @@ async fn all_ok_empty_returns_not_found() {
 
     let borsa = Borsa::builder().with_connector(empty_ok).build().unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa
         .history(
             &inst,

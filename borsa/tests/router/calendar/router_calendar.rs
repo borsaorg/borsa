@@ -1,4 +1,4 @@
-use crate::helpers::MockConnector;
+use crate::helpers::{TSLA, MockConnector};
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaError, Calendar};
 // use chrono::TimeZone;
@@ -28,7 +28,7 @@ async fn calendar_falls_back_and_succeeds() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("TSLA", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&TSLA, AssetKind::Equity);
     let cal = borsa.calendar(&inst).await.unwrap();
 
     assert_eq!(

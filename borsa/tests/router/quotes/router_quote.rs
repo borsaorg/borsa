@@ -3,7 +3,7 @@ use borsa_core::{
     AssetKind, BorsaConnector, Exchange, Instrument, Quote, RoutingPolicyBuilder, Symbol,
 };
 
-use crate::helpers::{MockConnector, m_quote, usd};
+use crate::helpers::{MockConnector, m_quote, usd, X};
 use std::sync::Arc;
 
 #[tokio::test]
@@ -17,7 +17,7 @@ async fn quote_fallback_first_success() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.unwrap().amount(),
@@ -31,7 +31,7 @@ async fn quote_respects_priority_override() {
     let c2 = m_quote("high", 99.0);
 
     let policy = RoutingPolicyBuilder::new()
-        .providers_for_symbol("X", &[c2.key(), c1.key()])
+        .providers_for_symbol(&X, &[c2.key(), c1.key()])
         .build();
 
     let borsa = Borsa::builder()
@@ -41,7 +41,7 @@ async fn quote_respects_priority_override() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(
         q.price.unwrap().amount(),
@@ -146,10 +146,11 @@ async fn quote_strict_rule_blocks_fallback() {
         .build();
     let other = m_quote("other", 123.45);
 
+    let x = Symbol::new("X").expect("valid symbol");
     let policy = RoutingPolicyBuilder::new()
         .providers_rule(
             borsa_core::Selector {
-                symbol: Some("X".into()),
+                symbol: Some(x),
                 kind: Some(AssetKind::Equity),
                 exchange: None,
             },
@@ -165,7 +166,7 @@ async fn quote_strict_rule_blocks_fallback() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("X", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let err = borsa.quote(&inst).await.expect_err("should not fallback");
     assert!(matches!(err, borsa_core::BorsaError::NotFound { .. }));
 }

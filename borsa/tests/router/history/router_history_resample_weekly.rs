@@ -1,7 +1,7 @@
 use borsa::{Borsa, Resampling};
 use borsa_core::{AssetKind, HistoryRequest};
 
-use crate::helpers::m_hist;
+use crate::helpers::{BTC_USD, ETH_USD, m_hist};
 
 #[tokio::test]
 async fn resamples_into_weekly_monday_start() {
@@ -15,7 +15,7 @@ async fn resamples_into_weekly_monday_start() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let out = borsa
         .history(
             &inst,
@@ -42,7 +42,7 @@ async fn weekly_takes_precedence_over_daily() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&ETH_USD, AssetKind::Crypto);
     let out = borsa
         .history(
             &inst,

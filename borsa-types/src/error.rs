@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use paft::domain::Symbol;
+
 /// Unified error type for the borsa workspace.
 ///
 /// This wraps capability mismatches, argument validation errors, provider-tagged
@@ -74,7 +76,7 @@ pub enum BorsaError {
     #[error("strict routing rejected symbols: {rejected:?}")]
     StrictSymbolsRejected {
         /// List of symbol strings that were excluded by strict routing rules.
-        rejected: Vec<String>,
+        rejected: Vec<Symbol>,
     },
 
     /// The request exceeds the configured quota budget for the current window.

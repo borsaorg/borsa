@@ -1,7 +1,7 @@
 use borsa::{Borsa, Resampling};
 use borsa_core::{AssetKind, HistoryRequest};
 
-use crate::helpers::m_hist;
+use crate::helpers::{BTC_USD, ETH_USD, m_hist};
 
 #[tokio::test]
 async fn resamples_intraday_into_daily() {
@@ -16,7 +16,7 @@ async fn resamples_intraday_into_daily() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let req =
         HistoryRequest::try_from_range(borsa_core::Range::D1, borsa_core::Interval::I1m).unwrap();
 
@@ -33,7 +33,7 @@ async fn without_resample_returns_original_granularity() {
 
     let borsa = Borsa::builder().with_connector(c).build().unwrap();
 
-    let inst = crate::helpers::instrument("ETH-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&ETH_USD, AssetKind::Crypto);
     let req =
         HistoryRequest::try_from_range(borsa_core::Range::D1, borsa_core::Interval::I1m).unwrap();
 

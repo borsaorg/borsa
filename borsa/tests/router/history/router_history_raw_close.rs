@@ -1,6 +1,6 @@
 use borsa::{Borsa, Resampling};
 
-use crate::helpers::usd;
+use crate::helpers::{AAPL, BTC_USD, usd};
 use borsa_core::{AssetKind, Candle, HistoryRequest, HistoryResponse};
 use chrono::TimeZone;
 
@@ -41,7 +41,7 @@ async fn raw_close_preserved_for_single_source_no_resample() {
 
     let borsa = Borsa::builder().with_connector(c).build().unwrap();
 
-    let inst = crate::helpers::instrument("AAPL", AssetKind::Equity);
+    let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa
         .history(
             &inst,
@@ -110,7 +110,7 @@ async fn raw_close_dropped_when_resampled() {
         .build()
         .unwrap();
 
-    let inst = crate::helpers::instrument("BTC-USD", AssetKind::Crypto);
+    let inst = crate::helpers::instrument(&BTC_USD, AssetKind::Crypto);
     let out = borsa
         .history(
             &inst,
