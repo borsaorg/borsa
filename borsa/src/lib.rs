@@ -147,6 +147,7 @@ pub use borsa_core::{
     NetSharePurchaseActivity,
     NewsArticle,
     NewsRequest,
+    OptionContract,
     OptionChain,
     PriceTarget,
     Profile,
