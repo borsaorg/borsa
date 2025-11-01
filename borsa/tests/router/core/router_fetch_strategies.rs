@@ -42,7 +42,7 @@ async fn strategy_latency_returns_fastest_success() {
         .fetch_strategy(FetchStrategy::Latency)
         .build()
         .unwrap();
-    
+
     let inst = crate::helpers::instrument(&X, AssetKind::Equity);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(

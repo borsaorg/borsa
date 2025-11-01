@@ -1,6 +1,6 @@
+use crate::helpers::X;
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaError};
-use crate::helpers::X;
 
 #[tokio::test]
 async fn stream_quotes_reports_unsupported_when_no_stream_provider_available() {

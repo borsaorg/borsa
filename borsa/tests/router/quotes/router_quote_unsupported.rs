@@ -1,6 +1,6 @@
+use crate::helpers::X;
 use borsa::{Borsa, FetchStrategy};
 use borsa_core::{AssetKind, BorsaError};
-use crate::helpers::X;
 
 #[tokio::test]
 async fn quote_returns_unsupported_when_no_connector_handles_capability() {

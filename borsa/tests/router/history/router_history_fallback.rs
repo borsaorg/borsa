@@ -2,8 +2,8 @@ use borsa::Borsa;
 
 use borsa_core::{AssetKind, HistoryRequest, HistoryResponse};
 
-use crate::helpers::{BTC_USD, candle};
 use crate::helpers::mock_connector::MockConnector;
+use crate::helpers::{BTC_USD, candle};
 
 #[tokio::test]
 async fn history_falls_back_when_first_errors() {

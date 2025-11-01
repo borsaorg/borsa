@@ -43,7 +43,7 @@ async fn recommendations_summary_respects_per_kind_priority() {
         .routing_policy(policy)
         .build()
         .unwrap();
-    
+
     let inst = crate::helpers::instrument(&AAPL, AssetKind::Equity);
     let out = borsa.recommendations_summary(&inst).await.unwrap();
 

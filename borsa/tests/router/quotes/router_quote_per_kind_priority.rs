@@ -1,7 +1,7 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
 
-use crate::helpers::{m_quote, X};
+use crate::helpers::{X, m_quote};
 
 #[tokio::test]
 async fn per_kind_priority_applies_to_quotes() {

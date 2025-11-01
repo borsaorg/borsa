@@ -1,10 +1,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::helpers::X;
 use async_trait::async_trait;
 use borsa::{BackoffConfig, Borsa};
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
-use crate::helpers::X;
 
 struct CountingFailStreamConnector {
     attempts: Arc<AtomicUsize>,

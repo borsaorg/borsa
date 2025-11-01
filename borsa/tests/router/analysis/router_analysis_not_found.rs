@@ -1,8 +1,8 @@
+use crate::helpers::X;
 use async_trait::async_trait;
 use borsa::Borsa;
 use borsa_core::connector::{BorsaConnector, RecommendationsSummaryProvider};
 use borsa_core::{AssetKind, BorsaError, Instrument};
-use crate::helpers::X;
 
 struct NF;
 #[async_trait]

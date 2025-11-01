@@ -1,4 +1,4 @@
-use crate::helpers::{MockConnector, GOOG};
+use crate::helpers::{GOOG, MockConnector};
 use crate::helpers::{dt, usd};
 use borsa::Borsa;
 use borsa_core::{AssetKind, CashflowRow, Period};

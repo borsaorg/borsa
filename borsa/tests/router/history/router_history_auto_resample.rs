@@ -1,9 +1,9 @@
 use borsa::{Borsa, Resampling};
 use borsa_core::{AssetKind, HistoryRequest, Interval, Range};
 
-use crate::helpers::{AAPL, m_hist};
 use crate::helpers::BTC_USD;
 use crate::helpers::ETH_USD;
+use crate::helpers::{AAPL, m_hist};
 
 #[tokio::test]
 async fn auto_resamples_when_series_is_subdaily() {

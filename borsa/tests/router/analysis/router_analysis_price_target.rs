@@ -1,5 +1,5 @@
-use crate::helpers::{AAPL, MockConnector};
 use crate::helpers::usd;
+use crate::helpers::{AAPL, MockConnector};
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, PriceTarget, RoutingPolicyBuilder};
 use rust_decimal::Decimal;

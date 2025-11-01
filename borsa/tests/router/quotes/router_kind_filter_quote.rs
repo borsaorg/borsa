@@ -44,7 +44,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
         .with_connector(b)
         .build()
         .unwrap();
-    
+
     let inst = crate::helpers::instrument(&X, AssetKind::Fund);
     let q = borsa.quote(&inst).await.unwrap();
     assert_eq!(

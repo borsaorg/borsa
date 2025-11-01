@@ -3,7 +3,7 @@ use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaError};
 use rust_decimal::Decimal;
 
-use crate::helpers::{MockConnector, m_quote, X};
+use crate::helpers::{MockConnector, X, m_quote};
 
 #[tokio::test]
 async fn all_not_found_returns_not_found() {

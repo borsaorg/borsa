@@ -30,7 +30,7 @@ async fn upgrades_downgrades_falls_back_and_succeeds() {
         .with_connector(ok)
         .build()
         .unwrap();
-    
+
     let inst = crate::helpers::instrument(&MSFT, AssetKind::Equity);
     let rows = borsa.upgrades_downgrades(&inst).await.unwrap();
     assert_eq!(rows.len(), 1);

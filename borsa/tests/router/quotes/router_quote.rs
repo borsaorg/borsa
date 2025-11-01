@@ -3,7 +3,7 @@ use borsa_core::{
     AssetKind, BorsaConnector, Exchange, Instrument, Quote, RoutingPolicyBuilder, Symbol,
 };
 
-use crate::helpers::{MockConnector, m_quote, usd, X};
+use crate::helpers::{MockConnector, X, m_quote, usd};
 use std::sync::Arc;
 
 #[tokio::test]

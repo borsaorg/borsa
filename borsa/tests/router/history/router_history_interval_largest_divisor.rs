@@ -1,5 +1,5 @@
-use crate::helpers::{ETH_USD, MockConnector};
 use crate::helpers::usd;
+use crate::helpers::{ETH_USD, MockConnector};
 use borsa::Borsa;
 use borsa_core::{AssetKind, Candle, HistoryRequest, HistoryResponse, Interval};
 use chrono::TimeZone;

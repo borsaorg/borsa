@@ -1,5 +1,5 @@
-use crate::helpers::{MockConnector, X};
 use crate::helpers::usd;
+use crate::helpers::{MockConnector, X};
 use borsa::Borsa;
 use borsa_core::{AssetKind, Candle, HistoryRequest, HistoryResponse, Interval, Range};
 use chrono::TimeZone;

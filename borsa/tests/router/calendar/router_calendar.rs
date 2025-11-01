@@ -1,4 +1,4 @@
-use crate::helpers::{TSLA, MockConnector};
+use crate::helpers::{MockConnector, TSLA};
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaError, Calendar};
 // use chrono::TimeZone;

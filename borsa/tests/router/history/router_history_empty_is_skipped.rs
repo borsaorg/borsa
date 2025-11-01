@@ -2,8 +2,8 @@ use borsa::Borsa;
 
 use borsa_core::{AssetKind, HistoryRequest, HistoryResponse};
 
-use crate::helpers::{candle, ETH_USD};
 use crate::helpers::mock_connector::MockConnector;
+use crate::helpers::{ETH_USD, candle};
 
 #[tokio::test]
 async fn empty_history_result_is_skipped() {
@@ -34,7 +34,7 @@ async fn empty_history_result_is_skipped() {
         .with_connector(filled)
         .build()
         .unwrap();
-    
+
     let inst = crate::helpers::instrument(&ETH_USD, AssetKind::Crypto);
     let out = borsa
         .history(

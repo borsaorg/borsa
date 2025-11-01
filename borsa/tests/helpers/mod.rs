@@ -24,8 +24,10 @@ pub static MSFT: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("MSFT").expect(
 pub static TSLA: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("TSLA").expect("valid symbol"));
 pub static X: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("X").expect("valid symbol"));
 pub static GOOG: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("GOOG").expect("valid symbol"));
-pub static BTC_USD: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("BTC-USD").expect("valid symbol"));
-pub static ETH_USD: LazyLock<Symbol> = LazyLock::new(|| Symbol::new("ETH-USD").expect("valid symbol"));
+pub static BTC_USD: LazyLock<Symbol> =
+    LazyLock::new(|| Symbol::new("BTC-USD").expect("valid symbol"));
+pub static ETH_USD: LazyLock<Symbol> =
+    LazyLock::new(|| Symbol::new("ETH-USD").expect("valid symbol"));
 
 /// Construct a UTC `DateTime` from components for readability in tests.
 pub const fn dt(

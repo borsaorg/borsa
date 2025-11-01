@@ -1,8 +1,8 @@
 use borsa::Borsa;
 use borsa_core::{AssetKind, BorsaConnector, ConnectorKey, HistoryRequest, RoutingPolicyBuilder};
 
-use crate::helpers::{BTC_USD, m_hist};
 use crate::helpers::X;
+use crate::helpers::{BTC_USD, m_hist};
 
 #[tokio::test]
 async fn per_kind_priority_is_applied() {

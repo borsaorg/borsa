@@ -89,7 +89,7 @@ async fn merge_strategy_fallback_continues_on_empty_data() {
         .merge_history_strategy(MergeStrategy::Fallback)
         .build()
         .unwrap();
-    
+
     let test = Symbol::new("TEST").expect("valid symbol");
     let inst = crate::helpers::instrument(&test, AssetKind::Equity);
     let req = HistoryRequest::try_from_range(Range::D1, Interval::D1).unwrap();

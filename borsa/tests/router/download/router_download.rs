@@ -113,7 +113,7 @@ async fn download_builder_rejects_duplicate_symbols_in_instruments() {
         .with_connector(std::sync::Arc::new(MultiSymbolHist))
         .build()
         .unwrap();
-     
+
     let instruments_with_duplicates = &[
         crate::helpers::instrument(&AAPL, AssetKind::Equity),
         crate::helpers::instrument(&MSFT, AssetKind::Equity),

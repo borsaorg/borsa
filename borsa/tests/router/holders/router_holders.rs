@@ -1,4 +1,4 @@
-use crate::helpers::{MockConnector, MSFT};
+use crate::helpers::{MSFT, MockConnector};
 use borsa::Borsa;
 use borsa_core::{AssetKind, MajorHolder};
 
