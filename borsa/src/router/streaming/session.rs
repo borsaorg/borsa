@@ -61,10 +61,10 @@ impl SessionManager {
                                 }
 
                             if enforce_monotonic && !monotonic_gate.allow(&u).await {
-                                #[cfg(feature = "tracing")]
-                                tracing::warn!(symbol = %u.symbol, ts = %u.ts, provider_index = session_index, "dropping out-of-order stream update (monotonic)");
-                                continue;
-                            }
+                                    #[cfg(feature = "tracing")]
+                                    tracing::warn!(symbol = %u.symbol, ts = %u.ts, provider_index = session_index, "dropping out-of-order stream update (monotonic)");
+                                    continue;
+                                }
 
                             if tx_out.send(u).await.is_err() {
                                 // Downstream dropped

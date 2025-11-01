@@ -317,7 +317,7 @@ impl Borsa {
             tokio::select! {
                 _ = &mut stop_rx_inner => {}
                 // Downstream receiver dropped for the fan-in channel
-                () = async {}, if tx.is_closed() => {}
+                () = tx.closed() => {}
             }
             let _ = stop_broadcast_tx.send(true);
             for j in joins {

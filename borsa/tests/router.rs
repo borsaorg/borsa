@@ -105,6 +105,8 @@ mod router_search_priority;
 #[path = "router/search/router_search_unsupported.rs"]
 mod router_search_unsupported;
 
+#[path = "router/stream/downstream_drop_prop.rs"]
+mod downstream_drop_prop;
 #[path = "router/stream/router_stream_backoff.rs"]
 mod router_stream_backoff;
 #[path = "router/stream/router_stream_downstream_drop.rs"]
@@ -115,6 +117,8 @@ mod router_stream_drop_unassigned_warn;
 mod router_stream_failover_end;
 #[path = "router/stream/router_stream_kind_hint.rs"]
 mod router_stream_kind_hint;
+#[path = "router/stream/router_stream_model_multiplex_prop.rs"]
+mod router_stream_model_multiplex_prop;
 #[path = "router/stream/router_stream_monotonic.rs"]
 mod router_stream_monotonic;
 #[path = "router/stream/router_stream_no_provider.rs"]

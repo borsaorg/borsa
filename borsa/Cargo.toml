@@ -37,3 +37,5 @@ borsa-middleware = { workspace = true }
 # examples-only deps
 borsa-yfinance = { workspace = true }
 tracing-subscriber = { workspace = true }
+proptest = { workspace = true }
+tokio-test = { workspace = true }

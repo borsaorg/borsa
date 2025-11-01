@@ -246,8 +246,8 @@ pub fn spawn_kind_supervisor(
                     for session in &mut active_sessions { if let Some(ActiveSession { join, .. }) = session.take() { let _ = join.await; } }
                     return;
                 }
-                () = async {}, if tx_clone.is_closed() => {
-                    // Signal all sessions to stop before awaiting their termination
+                () = tx_clone.closed() => {
+                    // Downstream receiver dropped for the fan-in channel
                     for session in &mut active_sessions { if let Some(sess) = session.as_mut() && let Some(tx) = sess.stop_tx.take() { let _ = tx.send(()); } }
                     for session in &mut active_sessions { if let Some(ActiveSession { join, .. }) = session.take() { let _ = join.await; } }
                     return;

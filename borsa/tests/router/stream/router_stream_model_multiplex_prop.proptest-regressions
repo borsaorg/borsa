@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7bf41f5ab520c97f310d0a85102889e4574811341c898f408165860156574cf8 # shrinks to actions = [ProviderStreamFails { provider: 1 }, ProviderSendsUpdate { provider: 0, sym: 0, ts: 0 }]
+cc 46efad12a3eb08c5f9b823e299432b5cd38231759c09a65354f5995e3c840959 # shrinks to actions = [ProviderSendsUpdate { provider: 0, sym: 0, ts: 0 }, ProviderSendsUpdate { provider: 0, sym: 0, ts: 0 }, ProviderSendsUpdate { provider: 0, sym: 0, ts: 0 }, ProviderStreamFails { provider: 2 }, AdvanceTime { millis: 1 }, ProviderStreamFails { provider: 2 }, ProviderSendsUpdate { provider: 0, sym: 2, ts: 0 }]
+cc 244ce1dbf200d618d84feb65b648cc852ed384b5d4b8db706af9f90479ec3ec3 # shrinks to actions = [ProviderStreamFails { provider: 1 }, ProviderStreamFails { provider: 0 }, ProviderSendsUpdate { provider: 1, sym: 0, ts: 0 }]

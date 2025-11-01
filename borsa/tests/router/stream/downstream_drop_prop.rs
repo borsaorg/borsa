@@ -1,5 +1,6 @@
-use crate::helpers::{instrument, usd, AAPL};
+use crate::helpers::{AAPL, instrument, usd};
 use borsa_core::{AssetKind, QuoteUpdate};
+use chrono::TimeZone;
 use proptest::prelude::*;
 
 use crate::helpers::MockConnector;
@@ -9,7 +10,7 @@ proptest! {
     #[test]
     fn downstream_drop_finishes_handle(drop_after in 0u8..=3, num_updates in 1u8..=10) {
         tokio_test::block_on(async move {
-            let updates: Vec<QuoteUpdate> = (1..=num_updates as i64)
+            let updates: Vec<QuoteUpdate> = (1..=i64::from(num_updates))
                 .map(|t| QuoteUpdate {
                     symbol: AAPL.clone(),
                     price: Some(usd("123.0")),
@@ -32,7 +33,7 @@ proptest! {
                 .unwrap();
 
             let (handle, mut rx) = borsa
-                .stream_quotes(&[instrument(AAPL, AssetKind::Equity)])
+                .stream_quotes(&[instrument(&AAPL, AssetKind::Equity)])
                 .await
                 .expect("stream started");
 
@@ -44,13 +45,9 @@ proptest! {
 
             let start = std::time::Instant::now();
             while !handle.is_finished() {
-                if start.elapsed() > std::time::Duration::from_millis(500) {
-                    panic!("stream handle did not finish after downstream drop (drop_after={}, num_updates={})", drop_after, num_updates);
-                }
+                assert!(start.elapsed() <= std::time::Duration::from_millis(500), "stream handle did not finish after downstream drop (drop_after={drop_after}, num_updates={num_updates})");
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             }
         });
     }
 }
-
-

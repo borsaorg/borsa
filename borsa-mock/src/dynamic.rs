@@ -36,16 +36,18 @@ pub enum StreamBehavior {
 
 struct StreamController {
     behavior: StreamBehavior,
-    kill_switch: Option<oneshot::Sender<()>>, // remote kill switch
-    manual_tx: Option<mpsc::Sender<QuoteUpdate>>, // inbound updates for Manual behavior
+    next_session_id: u64,
+    kill_switches: HashMap<u64, oneshot::Sender<()>>, // remote kill switches per active session
+    manual_txs: HashMap<u64, mpsc::Sender<QuoteUpdate>>, // inbound updates per Manual session
 }
 
 impl StreamController {
-    const fn new(behavior: StreamBehavior) -> Self {
+    fn new(behavior: StreamBehavior) -> Self {
         Self {
             behavior,
-            kill_switch: None,
-            manual_tx: None,
+            next_session_id: 0,
+            kill_switches: HashMap::new(),
+            manual_txs: HashMap::new(),
         }
     }
 }
@@ -96,10 +98,12 @@ impl DynamicMockController {
     /// Remotely kill an active stream for the given provider name.
     pub async fn fail_stream(&self, provider_name: &'static str) {
         let mut guard = self.state.lock().await;
-        if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name)
-            && let Some(tx) = ctrl.kill_switch.take()
-        {
-            let _ = tx.send(());
+        if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
+            let mut kill_switches = std::mem::take(&mut ctrl.kill_switches);
+            for (_, tx) in kill_switches.drain() {
+                let _ = tx.send(());
+            }
+            ctrl.manual_txs.clear();
         }
     }
 
@@ -108,19 +112,42 @@ impl DynamicMockController {
     /// Returns `true` if the update was queued, `false` if no Manual session is active
     /// or the channel is closed.
     pub async fn push_update(&self, provider_name: &'static str, update: QuoteUpdate) -> bool {
-        // Extract a sender clone without holding the lock across await
-        let tx_opt = {
-            let mut guard = self.state.lock().await;
-            guard
-                .stream_controllers
-                .get_mut(provider_name)
-                .and_then(|c| c.manual_tx.clone())
+        let sessions = {
+            let guard = self.state.lock().await;
+            guard.stream_controllers.get(provider_name).map(|c| {
+                c.manual_txs
+                    .iter()
+                    .map(|(id, tx)| (*id, tx.clone()))
+                    .collect::<Vec<_>>()
+            })
         };
-        if let Some(tx) = tx_opt {
-            tx.send(update).await.is_ok()
-        } else {
-            false
+        let Some(sessions) = sessions else {
+            return false;
+        };
+        if sessions.is_empty() {
+            return false;
         }
+
+        let mut any_sent = false;
+        let mut failed_ids: Vec<u64> = Vec::new();
+        for (id, tx) in sessions {
+            match tx.send(update.clone()).await {
+                Ok(()) => any_sent = true,
+                Err(_) => failed_ids.push(id),
+            }
+        }
+
+        if !failed_ids.is_empty() {
+            let mut guard = self.state.lock().await;
+            if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
+                for id in failed_ids {
+                    ctrl.manual_txs.remove(&id);
+                    ctrl.kill_switches.remove(&id);
+                }
+            }
+        }
+
+        any_sent
     }
 
     /// Return a copy of the request log for the given provider name.
@@ -290,16 +317,23 @@ impl StreamProvider for DynamicMockConnector {
                 let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
                 let (in_tx, mut in_rx) = mpsc::channel::<QuoteUpdate>(1024);
 
-                // Publish kill switch and manual sender for remote control
-                {
+                // Publish kill switches and manual sender for remote control
+                let session_id = {
                     let mut guard = self.state.lock().await;
                     let entry = guard
                         .stream_controllers
                         .entry(self.name)
                         .or_insert_with(|| StreamController::new(StreamBehavior::Manual));
-                    entry.kill_switch = Some(kill_tx);
-                    entry.manual_tx = Some(in_tx.clone());
-                }
+                    entry.behavior = StreamBehavior::Manual;
+                    let sid = entry.next_session_id;
+                    entry.next_session_id += 1;
+                    entry.kill_switches.insert(sid, kill_tx);
+                    entry.manual_txs.insert(sid, in_tx.clone());
+                    sid
+                };
+
+                let state = Arc::clone(&self.state);
+                let provider_name = self.name;
 
                 let join = tokio::spawn(async move {
                     loop {
@@ -326,6 +360,12 @@ impl StreamProvider for DynamicMockConnector {
                             }
                         }
                     }
+
+                    let mut guard = state.lock().await;
+                    if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
+                        ctrl.manual_txs.remove(&session_id);
+                        ctrl.kill_switches.remove(&session_id);
+                    }
                 });
 
                 Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
@@ -340,7 +380,7 @@ impl StreamProvider for DynamicMockConnector {
                 let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
 
                 // Publish kill switch for remote failure
-                {
+                let session_id = {
                     let mut guard = self.state.lock().await;
                     let entry = guard
                         .stream_controllers
@@ -348,10 +388,16 @@ impl StreamProvider for DynamicMockConnector {
                         .or_insert_with(|| {
                             StreamController::new(StreamBehavior::Success(Vec::new()))
                         });
-                    entry.kill_switch = Some(kill_tx);
-                    // ensure manual_tx cleared for non-Manual behaviors
-                    entry.manual_tx = None;
-                }
+                    entry.behavior = StreamBehavior::Success(Vec::new());
+                    let sid = entry.next_session_id;
+                    entry.next_session_id += 1;
+                    entry.kill_switches.insert(sid, kill_tx);
+                    entry.manual_txs.clear();
+                    sid
+                };
+
+                let state = Arc::clone(&self.state);
+                let provider_name = self.name;
 
                 let join = tokio::spawn(async move {
                     // Send scripted updates, respecting allow filter, until stopped/killed.
@@ -374,6 +420,11 @@ impl StreamProvider for DynamicMockConnector {
                     tokio::select! {
                         _ = &mut stop_rx => {}
                         _ = &mut kill_rx => {}
+                    }
+
+                    let mut guard = state.lock().await;
+                    if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
+                        ctrl.kill_switches.remove(&session_id);
                     }
                 });
 
