@@ -30,11 +30,14 @@ pub enum StreamBehavior {
     Fail(BorsaError),
     /// Hang the `stream_quotes` call (simulate a network stall during connect).
     Hang,
+    /// Start a stream that accepts external updates via controller `push_update`.
+    Manual,
 }
 
 struct StreamController {
     behavior: StreamBehavior,
     kill_switch: Option<oneshot::Sender<()>>, // remote kill switch
+    manual_tx: Option<mpsc::Sender<QuoteUpdate>>, // inbound updates for Manual behavior
 }
 
 impl StreamController {
@@ -42,6 +45,7 @@ impl StreamController {
         Self {
             behavior,
             kill_switch: None,
+            manual_tx: None,
         }
     }
 }
@@ -96,6 +100,26 @@ impl DynamicMockController {
             && let Some(tx) = ctrl.kill_switch.take()
         {
             let _ = tx.send(());
+        }
+    }
+
+    /// Push a single update into an active Manual stream.
+    ///
+    /// Returns `true` if the update was queued, `false` if no Manual session is active
+    /// or the channel is closed.
+    pub async fn push_update(&self, provider_name: &'static str, update: QuoteUpdate) -> bool {
+        // Extract a sender clone without holding the lock across await
+        let tx_opt = {
+            let mut guard = self.state.lock().await;
+            guard
+                .stream_controllers
+                .get_mut(provider_name)
+                .and_then(|c| c.manual_tx.clone())
+        };
+        if let Some(tx) = tx_opt {
+            tx.send(update).await.is_ok()
+        } else {
+            false
         }
     }
 
@@ -256,6 +280,56 @@ impl StreamProvider for DynamicMockConnector {
                 std::future::pending::<()>().await;
                 unreachable!()
             }
+            Some(StreamBehavior::Manual) => {
+                // Filter set
+                let allow: std::collections::HashSet<Symbol> =
+                    instruments.iter().map(|i| i.symbol().clone()).collect();
+
+                let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
+                let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
+                let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
+                let (in_tx, mut in_rx) = mpsc::channel::<QuoteUpdate>(1024);
+
+                // Publish kill switch and manual sender for remote control
+                {
+                    let mut guard = self.state.lock().await;
+                    let entry = guard
+                        .stream_controllers
+                        .entry(self.name)
+                        .or_insert_with(|| StreamController::new(StreamBehavior::Manual));
+                    entry.kill_switch = Some(kill_tx);
+                    entry.manual_tx = Some(in_tx.clone());
+                }
+
+                let join = tokio::spawn(async move {
+                    loop {
+                        tokio::select! {
+                            biased;
+                            _ = &mut stop_rx => { break; }
+                            _ = &mut kill_rx => { break; }
+                            maybe_u = in_rx.recv() => {
+                                if let Some(u) = maybe_u {
+                                    if !allow.is_empty() && !allow.contains(&u.symbol) {
+                                        continue;
+                                    }
+                                    // Forward; drop if downstream closed
+                                    if tx.send(u).await.is_err() { break; }
+                                } else {
+                                    // Controller dropped manual sender; wait for stop/kill
+                                    // to avoid busy loop
+                                    tokio::select! {
+                                        _ = &mut stop_rx => {}
+                                        _ = &mut kill_rx => {}
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                });
+
+                Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
+            }
             Some(StreamBehavior::Success(updates)) => {
                 // Filter set
                 let allow: std::collections::HashSet<Symbol> =
@@ -266,13 +340,18 @@ impl StreamProvider for DynamicMockConnector {
                 let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
 
                 // Publish kill switch for remote failure
-                self.state
-                    .lock()
-                    .await
-                    .stream_controllers
-                    .entry(self.name)
-                    .or_insert_with(|| StreamController::new(StreamBehavior::Success(Vec::new())))
-                    .kill_switch = Some(kill_tx);
+                {
+                    let mut guard = self.state.lock().await;
+                    let entry = guard
+                        .stream_controllers
+                        .entry(self.name)
+                        .or_insert_with(|| {
+                            StreamController::new(StreamBehavior::Success(Vec::new()))
+                        });
+                    entry.kill_switch = Some(kill_tx);
+                    // ensure manual_tx cleared for non-Manual behaviors
+                    entry.manual_tx = None;
+                }
 
                 let join = tokio::spawn(async move {
                     // Send scripted updates, respecting allow filter, until stopped/killed.
