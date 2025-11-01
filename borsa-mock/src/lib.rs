@@ -13,7 +13,9 @@ use borsa_core::{
     SearchResponse, UpgradeDowngradeRow, types,
 };
 
+pub mod dynamic;
 mod fixtures;
+pub use dynamic::{DynamicMockConnector, DynamicMockController, MockBehavior, StreamBehavior};
 
 /// Mock connector for CI-safe examples. Provides deterministic data from static fixtures.
 pub struct MockConnector;

@@ -15,4 +15,4 @@ borsa-core = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt"] }
