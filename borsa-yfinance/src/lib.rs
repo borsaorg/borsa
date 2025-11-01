@@ -11,7 +11,6 @@ mod builder;
 
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio::sync::oneshot;
 
 #[cfg(feature = "test-adapters")]
 use adapter::CloneArcAdapters;
@@ -753,28 +752,7 @@ impl borsa_core::connector::StreamProvider for YfConnector {
         BorsaError,
     > {
         let symbols: Vec<String> = instruments.iter().map(|i| i.symbol().to_string()).collect();
-        // Keep the upstream handle and ensure our returned handle can stop it.
-        let (upstream_handle, rx_raw) = self.stream.start(&symbols).await?;
-        let (tx, rx_core) = mpsc::channel::<borsa_core::QuoteUpdate>(1024);
-        let forward = tokio::spawn(async move {
-            let mut rx = rx_raw;
-            while let Some(u) = rx.recv().await {
-                if tx.send(u).await.is_err() {
-                    break;
-                }
-            }
-        });
-        let (stop_tx, stop_rx) = oneshot::channel::<()>();
-        let join = tokio::spawn(async move {
-            let _ = stop_rx.await;
-            // Stop upstream stream, then abort forwarder to unblock quickly if needed.
-            upstream_handle.stop().await;
-            forward.abort();
-        });
-        Ok((
-            borsa_core::stream::StreamHandle::new(join, stop_tx),
-            rx_core,
-        ))
+        self.stream.start(&symbols).await
     }
 }
 
