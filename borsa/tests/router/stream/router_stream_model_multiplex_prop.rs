@@ -3,6 +3,7 @@ use proptest::prelude::*;
 use borsa::{BackoffConfig, Borsa};
 use borsa_core::{AssetKind, Instrument, QuoteUpdate, Symbol};
 use borsa_mock::{DynamicMockConnector, StreamBehavior};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug)]
 enum SymId {
@@ -55,7 +56,7 @@ fn arb_action() -> impl Strategy<Value = Action> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 30, .. ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig { cases: 60, .. ProptestConfig::default() })]
     #[test]
     fn streaming_routing_multiplex_model(actions in proptest::collection::vec(arb_action(), 0..80)) {
         tokio_test::block_on(async move {
@@ -93,8 +94,23 @@ proptest! {
             let (handle, mut rx) = borsa.stream_quotes(&insts).await.expect("stream started");
 
             // Model state
-            use std::collections::{HashMap, HashSet};
             let providers: [(&'static str, borsa_mock::DynamicMockController); 3] = [("P1", c1), ("P2", c2), ("P3", c3)];
+            fn recompute_active(
+                active: &mut HashMap<u8, Option<u8>>,
+                chains: &HashMap<u8, Vec<u8>>,
+                cooldown: &HashSet<u8>,
+            ) {
+                for (sid, chain) in chains.iter() {
+                    let mut next: Option<u8> = None;
+                    for &p in chain {
+                        if !cooldown.contains(&p) {
+                            next = Some(p);
+                            break;
+                        }
+                    }
+                    active.insert(*sid, next);
+                }
+            }
             // Per-symbol preference chains
             let chains: HashMap<u8, Vec<u8>> = {
                 let mut m = HashMap::new();
@@ -147,11 +163,9 @@ proptest! {
                     }
                     Action::ProviderStreamFails { provider } => {
                         if provider > 2 { continue; }
-                        // Mark provider cooldown and clear any active symbol routed to it
                         cooldown.insert(provider);
-                        for (sid, cur) in active.iter_mut() {
-                            if cur.and_then(|x| x) == Some(provider) { *cur = None; }
-                        }
+                        // Recompute immediately – supervisor fails over right away on session end
+                        recompute_active(&mut active, &chains, &cooldown);
                         let (name, ctrl) = &providers[provider as usize];
                         ctrl.fail_stream(*name).await;
                         let drained = drain(&mut rx).await;
@@ -159,16 +173,11 @@ proptest! {
                     }
                     Action::AdvanceTime { millis } => {
                         tokio::time::advance(std::time::Duration::from_millis(millis as u64)).await;
-                        // Recompute active mapping subject to cooldown, then clear cooldown afterwards (failback window)
-                        for (sid, chain) in chains.iter() {
-                            let mut next: Option<u8> = None;
-                            for p in chain {
-                                if !cooldown.contains(p) { next = Some(*p); break; }
-                            }
-                            active.insert(*sid, next);
-                        }
+                        // cooldown clears after the backoff tick; model that:
                         cooldown.clear();
-                        let _ = drain(&mut rx).await; // no expectations on tick by itself
+                        // pick highest-priority provider for each symbol (failback/preemption)
+                        recompute_active(&mut active, &chains, &cooldown);
+                        let _ = drain(&mut rx).await;
                     }
                 }
             }
