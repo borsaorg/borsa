@@ -47,7 +47,7 @@ impl SessionManager {
                         if let Some(h) = provider_handle.take() { h.stop().await; }
                         break;
                     }
-                    Ok(()) = &mut session_stop_rx => {
+                    _ = &mut session_stop_rx => {
                         if let Some(h) = provider_handle.take() { h.stop().await; }
                         break;
                     }
