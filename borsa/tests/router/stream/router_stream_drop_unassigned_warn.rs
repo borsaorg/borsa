@@ -5,7 +5,7 @@ use chrono::TimeZone;
 use crate::helpers::MockConnector;
 
 #[tokio::test]
-async fn stream_quotes_drops_unassigned_symbol_updates() {
+async fn stream_quotes_merges_and_delivers_wildcard_and_explicit_updates() {
     // Provider X is assigned only AAPL but will try to send MSFT as well.
     let x_updates = vec![
         QuoteUpdate {
@@ -29,7 +29,7 @@ async fn stream_quotes_drops_unassigned_symbol_updates() {
         .with_stream_updates(x_updates)
         .build();
 
-    // Policy assigns AAPL to X; MSFT to no one.
+    // Policy assigns AAPL explicitly to X; MSFT is eligible via wildcard.
     let policy = RoutingPolicyBuilder::new()
         .providers_for_symbol(&AAPL, &[x.key()])
         .build();
@@ -48,14 +48,15 @@ async fn stream_quotes_drops_unassigned_symbol_updates() {
         .await
         .expect("stream started");
 
-    // Expect to receive only AAPL; MSFT should be dropped.
+    // Expect to receive both AAPL and MSFT from the merged session.
     let mut got = Vec::new();
     while let Some(u) = rx.recv().await {
         got.push(u.symbol.clone().to_string());
-        if !got.is_empty() {
+        if got.len() >= 2 {
+            // Wait for both expected updates
             break;
         }
     }
-
-    assert_eq!(got, vec![AAPL.to_string()]);
+    got.sort(); // Accounts for potential race condition in arrival
+    assert_eq!(got, vec![AAPL.to_string(), MSFT.to_string()]);
 }
