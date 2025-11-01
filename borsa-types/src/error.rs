@@ -172,6 +172,66 @@ impl BorsaError {
             other => vec![other],
         }
     }
+
+    /// Tri-state retry classification helper used by ergonomic predicates.
+    #[must_use]
+    pub fn retry_class(&self) -> RetryClass {
+        match self {
+            // Permanent (fatal)
+            Self::Unsupported { .. }
+            | Self::NotFound { .. }
+            | Self::StrictSymbolsRejected { .. }
+            | Self::InvalidArg(_)
+            | Self::InvalidMiddlewareStack { .. } => RetryClass::Permanent,
+
+            // Transient (retriable)
+            Self::ProviderTimeout { .. }
+            | Self::RequestTimeout { .. }
+            | Self::AllProvidersTimedOut { .. }
+            | Self::QuotaExceeded { .. }
+            | Self::RateLimitExceeded { .. }
+            | Self::TemporarilyBlacklisted { .. } => RetryClass::Transient,
+
+            // Aggregate: any permanent -> Permanent; all transient -> Transient; else Unknown
+            Self::AllProvidersFailed(inner) => {
+                if inner
+                    .iter()
+                    .any(|e| matches!(e.retry_class(), RetryClass::Permanent))
+                {
+                    RetryClass::Permanent
+                } else if inner
+                    .iter()
+                    .all(|e| matches!(e.retry_class(), RetryClass::Transient))
+                {
+                    RetryClass::Transient
+                } else {
+                    RetryClass::Unknown
+                }
+            }
+
+            // Default: Unknown (e.g., Connector, Data, Other)
+            _ => RetryClass::Unknown,
+        }
+    }
+
+    /// Returns true if this error is considered permanent (non-retriable).
+    #[must_use]
+    pub fn is_permanent(&self) -> bool {
+        matches!(self.retry_class(), RetryClass::Permanent)
+    }
+
+    /// Returns true if this error is considered transient (retriable).
+    #[must_use]
+    pub fn is_transient(&self) -> bool {
+        matches!(self.retry_class(), RetryClass::Transient)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum RetryClass {
+    Permanent,
+    Transient,
+    Unknown,
 }
 
 impl From<paft::Error> for BorsaError {
