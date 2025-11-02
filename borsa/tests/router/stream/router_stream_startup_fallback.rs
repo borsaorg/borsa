@@ -5,7 +5,7 @@ use chrono::TimeZone;
 
 use crate::helpers::MockConnector;
 
-#[tokio::test] 
+#[tokio::test]
 async fn stream_quotes_falls_back_when_first_cannot_start() {
     // First provider claims STREAM but fails to start
     let failing = MockConnector::builder()
@@ -59,13 +59,12 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
         .unwrap();
 
     let (handle, mut rx) = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            borsa.stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
-        )
-        .await
-        .expect("stream setup should not hang")
-        .expect("stream started");
-    
+        std::time::Duration::from_secs(2),
+        borsa.stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)]),
+    )
+    .await
+    .expect("stream setup should not hang")
+    .expect("stream started");
 
     let first = rx.recv().await.expect("first update");
     assert_eq!(first.ts.timestamp(), 10);

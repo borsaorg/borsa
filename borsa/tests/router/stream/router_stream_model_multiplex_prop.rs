@@ -64,12 +64,8 @@ async fn flush_rx(rx: &mut tokio::sync::mpsc::Receiver<QuoteUpdate>) -> Vec<Quot
     for _ in 0..20 {
         tokio::task::yield_now().await;
     }
-    loop {
-        match rx.try_recv() {
-            Ok(u) => out.push(u),
-            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
-            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => break,
-        }
+    while let Ok(u) = rx.try_recv() {
+        out.push(u);
     }
     out
 }
@@ -89,7 +85,7 @@ async fn sync_assignments(
     assignments: &mut HashMap<u8, HashSet<u8>>,
 ) {
     for (idx, (name, ctrl)) in providers.iter().enumerate() {
-        let idx_u8 = idx as u8;
+        let idx_u8 = u8::try_from(idx).expect("provider index fits in u8");
         let requests = ctrl.get_stream_requests(name).await;
         let start = *seen.get(&idx_u8).unwrap_or(&0);
         if start >= requests.len() {
@@ -175,10 +171,10 @@ proptest! {
                         let push_ok = ctrl.push_update(name, update).await;
 
                         let drained = drain_with_time(&mut rx, &providers, &mut seen_requests, &mut assignments).await;
-                        let monotonic_ok = last_ts.get(&sid).map_or(true, |prev| ts >= *prev);
+                        let monotonic_ok = last_ts.get(&sid).is_none_or(|prev| ts >= *prev);
                         let provider_has_symbol = assignments
                             .get(&provider)
-                            .map_or(false, |set| set.contains(&sid));
+                            .is_some_and(|set| set.contains(&sid));
                         let should_route = push_ok && monotonic_ok;
                         if should_route && provider_has_symbol {
                             if drained.is_empty() {
