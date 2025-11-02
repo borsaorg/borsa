@@ -39,7 +39,8 @@ pub fn spawn_kind_supervisor(
     }
 
     tokio::spawn(async move {
-        use tokio::time::{Duration, sleep};
+        use tokio::time::Duration;
+        use std::pin::Pin;
 
         let KindSupervisorParams {
             providers,
@@ -62,229 +63,173 @@ pub fn spawn_kind_supervisor(
             return;
         }
 
-        let mut start_index: usize = 0;
-        let mut backoff_ms: u64 = min_backoff_ms;
-        let mut initial_errors: Vec<BorsaError> = Vec::new();
-        let mut coverage_counts: HashMap<Symbol, usize> = HashMap::new();
-        let mut active_sessions: Vec<Option<ActiveSession>> = Vec::with_capacity(providers.len());
-        active_sessions.resize_with(providers.len(), || None);
+        // ----- Explicit state machine driver -----
+        use super::supervisor_sm as sm;
+
+        let providers_can_stream: Vec<bool> = providers
+            .iter()
+            .map(|p| p.as_stream_provider().is_some())
+            .collect();
+
+        let mut supervisor = sm::Supervisor {
+            providers: vec![sm::ProviderState::Idle; providers.len()],
+            provider_instruments,
+            provider_allow,
+            required_symbols,
+            providers_can_stream,
+            start_index: 0,
+            scan_cursor: 0,
+            round_exhausted: false,
+            backoff_ms: min_backoff_ms,
+            min_backoff_ms,
+            max_backoff_ms,
+            factor,
+            jitter_percent,
+            attempted_since_last_tick: false,
+            phase: sm::Phase::Startup { initial_tx: initial_notify.take(), accumulated_errors: Vec::new() },
+        };
+
         let monotonic_gate = Arc::new(MonotonicGate::new());
-        let (event_tx, mut event_rx) =
-            tokio::sync::mpsc::unbounded_channel::<(usize, Arc<[Symbol]>)>();
-        let mut cooldown_providers: HashSet<usize> = HashSet::new();
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel::<(usize, Arc<[Symbol]>)>();
+
+        let mut session_tasks: HashMap<usize, ActiveSession> = HashMap::new();
+        type StartFuture = Pin<Box<dyn core::future::Future<Output = (usize, Result<(borsa_core::stream::StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>, Arc<[Symbol]>), BorsaError>)> + Send>>;
+        let mut in_flight_start: Option<StartFuture> = None;
+        let mut backoff_timer: Option<Pin<Box<tokio::time::Sleep>>> = Some(Box::pin(tokio::time::sleep(Duration::from_millis(jitter_wait(supervisor.current_delay_ms(), jitter_percent)))));
+
+        // Kick off initial start attempts proactively before the first poll
+        if supervisor.should_attempt_starts() {
+            let mut initial_actions = supervisor.compute_needed_starts();
+            for action in initial_actions.drain(..) {
+                if let sm::Action::RequestStart { id, instruments } = action {
+                    if in_flight_start.is_none() {
+                        let provider = Arc::clone(&providers[id]);
+                        let syms: Arc<[Symbol]> = Arc::from(
+                            instruments
+                                .iter()
+                                .map(|inst| inst.symbol().clone())
+                                .collect::<Vec<_>>()
+                                .into_boxed_slice(),
+                        );
+                        let fut = async move {
+                            let provider_name = provider.name();
+                            let res = match provider.as_stream_provider() {
+                                Some(sp) => match sp.stream_quotes(&instruments).await {
+                                    Ok((handle, prx)) => Ok((handle, prx, syms)),
+                                    Err(err) => Err(crate::core::tag_err(provider_name, err)),
+                                },
+                                None => Err(BorsaError::unsupported("stream_quotes")),
+                            };
+                            (id, res)
+                        };
+                        in_flight_start = Some(Box::pin(fut));
+                    }
+                }
+            }
+        }
 
         loop {
-            if tx_clone.is_closed() {
-                // Signal all sessions to stop before awaiting their termination
-                for session in &mut active_sessions {
-                    if let Some(sess) = session.as_mut()
-                        && let Some(tx) = sess.stop_tx.take()
-                    {
-                        let _ = tx.send(());
+            let event = tokio::select! {
+                _ = stop_watch.changed() => sm::Event::Shutdown,
+                () = async {}, if *stop_watch.borrow() => sm::Event::Shutdown,
+                () = tx_clone.closed() => sm::Event::DownstreamClosed,
+                Some((id, syms)) = event_rx.recv() => sm::Event::SessionEnded { id, symbols: syms },
+                outcome = async { in_flight_start.as_mut().unwrap().await }, if in_flight_start.is_some() => {
+                    // Map outcome to Event::ProviderStartSucceeded/Failed
+                    in_flight_start = None;
+                    let (id, res) = outcome;
+                    match res {
+                        Ok((handle, prx, symbols)) => {
+                            let allowed = supervisor.provider_allow.get(id).cloned();
+                            let spawned = SessionManager::spawn(
+                                id,
+                                handle,
+                                prx,
+                                allowed,
+                                stop_watch.clone(),
+                                enforce_monotonic,
+                                Arc::clone(&monotonic_gate),
+                                tx_clone.clone(),
+                                event_tx.clone(),
+                                Arc::clone(&symbols),
+                            );
+                            session_tasks.insert(id, ActiveSession { join: spawned.join, symbols: Arc::clone(&symbols), stop_tx: spawned.stop_tx });
+                            sm::Event::ProviderStartSucceeded { id, symbols }
+                        }
+                        Err(e) => {
+                            sm::Event::ProviderStartFailed { id, error: e }
+                        }
                     }
                 }
-                for session in &mut active_sessions {
-                    if let Some(ActiveSession { join, .. }) = session.take() {
-                        let _ = join.await;
+                _ = async { backoff_timer.as_mut().unwrap().await }, if backoff_timer.is_some() => sm::Event::BackoffTick,
+            };
+            
+            let (new_sm, actions) = supervisor.handle(event);
+            supervisor = new_sm;
+
+            for action in actions {
+                match action {
+                    sm::Action::RequestStart { id, instruments } => {
+                        if in_flight_start.is_none() {
+                            let provider = Arc::clone(&providers[id]);
+                            let syms: Arc<[Symbol]> = Arc::from(
+                                instruments.iter().map(|inst| inst.symbol().clone()).collect::<Vec<_>>().into_boxed_slice()
+                            );
+                            let fut = async move {
+                                let provider_name = provider.name();
+                                let res = match provider.as_stream_provider() {
+                                    Some(sp) => match sp.stream_quotes(&instruments).await {
+                                        Ok((handle, prx)) => Ok((handle, prx, syms)),
+                                        Err(err) => Err(crate::core::tag_err(provider_name, err)),
+                                    },
+                                    None => Err(BorsaError::unsupported("stream_quotes")),
+                                };
+                                (id, res)
+                            };
+                            in_flight_start = Some(Box::pin(fut));
+                        } else {
+                        }
                     }
-                }
-                return;
-            }
-
-            let mut reconnected_from_cooldown = false;
-            let mut attempted_reconnect_this_round = false;
-            let cooldown_snapshot = cooldown_providers.clone();
-
-            for offset in 0..providers.len() {
-                let i = (start_index + offset) % providers.len();
-
-                if active_sessions.get(i).and_then(|s| s.as_ref()).is_some() {
-                    continue;
-                }
-
-                if cooldown_providers.contains(&i) {
-                    continue;
-                }
-
-                let Some(sp) = providers[i].as_stream_provider() else {
-                    continue;
-                };
-
-                let provider_symbols = provider_allow.get(i);
-                let provider_insts = provider_instruments.get(i);
-                let needed_from_provider: Vec<Instrument> = match (provider_symbols, provider_insts)
-                {
-                    (Some(allow_set), Some(insts)) => insts
-                        .iter()
-                        .filter(|inst| {
-                            let sym = inst.symbol();
-                            if !allow_set.contains(sym) || !required_symbols.contains(sym) {
-                                return false;
+                    sm::Action::StopSession { id } => {
+                        if let Some(sess) = session_tasks.get_mut(&id) {
+                            if let Some(tx) = sess.stop_tx.take() {
+                                let _ = tx.send(());
                             }
-                            let already_covered =
-                                coverage_counts.get(sym).copied().unwrap_or(0) > 0;
-                            if !already_covered {
-                                return true;
+                        }
+                    }
+                    sm::Action::StopAll => {
+                        for sess in session_tasks.values_mut() {
+                            if let Some(tx) = sess.stop_tx.take() {
+                                let _ = tx.send(());
                             }
-                            !active_sessions.iter().enumerate().any(|(j, s)| {
-                                j < i
-                                    && s.as_ref()
-                                        .is_some_and(|sess| sess.symbols.iter().any(|s2| s2 == sym))
-                            })
-                        })
-                        .cloned()
-                        .collect(),
-                    _ => Vec::new(),
-                };
-
-                if needed_from_provider.is_empty() {
-                    continue;
-                }
-
-                attempted_reconnect_this_round = true;
-                match sp.stream_quotes(&needed_from_provider).await {
-                    Ok((handle, prx)) => {
-                        if cooldown_snapshot.contains(&i) {
-                            reconnected_from_cooldown = true;
                         }
-                        #[cfg(feature = "tracing")]
-                        tracing::info!(provider_index = i, symbols = ?needed_from_provider.iter().map(|x| x.symbol().to_string()).collect::<Vec<_>>(), "stream session started");
-                        if let Some(tx) = initial_notify.take() {
-                            let _ = tx.send(Ok(()));
+                    }
+                    sm::Action::AwaitAll => {
+                        for (_id, mut sess) in session_tasks.drain() {
+                            let _ = sess.join.await;
                         }
-                        initial_errors.clear();
-
-                        let symbols_vec: Vec<Symbol> = needed_from_provider
-                            .iter()
-                            .map(|inst| inst.symbol().clone())
-                            .collect();
-                        let symbols_arc: Arc<[Symbol]> = Arc::from(symbols_vec.into_boxed_slice());
-                        for sym in symbols_arc.iter() {
-                            *coverage_counts.entry(sym.clone()).or_insert(0) += 1;
+                        return;
+                    }
+                    sm::Action::NotifyInitial { tx, result } => {
+                        let _ = tx.send(result);
+                        if matches!(supervisor.phase, sm::Phase::Terminated) {
+                            return;
                         }
-
-                        let allowed = provider_allow.get(i).cloned();
-                        let spawned = SessionManager::spawn(
-                            i,
-                            handle,
-                            prx,
-                            allowed,
-                            stop_watch.clone(),
-                            enforce_monotonic,
-                            Arc::clone(&monotonic_gate),
-                            tx_clone.clone(),
-                            event_tx.clone(),
-                            Arc::clone(&symbols_arc),
-                        );
-
-                        active_sessions[i] = Some(ActiveSession {
-                            join: spawned.join,
-                            symbols: Arc::clone(&symbols_arc),
-                            stop_tx: spawned.stop_tx,
-                        });
-                        start_index = (i + 1) % providers.len();
-
-                        // Preempt lower-priority sessions that overlap on any of these symbols
-                        for j in (i + 1)..providers.len() {
-                            if let Some(sess) = active_sessions.get_mut(j).and_then(|s| s.as_mut())
-                            {
-                                let overlaps = sess
-                                    .symbols
-                                    .iter()
-                                    .any(|s| symbols_arc.iter().any(|t| t == s));
-                                if overlaps && let Some(tx) = sess.stop_tx.take() {
+                    }
+                    sm::Action::ScheduleBackoffTick { delay_ms } => {
+                        backoff_timer = Some(Box::pin(tokio::time::sleep(Duration::from_millis(jitter_wait(delay_ms, jitter_percent)))));
+                    }
+                    sm::Action::PreemptSessions { provider_ids } => {
+                        for id in provider_ids {
+                            if let Some(sess) = session_tasks.get_mut(&id) {
+                                if let Some(tx) = sess.stop_tx.take() {
                                     #[cfg(feature = "tracing")]
-                                    tracing::info!(
-                                        preempted_index = j,
-                                        by_index = i,
-                                        "preempting lower-priority overlapping session"
-                                    );
+                                    tracing::info!(preempted_index = id, "preempting lower-priority overlapping session");
                                     let _ = tx.send(());
                                 }
                             }
                         }
                     }
-                    Err(err) => {
-                        if initial_notify.is_some() {
-                            initial_errors.push(crate::core::tag_err(providers[i].name(), err));
-                        }
-                        #[cfg(feature = "tracing")]
-                        {
-                            let err_str = initial_errors.last().map_or_else(
-                                || "unknown".to_string(),
-                                std::string::ToString::to_string,
-                            );
-                            tracing::warn!(
-                                provider_index = i,
-                                error = %err_str,
-                                "stream session failed to start"
-                            );
-                        }
-                    }
-                }
-            }
-
-            let base_ms = backoff_ms;
-            let wait_ms = jitter_wait(base_ms, jitter_percent);
-
-            let mut woke_by_sleep: bool = false;
-
-            // Always use a timer to periodically re-evaluate provider priorities.
-            // This enables failback to higher-priority providers and clears cooldown.
-            tokio::select! {
-                _ = stop_watch.changed() => {
-                    if *stop_watch.borrow() {
-                        // Signal all sessions to stop before awaiting their termination
-                        for session in &mut active_sessions { if let Some(sess) = session.as_mut() && let Some(tx) = sess.stop_tx.take() { let _ = tx.send(()); } }
-                        for session in &mut active_sessions { if let Some(ActiveSession { join, .. }) = session.take() { let _ = join.await; } }
-                        return;
-                    }
-                }
-                () = async {}, if *stop_watch.borrow() => {
-                    // Signal all sessions to stop before awaiting their termination
-                    for session in &mut active_sessions { if let Some(sess) = session.as_mut() && let Some(tx) = sess.stop_tx.take() { let _ = tx.send(()); } }
-                    for session in &mut active_sessions { if let Some(ActiveSession { join, .. }) = session.take() { let _ = join.await; } }
-                    return;
-                }
-                () = tx_clone.closed() => {
-                    // Downstream receiver dropped for the fan-in channel
-                    for session in &mut active_sessions { if let Some(sess) = session.as_mut() && let Some(tx) = sess.stop_tx.take() { let _ = tx.send(()); } }
-                    for session in &mut active_sessions { if let Some(ActiveSession { join, .. }) = session.take() { let _ = join.await; } }
-                    return;
-                }
-                Some((provider_index, symbols)) = event_rx.recv() => {
-                    #[cfg(feature = "tracing")]
-                    tracing::info!(provider_index, symbols = ?symbols, "stream session ended");
-                    if let Some(ActiveSession { join, .. }) = active_sessions.get_mut(provider_index).and_then(std::option::Option::take) { let _ = join.await; }
-                    for sym in symbols.iter() {
-                        use std::collections::hash_map::Entry;
-                        if let Entry::Occupied(mut entry) = coverage_counts.entry(sym.clone()) {
-                            if *entry.get() > 1 { *entry.get_mut() -= 1; } else { entry.remove(); }
-                        }
-                    }
-                    cooldown_providers.insert(provider_index);
-                    #[cfg(feature = "tracing")]
-                    tracing::debug!(provider_index, "cooldown set for provider after session end");
-                }
-                () = sleep(Duration::from_millis(wait_ms)) => { woke_by_sleep = true; cooldown_providers.clear(); #[cfg(feature = "tracing")] tracing::debug!(wait_ms, "backoff tick"); }
-            }
-
-            if reconnected_from_cooldown {
-                backoff_ms = min_backoff_ms;
-                start_index = 0;
-            } else if woke_by_sleep && attempted_reconnect_this_round {
-                if active_sessions.iter().all(std::option::Option::is_none) {
-                    if let Some(tx) = initial_notify.take() {
-                        let err = collapse_stream_errors(std::mem::take(&mut initial_errors));
-                        let _ = tx.send(Err(err));
-                        return;
-                    }
-                    backoff_ms =
-                        std::cmp::min(max_backoff_ms, base_ms.saturating_mul(u64::from(factor)));
-                    start_index = 0;
-                } else {
-                    backoff_ms =
-                        std::cmp::min(max_backoff_ms, base_ms.saturating_mul(u64::from(factor)));
                 }
             }
         }
