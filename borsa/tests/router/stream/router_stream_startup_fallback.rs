@@ -1,10 +1,11 @@
 use crate::helpers::{AAPL, ts, usd};
+use borsa::BackoffConfig;
 use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate, RoutingPolicyBuilder};
 use chrono::TimeZone;
 
 use crate::helpers::MockConnector;
 
-#[tokio::test]
+#[tokio::test] 
 async fn stream_quotes_falls_back_when_first_cannot_start() {
     // First provider claims STREAM but fails to start
     let failing = MockConnector::builder()
@@ -47,14 +48,27 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
         .with_connector(failing.clone())
         .with_connector(ok.clone())
         .routing_policy(policy)
+        .provider_timeout(std::time::Duration::from_millis(50))
+        .backoff(BackoffConfig {
+            min_backoff_ms: 1,
+            max_backoff_ms: 10,
+            factor: 1,
+            jitter_percent: 0,
+        })
         .build()
         .unwrap();
 
-    let (_h, mut rx) = borsa
-        .stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
+    let (handle, mut rx) = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            borsa.stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
+        )
         .await
+        .expect("stream setup should not hang")
         .expect("stream started");
+    
 
     let first = rx.recv().await.expect("first update");
     assert_eq!(first.ts.timestamp(), 10);
+
+    handle.stop().await;
 }
