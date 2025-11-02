@@ -73,12 +73,17 @@ async fn stream_quotes_errors_when_one_kind_fails_to_start() {
     let err = borsa.stream_quotes(&[equity, crypto]).await.unwrap_err();
 
     match err {
-        BorsaError::Connector { connector, msg } => {
+        BorsaError::Connector { connector, error } => {
             assert_eq!(connector, "crypto_fail");
-            assert!(
-                msg.contains("crypto stream failed"),
-                "unexpected connector message: {msg}"
-            );
+            match error.as_ref() {
+                BorsaError::Other(msg) => {
+                    assert!(
+                        msg.contains("crypto stream failed"),
+                        "unexpected connector message: {msg}"
+                    );
+                }
+                other => panic!("expected Other error, got {other:?}"),
+            }
         }
         other => panic!("expected connector error, got {other:?}"),
     }

@@ -63,7 +63,12 @@ macro_rules! borsa_router_method {
                                         Err(e) => Err(e),
                                     }
                                 } else {
-                                    Err(borsa_core::BorsaError::connector(c2.name(), format!("missing {} capability during call", $capability)))
+                                    Err(borsa_core::BorsaError::connector(
+                                        c2.name(),
+                                        borsa_core::BorsaError::unsupported(
+                                            $capability.to_string(),
+                                        ),
+                                    ))
                                 }
                             }
                         })

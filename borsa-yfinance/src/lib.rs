@@ -114,21 +114,21 @@ impl YfConnector {
         ConnectorKey::new("borsa-yfinance")
     }
 
-    fn looks_like_not_found(msg: &str) -> bool {
-        let m = msg.to_ascii_lowercase();
-        m.contains("not found") || m.contains("no data") || m.contains("no matches")
-    }
-
     fn normalize_error(e: BorsaError, what: &str) -> BorsaError {
         match e {
-            BorsaError::Connector { connector: _, msg } => {
-                if Self::looks_like_not_found(&msg) {
+            BorsaError::Connector {
+                connector: _,
+                error,
+            } => match *error {
+                BorsaError::NotFound { what: inner } if inner.is_empty() => {
                     BorsaError::not_found(what.to_string())
-                } else {
-                    BorsaError::connector("borsa-yfinance", msg)
                 }
+                BorsaError::NotFound { what: inner } => BorsaError::not_found(inner),
+                other => BorsaError::connector("borsa-yfinance", other),
+            },
+            BorsaError::Other(msg) => {
+                BorsaError::connector("borsa-yfinance", BorsaError::Other(msg))
             }
-            BorsaError::Other(msg) => BorsaError::connector("borsa-yfinance", msg),
             other => other,
         }
     }

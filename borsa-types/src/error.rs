@@ -26,13 +26,17 @@ pub enum BorsaError {
     InvalidArg(String),
 
     /// An individual connector returned an error.
-    #[error("{connector} failed: {msg}")]
+    #[error("{connector} failed: {error}")]
     Connector {
         /// Connector name that failed.
         connector: String,
-        /// Human-readable error message.
-        msg: String,
+        /// Structured error produced by the connector.
+        error: Box<BorsaError>,
     },
+
+    /// Connector returned data with inconsistent currency metadata.
+    #[error("inconsistent currency data")]
+    InconsistentCurrencyData,
 
     /// Unknown/opaque error.
     #[error("unknown error: {0}")]
@@ -120,11 +124,11 @@ impl BorsaError {
             capability: cap.into(),
         }
     }
-    /// Helper: build a `Connector` error with the connector name and message.
-    pub fn connector(connector: impl Into<String>, msg: impl Into<String>) -> Self {
+    /// Helper: build a `Connector` error with the connector name and inner error.
+    pub fn connector(connector: impl Into<String>, error: impl Into<Self>) -> Self {
         Self::Connector {
             connector: connector.into(),
-            msg: msg.into(),
+            error: Box::new(error.into()),
         }
     }
 
@@ -182,7 +186,8 @@ impl BorsaError {
             | Self::NotFound { .. }
             | Self::StrictSymbolsRejected { .. }
             | Self::InvalidArg(_)
-            | Self::InvalidMiddlewareStack { .. } => RetryClass::Permanent,
+            | Self::InvalidMiddlewareStack { .. }
+            | Self::InconsistentCurrencyData => RetryClass::Permanent,
 
             // Transient (retriable)
             Self::ProviderTimeout { .. }

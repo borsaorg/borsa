@@ -233,21 +233,94 @@ impl RealAdapter {
     }
 }
 
-fn map_yf_err(e: &yf::YfError, context: &str) -> BorsaError {
+fn map_yf_err(e: &yf::YfError, capability: &str, target: Option<&str>) -> BorsaError {
     match e {
-        yf::YfError::NotFound { .. } => BorsaError::not_found(context.to_string()),
-        yf::YfError::RateLimited { .. } => {
-            BorsaError::connector("borsa-yfinance", format!("rate limit: {context}"))
-        }
-        yf::YfError::ServerError { status, .. } => BorsaError::connector(
+        yf::YfError::NotFound { .. } => not_found_for(capability, target, None),
+        yf::YfError::RateLimited { .. } => BorsaError::connector(
             "borsa-yfinance",
-            format!("server error {status}: {context}"),
+            BorsaError::RateLimitExceeded {
+                limit: 0,
+                window_ms: 0,
+            },
         ),
-        yf::YfError::Status { status, .. } => {
-            BorsaError::connector("borsa-yfinance", format!("status {status}: {context}"))
+        yf::YfError::ServerError { status, .. } | yf::YfError::Status { status, .. } => {
+            BorsaError::connector(
+                "borsa-yfinance",
+                BorsaError::Other(format!("http status {status} during {capability}")),
+            )
         }
-        other => BorsaError::connector("borsa-yfinance", other.to_string()),
+        yf::YfError::Api(msg) => map_yf_api_error(msg, capability, target),
+        yf::YfError::MissingData(detail) => BorsaError::Data(detail.clone()),
+        yf::YfError::InvalidParams(detail) => BorsaError::InvalidArg(detail.clone()),
+        yf::YfError::InvalidDates => BorsaError::InvalidArg("invalid date range".into()),
+        other => BorsaError::connector("borsa-yfinance", BorsaError::Other(other.to_string())),
     }
+}
+
+fn map_yf_api_error(message: &str, capability: &str, target: Option<&str>) -> BorsaError {
+    if let Some(symbol) = extract_symbol_from_api_message(message) {
+        return not_found_for(capability, target, Some(symbol));
+    }
+
+    let lower = message.to_ascii_lowercase();
+
+    if message_indicates_missing_data(&lower) {
+        return not_found_for(capability, target, None);
+    }
+
+    if lower.contains("invalid") || lower.contains("must provide") {
+        return BorsaError::InvalidArg(message.to_string());
+    }
+
+    BorsaError::connector("borsa-yfinance", BorsaError::Other(message.to_string()))
+}
+
+fn extract_symbol_from_api_message(message: &str) -> Option<String> {
+    let lower = message.to_ascii_lowercase();
+    let marker = "for symbol";
+    let idx = lower.find(marker)?;
+    let mut tail = message[idx + marker.len()..].trim_start();
+    if tail.starts_with(':') {
+        tail = tail[1..].trim_start();
+    }
+    if tail.is_empty() {
+        return None;
+    }
+    let symbol = tail
+        .split([' ', ',', ';', '.'])
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+    Some(symbol.to_string())
+}
+
+fn not_found_for(
+    capability: &str,
+    target: Option<&str>,
+    explicit_symbol: Option<String>,
+) -> BorsaError {
+    if let Some(symbol) = explicit_symbol.or_else(|| target.map(std::string::ToString::to_string)) {
+        BorsaError::not_found(symbol)
+    } else {
+        BorsaError::not_found(capability.to_string())
+    }
+}
+
+fn message_indicates_missing_data(lower: &str) -> bool {
+    if lower.contains("no data") {
+        return true;
+    }
+
+    if let Some(idx) = lower.find("no ") {
+        let tail = &lower[idx + 3..];
+        if let Some(data_idx) = tail.find(" data")
+            && data_idx > 0
+        {
+            return true;
+        }
+    }
+
+    lower.contains("no results") || lower.contains("no matches")
 }
 
 #[async_trait]
@@ -261,7 +334,7 @@ impl YfHistory for RealAdapter {
         self.client
             .fetch_full_history(symbol, req)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("history for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "history", Some(symbol)))
     }
 }
 
@@ -270,7 +343,7 @@ impl YfQuotes for RealAdapter {
     async fn fetch(&self, symbols: &[String]) -> Result<Vec<yf::core::Quote>, BorsaError> {
         let quotes = yf::quote::quotes(&self.client, symbols.iter().cloned())
             .await
-            .map_err(|e| map_yf_err(&e, "quotes"))?;
+            .map_err(|e| map_yf_err(&e, "quotes", None))?;
         Ok(quotes)
     }
 }
@@ -291,7 +364,9 @@ impl YfStream for RealAdapter {
             .method(yf::stream::StreamMethod::WebsocketWithFallback)
             .interval(Duration::from_secs(1))
             .symbols(symbols.iter().cloned());
-        let (handle, rx) = builder.start().map_err(|e| map_yf_err(&e, "stream"))?;
+        let (handle, rx) = builder
+            .start()
+            .map_err(|e| map_yf_err(&e, "stream", None))?;
 
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
         let join = tokio::spawn(async move {
@@ -329,7 +404,7 @@ impl YfSearch for RealAdapter {
         let resp = builder
             .fetch()
             .await
-            .map_err(|e| map_yf_err(&e, "search"))?;
+            .map_err(|e| map_yf_err(&e, "search", None))?;
 
         Ok(resp)
     }
@@ -340,14 +415,14 @@ impl YfProfile for RealAdapter {
     async fn load(&self, symbol: &str) -> Result<yf::profile::Profile, BorsaError> {
         yf::profile::load_profile(&self.client, symbol)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("profile for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "profile", Some(symbol)))
     }
 
     async fn isin(&self, symbol: &str) -> Result<Option<String>, BorsaError> {
         yfinance_rs::ticker::Ticker::new(&self.client, symbol.to_string())
             .isin()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("isin for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "isin", Some(symbol)))
     }
 }
 
@@ -357,7 +432,7 @@ impl YfFundamentals for RealAdapter {
         let fb = yf::fundamentals::FundamentalsBuilder::new(&self.client, symbol.to_string());
         fb.earnings(None)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("earnings for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "earnings", Some(symbol)))
     }
 
     async fn income_statement(
@@ -368,7 +443,7 @@ impl YfFundamentals for RealAdapter {
         let fb = yf::fundamentals::FundamentalsBuilder::new(&self.client, symbol.to_string());
         fb.income_statement(quarterly, None)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("income statement for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "income statement", Some(symbol)))
     }
 
     async fn balance_sheet(
@@ -379,7 +454,7 @@ impl YfFundamentals for RealAdapter {
         let fb = yf::fundamentals::FundamentalsBuilder::new(&self.client, symbol.to_string());
         fb.balance_sheet(quarterly, None)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("balance sheet for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "balance sheet", Some(symbol)))
     }
 
     async fn cashflow(
@@ -390,14 +465,14 @@ impl YfFundamentals for RealAdapter {
         let fb = yf::fundamentals::FundamentalsBuilder::new(&self.client, symbol.to_string());
         fb.cashflow(quarterly, None)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("cashflow for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "cashflow", Some(symbol)))
     }
 
     async fn calendar(&self, symbol: &str) -> Result<yf::fundamentals::Calendar, BorsaError> {
         let fb = yf::fundamentals::FundamentalsBuilder::new(&self.client, symbol.to_string());
         fb.calendar()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("calendar for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "calendar", Some(symbol)))
     }
 }
 
@@ -407,7 +482,7 @@ impl YfOptions for RealAdapter {
         let t = yf::ticker::Ticker::new(&self.client, symbol.to_string());
         t.options()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("options expirations for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "options expirations", Some(symbol)))
     }
 
     async fn chain(
@@ -418,7 +493,7 @@ impl YfOptions for RealAdapter {
         let t = yf::ticker::Ticker::new(&self.client, symbol.to_string());
         t.option_chain(date)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("option chain for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "option chain", Some(symbol)))
     }
 }
 
@@ -431,7 +506,7 @@ impl YfAnalysis for RealAdapter {
         let ab = yf::analysis::AnalysisBuilder::new(&self.client, symbol.to_string());
         ab.recommendations()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("recommendations for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "recommendations", Some(symbol)))
     }
 
     async fn recommendations_summary(
@@ -441,7 +516,7 @@ impl YfAnalysis for RealAdapter {
         let ab = yf::analysis::AnalysisBuilder::new(&self.client, symbol.to_string());
         ab.recommendations_summary()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("recommendations summary for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "recommendations summary", Some(symbol)))
     }
 
     async fn upgrades_downgrades(
@@ -451,7 +526,7 @@ impl YfAnalysis for RealAdapter {
         let ab = yf::analysis::AnalysisBuilder::new(&self.client, symbol.to_string());
         ab.upgrades_downgrades()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("upgrades downgrades for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "upgrades downgrades", Some(symbol)))
     }
 
     async fn analyst_price_target(
@@ -461,7 +536,7 @@ impl YfAnalysis for RealAdapter {
         let ab = yf::analysis::AnalysisBuilder::new(&self.client, symbol.to_string());
         ab.analyst_price_target(None)
             .await
-            .map_err(|e| map_yf_err(&e, &format!("analyst price target for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "analyst price target", Some(symbol)))
     }
 }
 
@@ -474,7 +549,7 @@ impl YfHolders for RealAdapter {
         let hb = yf::holders::HoldersBuilder::new(&self.client, symbol.to_string());
         hb.major_holders()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("major holders for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "major holders", Some(symbol)))
     }
 
     async fn institutional_holders(
@@ -484,7 +559,7 @@ impl YfHolders for RealAdapter {
         let hb = yf::holders::HoldersBuilder::new(&self.client, symbol.to_string());
         hb.institutional_holders()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("institutional holders for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "institutional holders", Some(symbol)))
     }
 
     async fn mutual_fund_holders(
@@ -494,7 +569,7 @@ impl YfHolders for RealAdapter {
         let hb = yf::holders::HoldersBuilder::new(&self.client, symbol.to_string());
         hb.mutual_fund_holders()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("mutual fund holders for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "mutual fund holders", Some(symbol)))
     }
 
     async fn insider_transactions(
@@ -504,7 +579,7 @@ impl YfHolders for RealAdapter {
         let hb = yf::holders::HoldersBuilder::new(&self.client, symbol.to_string());
         hb.insider_transactions()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("insider transactions for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "insider transactions", Some(symbol)))
     }
 
     async fn insider_roster_holders(
@@ -514,7 +589,7 @@ impl YfHolders for RealAdapter {
         let hb = yf::holders::HoldersBuilder::new(&self.client, symbol.to_string());
         hb.insider_roster_holders()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("insider roster holders for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "insider roster holders", Some(symbol)))
     }
 
     async fn net_share_purchase_activity(
@@ -524,7 +599,7 @@ impl YfHolders for RealAdapter {
         let hb = yf::holders::HoldersBuilder::new(&self.client, symbol.to_string());
         hb.net_share_purchase_activity()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("net share purchase activity for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "net share purchase activity", Some(symbol)))
     }
 }
 
@@ -535,7 +610,7 @@ impl YfEsg for RealAdapter {
         let summary = eb
             .fetch()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("sustainability for {symbol}")))?;
+            .map_err(|e| map_yf_err(&e, "sustainability", Some(symbol)))?;
         summary
             .scores
             .map_or_else(|| Err(BorsaError::Data("missing ESG scores".into())), Ok)
@@ -558,7 +633,7 @@ impl YfNews for RealAdapter {
             });
         nb.fetch()
             .await
-            .map_err(|e| map_yf_err(&e, &format!("news for {symbol}")))
+            .map_err(|e| map_yf_err(&e, "news", Some(symbol)))
     }
 }
 
@@ -1226,5 +1301,50 @@ impl CloneArcAdapters for RealAdapter {
     }
     fn clone_arc_stream(&self) -> Arc<dyn YfStream> {
         Arc::new(self.clone()) as Arc<dyn YfStream>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_not_found_extracts_symbol() {
+        let err = yf::YfError::Api(
+            "yahoo error: No fundamentals data found for symbol: BTC-USD".to_string(),
+        );
+
+        let mapped = map_yf_err(&err, "fundamentals", Some("BTC-USD"));
+
+        assert!(matches!(mapped, BorsaError::NotFound { what } if what == "BTC-USD"));
+    }
+
+    #[test]
+    fn api_not_found_handles_holders_variant() {
+        let err = yf::YfError::Api("yahoo error: No holders data for symbol BTC-USD".to_string());
+
+        let mapped = map_yf_err(&err, "holders", None);
+
+        assert!(matches!(mapped, BorsaError::NotFound { what } if what == "BTC-USD"));
+    }
+
+    #[test]
+    fn api_not_found_without_symbol_uses_capability() {
+        let err = yf::YfError::Api("yahoo error: No data found".to_string());
+
+        let mapped = map_yf_err(&err, "analysis", None);
+
+        assert!(matches!(mapped, BorsaError::NotFound { what } if what == "analysis"));
+    }
+
+    #[test]
+    fn api_invalid_params_maps_to_invalid_arg() {
+        let err = yf::YfError::Api("yahoo error: Invalid parameters".to_string());
+
+        let mapped = map_yf_err(&err, "history", Some("AAPL"));
+
+        assert!(
+            matches!(mapped, BorsaError::InvalidArg(msg) if msg.contains("Invalid parameters"))
+        );
     }
 }

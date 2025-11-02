@@ -50,9 +50,12 @@ async fn quote_capability_hot_swap_returns_error_not_panic() {
         Err(BorsaError::AllProvidersFailed(v)) => {
             assert_eq!(v.len(), 1);
             match &v[0] {
-                BorsaError::Connector { connector, msg } => {
+                BorsaError::Connector { connector, error } => {
                     assert!(connector.contains("hot"));
-                    assert!(msg.contains("missing quote capability during call"));
+                    assert!(
+                        matches!(error.as_ref(), BorsaError::Unsupported { .. }),
+                        "unexpected inner error: {error:?}"
+                    );
                 }
                 other => panic!("unexpected error variant: {other:?}"),
             }

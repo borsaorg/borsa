@@ -239,10 +239,7 @@ impl Borsa {
             .iter()
             .find(|(_, v)| matches!(v, CurrencyState::Inconsistent))
         {
-            return BorsaError::Connector {
-                connector: (*bad_name).to_string(),
-                msg: "Provider returned inconsistent currency data".to_string(),
-            };
+            return BorsaError::connector(*bad_name, BorsaError::InconsistentCurrencyData);
         }
         let reference_currency = results.iter().find_map(|(name, _)| {
             per_provider_currency.get(name).and_then(|v| match v {
@@ -258,16 +255,10 @@ impl Borsa {
                 })
             })
         {
-            return BorsaError::Connector {
-                connector: bad_name.to_string(),
-                msg: "Provider returned inconsistent currency data".to_string(),
-            };
+            return BorsaError::connector(bad_name, BorsaError::InconsistentCurrencyData);
         }
         let fallback = results.last().map_or("unknown", |(n, _)| *n);
-        BorsaError::Connector {
-            connector: fallback.to_string(),
-            msg: "Provider returned inconsistent currency data".to_string(),
-        }
+        BorsaError::connector(fallback, BorsaError::InconsistentCurrencyData)
     }
     /// Fetch historical OHLCV and actions for an instrument.
     ///

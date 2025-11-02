@@ -171,20 +171,15 @@ impl QuotaAwareConnector {
 
     fn translate_provider_error(err: BorsaError) -> BorsaError {
         match err {
-            BorsaError::Connector { connector, msg } => {
-                let lower = msg.to_lowercase();
-                let looks_like_rate_limit = lower.contains("rate limit")
-                    || lower.contains("429")
-                    || lower.contains("too many requests");
-                if looks_like_rate_limit {
-                    BorsaError::RateLimitExceeded {
-                        limit: 0,
-                        window_ms: 0,
-                    }
-                } else {
-                    BorsaError::Connector { connector, msg }
+            BorsaError::Connector { connector, error } => match *error {
+                BorsaError::RateLimitExceeded { limit, window_ms } => {
+                    BorsaError::RateLimitExceeded { limit, window_ms }
                 }
-            }
+                inner => BorsaError::Connector {
+                    connector,
+                    error: Box::new(inner),
+                },
+            },
             other => other,
         }
     }

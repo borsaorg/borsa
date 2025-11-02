@@ -231,10 +231,7 @@ pub fn tag_err(connector: &str, e: BorsaError) -> BorsaError {
         | BorsaError::RequestTimeout { .. }
         | BorsaError::AllProvidersTimedOut { .. }
         | BorsaError::AllProvidersFailed(_)) => e,
-        other => BorsaError::Connector {
-            connector: connector.to_string(),
-            msg: other.to_string(),
-        },
+        other => BorsaError::connector(connector, other),
     }
 }
 

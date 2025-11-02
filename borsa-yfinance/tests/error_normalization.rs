@@ -33,10 +33,12 @@ async fn connector_other_error_preserves_connector_name() {
 #[tokio::test]
 async fn not_found_maps_to_not_found() {
     let quotes = <dyn adapter::YfQuotes>::from_fn(|_symbols| {
-        Err(BorsaError::Connector {
-            connector: "borsa-yfinance".into(),
-            msg: "Not Found".into(),
-        })
+        Err(BorsaError::connector(
+            "borsa-yfinance",
+            BorsaError::NotFound {
+                what: String::new(),
+            },
+        ))
     });
 
     let yf = YfConnector::from_adapter(&Combo { q: quotes });
@@ -49,10 +51,13 @@ async fn not_found_maps_to_not_found() {
 #[tokio::test]
 async fn rate_limited_preserves_connector() {
     let quotes = <dyn adapter::YfQuotes>::from_fn(|_symbols| {
-        Err(BorsaError::Connector {
-            connector: "borsa-yfinance".into(),
-            msg: "rate limit".into(),
-        })
+        Err(BorsaError::connector(
+            "borsa-yfinance",
+            BorsaError::RateLimitExceeded {
+                limit: 0,
+                window_ms: 0,
+            },
+        ))
     });
 
     let yf = YfConnector::from_adapter(&Combo { q: quotes });
@@ -68,10 +73,10 @@ async fn rate_limited_preserves_connector() {
 #[tokio::test]
 async fn server_status_maps_to_connector() {
     let quotes = <dyn adapter::YfQuotes>::from_fn(|_symbols| {
-        Err(BorsaError::Connector {
-            connector: "borsa-yfinance".into(),
-            msg: "server error 500".into(),
-        })
+        Err(BorsaError::connector(
+            "borsa-yfinance",
+            BorsaError::Other("server error 500".into()),
+        ))
     });
 
     let yf = YfConnector::from_adapter(&Combo { q: quotes });

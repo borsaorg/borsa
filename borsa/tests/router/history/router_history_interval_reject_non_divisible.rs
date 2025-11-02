@@ -47,12 +47,13 @@ async fn router_rejects_non_divisible_intraday_request() {
         borsa_core::BorsaError::AllProvidersFailed(errors) => {
             assert_eq!(errors.len(), 1);
             match &errors[0] {
-                borsa_core::BorsaError::Connector { connector, msg } => {
+                borsa_core::BorsaError::Connector { connector, error } => {
                     assert_eq!(connector, "twenty_minute");
-                    assert!(
-                        msg.contains("history interval (intraday too fine for provider)"),
-                        "unexpected connector error message: {msg}"
-                    );
+                    assert!(matches!(
+                        error.as_ref(),
+                        borsa_core::BorsaError::Unsupported { capability }
+                            if capability == "history interval (intraday too fine for provider)"
+                    ));
                 }
                 other => panic!("expected connector error, got {other:?}"),
             }
