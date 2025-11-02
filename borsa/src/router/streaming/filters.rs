@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-use borsa_core::QuoteUpdate;
+use borsa_core::{QuoteUpdate, Symbol};
 
 type GateEntry = (chrono::DateTime<chrono::Utc>, Instant);
 type GateMap = HashMap<String, GateEntry>;
@@ -59,6 +59,16 @@ impl MonotonicGate {
                 e.insert((update.ts, now));
                 true
             }
+        }
+    }
+
+    pub async fn reset_symbols<'a, I>(&self, symbols: I)
+    where
+        I: IntoIterator<Item = &'a Symbol>,
+    {
+        let mut guard = self.state.lock().await;
+        for sym in symbols {
+            guard.remove(sym.as_str());
         }
     }
 }

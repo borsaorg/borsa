@@ -24,17 +24,23 @@ impl SessionManager {
         allowed: Option<HashSet<Symbol>>,
         mut stop_watch: watch::Receiver<bool>,
         enforce_monotonic: bool,
+        monotonic_gate: Option<Arc<MonotonicGate>>,
         tx_out: mpsc::Sender<QuoteUpdate>,
         event_tx: tokio::sync::mpsc::UnboundedSender<(usize, Arc<[Symbol]>)>,
         session_symbols: Arc<[Symbol]>,
     ) -> SpawnedSession {
         let (session_stop_tx, mut session_stop_rx) = oneshot::channel::<()>();
 
-        let monotonic_gate = Arc::new(MonotonicGate::new());
+        let monotonic_gate = if enforce_monotonic {
+            Some(monotonic_gate.unwrap_or_else(|| Arc::new(MonotonicGate::new())))
+        } else {
+            None
+        };
 
         let join = tokio::spawn(async move {
             let mut provider_handle = Some(handle);
             let mut notify_session_end = true;
+            let mut reset_monotonic = false;
             loop {
                 tokio::select! {
                     biased;
@@ -61,11 +67,14 @@ impl SessionManager {
                                     continue;
                                 }
 
-                            if enforce_monotonic && !monotonic_gate.allow(&u).await {
+                            if enforce_monotonic {
+                                let gate = monotonic_gate.as_ref().expect("monotonic gate must exist when enforcement enabled");
+                                if !gate.allow(&u).await {
                                     #[cfg(feature = "tracing")]
                                     tracing::warn!(symbol = %u.symbol, ts = %u.ts, provider_index = session_index, "dropping out-of-order stream update (monotonic)");
                                     continue;
                                 }
+                            }
 
                             if tx_out.send(u).await.is_err() {
                                 // Downstream dropped
@@ -74,6 +83,7 @@ impl SessionManager {
                                 break;
                             }
                         } else {
+                            reset_monotonic = true;
                             if let Some(h) = provider_handle.take() { h.stop().await; }
                             break;
                         }
@@ -81,8 +91,15 @@ impl SessionManager {
                 }
             }
 
+            if enforce_monotonic
+                && reset_monotonic
+                && let Some(gate) = &monotonic_gate
+            {
+                gate.reset_symbols(session_symbols.iter()).await;
+            }
+
             if notify_session_end {
-                let _ = event_tx.send((session_index, session_symbols));
+                let _ = event_tx.send((session_index, Arc::clone(&session_symbols)));
             }
         });
 

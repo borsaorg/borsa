@@ -7,6 +7,7 @@ use tokio::task::JoinHandle;
 
 use super::backoff::jitter_wait;
 use super::error::collapse_stream_errors;
+use super::filters::MonotonicGate;
 use super::session::SessionManager;
 
 pub struct KindSupervisorParams {
@@ -61,6 +62,14 @@ pub fn spawn_kind_supervisor(
             }
             return;
         }
+
+        let monotonic_gates: Vec<Option<Arc<MonotonicGate>>> = if enforce_monotonic {
+            (0..providers.len())
+                .map(|_| Some(Arc::new(MonotonicGate::new())))
+                .collect()
+        } else {
+            vec![None; providers.len()]
+        };
 
         let providers_can_stream: Vec<bool> = providers
             .iter()
@@ -153,6 +162,7 @@ pub fn spawn_kind_supervisor(
                                 allowed,
                                 stop_watch.clone(),
                                 enforce_monotonic,
+                                monotonic_gates.get(id).cloned().flatten(),
                                 tx_clone.clone(),
                                 event_tx.clone(),
                                 Arc::clone(&symbols),
