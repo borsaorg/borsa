@@ -109,10 +109,18 @@ mod router_search_unsupported;
 mod downstream_drop_prop;
 #[path = "router/stream/router_stream_backoff.rs"]
 mod router_stream_backoff;
+#[path = "router/stream/router_stream_clock_skew.rs"]
+mod router_stream_clock_skew;
+#[path = "router/stream/router_stream_cooldown.rs"]
+mod router_stream_cooldown;
 #[path = "router/stream/router_stream_downstream_drop.rs"]
 mod router_stream_downstream_drop;
 #[path = "router/stream/router_stream_drop_unassigned_warn.rs"]
 mod router_stream_drop_unassigned_warn;
+#[path = "router/stream/router_stream_empty_assignment.rs"]
+mod router_stream_empty_assignment;
+#[path = "router/stream/router_stream_failback_priority.rs"]
+mod router_stream_failback_priority;
 #[path = "router/stream/router_stream_failover_end.rs"]
 mod router_stream_failover_end;
 #[path = "router/stream/router_stream_kind_hint.rs"]
@@ -129,6 +137,10 @@ mod router_stream_per_provider_subset;
 mod router_stream_quotes;
 #[path = "router/stream/router_stream_quotes_multi.rs"]
 mod router_stream_quotes_multi;
+#[path = "router/stream/router_stream_rapid_flapping.rs"]
+mod router_stream_rapid_flapping;
+#[path = "router/stream/router_stream_slow_consumer.rs"]
+mod router_stream_slow_consumer;
 #[path = "router/stream/router_stream_startup_all_fail.rs"]
 mod router_stream_startup_all_fail;
 #[path = "router/stream/router_stream_startup_fallback.rs"]

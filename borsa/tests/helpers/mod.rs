@@ -1,7 +1,7 @@
 // Re-export helpers so tests can `use helpers::*;`
 pub mod mock_connector;
 
-pub use mock_connector::{MockConnector, candle, m_hist, m_quote, m_search};
+pub use mock_connector::{MockConnector, StreamStep, candle, m_hist, m_quote, m_search};
 
 use borsa_core::{AssetKind, Instrument, Symbol};
 use std::sync::LazyLock;

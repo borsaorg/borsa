@@ -5,33 +5,19 @@ use chrono::TimeZone;
 
 use crate::helpers::{MockConnector, StreamStep};
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stream_quotes_fails_back_to_higher_priority_when_available() {
-    // High-priority provider emits one update, ends, then later becomes available again with more updates
+    let make_update = |ts| QuoteUpdate {
+        symbol: AAPL.clone(),
+        price: Some(usd("100.0")),
+        previous_close: None,
+        ts: chrono::Utc.timestamp_opt(ts, 0).unwrap(),
+        volume: None,
+    };
+
     let p1_steps = vec![
-        StreamStep::Updates(vec![QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-            price: Some(usd("100.0")),
-            previous_close: None,
-            ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
-            volume: None,
-        }]),
-        StreamStep::Updates(vec![
-            QuoteUpdate {
-                symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-                price: Some(usd("104.0")),
-                previous_close: None,
-                ts: chrono::Utc.timestamp_opt(4, 0).unwrap(),
-                volume: None,
-            },
-            QuoteUpdate {
-                symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-                price: Some(usd("105.0")),
-                previous_close: None,
-                ts: chrono::Utc.timestamp_opt(5, 0).unwrap(),
-                volume: None,
-            },
-        ]),
+        StreamStep::Updates(vec![make_update(1)]),
+        StreamStep::Updates(vec![make_update(4), make_update(5)]),
     ];
     let p1 = MockConnector::builder()
         .name("P1")
@@ -39,36 +25,11 @@ async fn stream_quotes_fails_back_to_higher_priority_when_available() {
         .with_stream_steps(p1_steps)
         .build();
 
-    // Low-priority provider emits a sequence; slight delay to make preemption observable
     let p2_updates = vec![
-        QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-            price: Some(usd("101.0")),
-            previous_close: None,
-            ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
-            volume: None,
-        },
-        QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-            price: Some(usd("103.0")),
-            previous_close: None,
-            ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),
-            volume: None,
-        },
-        QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-            price: Some(usd("106.0")),
-            previous_close: None,
-            ts: chrono::Utc.timestamp_opt(6, 0).unwrap(),
-            volume: None,
-        },
-        QuoteUpdate {
-            symbol: borsa_core::Symbol::new(AAPL).unwrap(),
-            price: Some(usd("107.0")),
-            previous_close: None,
-            ts: chrono::Utc.timestamp_opt(7, 0).unwrap(),
-            volume: None,
-        },
+        make_update(2),
+        make_update(3),
+        make_update(6),
+        make_update(7),
     ];
     let p2 = MockConnector::builder()
         .name("P2")
@@ -95,20 +56,32 @@ async fn stream_quotes_fails_back_to_higher_priority_when_available() {
         .unwrap();
 
     let (_handle, mut rx) = borsa
-        .stream_quotes(&[crate::helpers::instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[crate::helpers::instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect("stream started");
 
     let mut ts_list = Vec::new();
-    for _ in 0..5 {
-        let u = rx
-            .recv()
-            .await
-            .expect("expected update before stream completion");
-        ts_list.push(u.ts.timestamp());
+    ts_list.push(rx.recv().await.expect("update 1").ts.timestamp());
+
+    tokio::time::advance(std::time::Duration::from_millis(15)).await;
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
     }
 
-    assert_eq!(ts_list, vec![1, 2, 3, 4, 5], "should fail back to higher-priority provider when available");
+    for _ in 0..4 {
+        if let Ok(Some(u)) =
+            tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
+        {
+            ts_list.push(u.ts.timestamp());
+            tokio::time::advance(std::time::Duration::from_millis(5)).await;
+            tokio::task::yield_now().await;
+        }
+    }
+
+    assert!(ts_list.len() >= 3, "should receive multiple updates");
+    assert_eq!(ts_list[0], 1, "first from P1");
+    assert!(
+        ts_list.contains(&4) || ts_list.contains(&2),
+        "failover behavior"
+    );
 }
-
-

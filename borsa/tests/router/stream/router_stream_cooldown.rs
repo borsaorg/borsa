@@ -1,6 +1,7 @@
-use crate::helpers::{instrument, usd, AAPL};
+use crate::helpers::{AAPL, instrument, usd};
 use borsa::{BackoffConfig, Borsa};
-use borsa_core::{AssetKind, QuoteUpdate, RoutingPolicyBuilder};
+use borsa_core::{AssetKind, BorsaConnector, QuoteUpdate, RoutingPolicyBuilder};
+use chrono::TimeZone;
 
 use crate::helpers::{MockConnector, StreamStep};
 
@@ -80,7 +81,7 @@ async fn cooldown_skips_provider_until_after_backoff_tick() {
         .unwrap();
 
     let (_h, mut rx) = borsa
-        .stream_quotes(&[instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect("stream started");
 
@@ -163,7 +164,7 @@ async fn cooldown_handles_consecutive_provider_failures_without_immediate_retry(
         .unwrap();
 
     let (_h, mut rx) = borsa
-        .stream_quotes(&[instrument(AAPL, AssetKind::Equity)])
+        .stream_quotes(&[instrument(&AAPL, AssetKind::Equity)])
         .await
         .expect("stream started");
 
@@ -174,7 +175,10 @@ async fn cooldown_handles_consecutive_provider_failures_without_immediate_retry(
 
     // Ensure the third update is NOT delivered immediately (i.e., before backoff tick)
     let early = tokio::time::timeout(std::time::Duration::from_millis(10), rx.recv()).await;
-    assert!(early.is_err(), "received an update before cooldown backoff tick");
+    assert!(
+        early.is_err(),
+        "received an update before cooldown backoff tick"
+    );
 
     // Next update should come after backoff tick from P0 (ts=200)
     let third = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
@@ -185,5 +189,3 @@ async fn cooldown_handles_consecutive_provider_failures_without_immediate_retry(
         .timestamp();
     assert_eq!(third, 200);
 }
-
-

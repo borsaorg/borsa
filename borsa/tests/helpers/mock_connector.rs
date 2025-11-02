@@ -554,7 +554,10 @@ impl BorsaConnector for MockConnector {
     }
 
     fn as_stream_provider(&self) -> Option<&dyn borsa_core::connector::StreamProvider> {
-        if self.stream_updates.is_some() || self.stream_start_error.is_some() {
+        if self.stream_updates.is_some()
+            || self.stream_start_error.is_some()
+            || self.stream_steps.is_some()
+        {
             Some(self as &dyn StreamProvider)
         } else {
             None
