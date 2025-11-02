@@ -41,24 +41,6 @@ pub fn spawn_kind_supervisor(
         use std::pin::Pin;
         use tokio::time::Duration;
 
-        type StartFuture = Pin<
-            Box<
-                dyn core::future::Future<
-                        Output = (
-                            usize,
-                            Result<
-                                (
-                                    borsa_core::stream::StreamHandle,
-                                    tokio::sync::mpsc::Receiver<QuoteUpdate>,
-                                    Arc<[Symbol]>,
-                                ),
-                                BorsaError,
-                            >,
-                        ),
-                    > + Send,
-            >,
-        >;
-
         let KindSupervisorParams {
             providers,
             provider_instruments,
@@ -107,9 +89,19 @@ pub fn spawn_kind_supervisor(
 
         let (event_tx, mut event_rx) =
             tokio::sync::mpsc::unbounded_channel::<(usize, Arc<[Symbol]>)>();
+        let (start_tx, mut start_rx) = tokio::sync::mpsc::unbounded_channel::<(
+            usize,
+            Result<
+                (
+                    borsa_core::stream::StreamHandle,
+                    tokio::sync::mpsc::Receiver<QuoteUpdate>,
+                    Arc<[Symbol]>,
+                ),
+                BorsaError,
+            >,
+        )>();
 
         let mut session_tasks: HashMap<usize, ActiveSession> = HashMap::new();
-        let mut in_flight_start: Option<StartFuture> = None;
         let mut backoff_timer: Option<Pin<Box<tokio::time::Sleep>>> =
             Some(Box::pin(tokio::time::sleep(Duration::from_millis(
                 jitter_wait(supervisor.current_delay_ms(), jitter_percent),
@@ -119,9 +111,7 @@ pub fn spawn_kind_supervisor(
         if supervisor.should_attempt_starts() {
             let initial_actions = supervisor.compute_needed_starts();
             for action in initial_actions {
-                if let sm::Action::RequestStart { id, instruments } = action
-                    && in_flight_start.is_none()
-                {
+                if let sm::Action::RequestStart { id, instruments } = action {
                     let provider = Arc::clone(&providers[id]);
                     let syms: Arc<[Symbol]> = Arc::from(
                         instruments
@@ -130,7 +120,8 @@ pub fn spawn_kind_supervisor(
                             .collect::<Vec<_>>()
                             .into_boxed_slice(),
                     );
-                    let fut = async move {
+                    let start_tx_clone = start_tx.clone();
+                    tokio::spawn(async move {
                         let provider_name = provider.name();
                         let res = match provider.as_stream_provider() {
                             Some(sp) => match sp.stream_quotes(&instruments).await {
@@ -139,9 +130,8 @@ pub fn spawn_kind_supervisor(
                             },
                             None => Err(BorsaError::unsupported("stream_quotes")),
                         };
-                        (id, res)
-                    };
-                    in_flight_start = Some(Box::pin(fut));
+                        let _ = start_tx_clone.send((id, res));
+                    });
                 }
             }
         }
@@ -152,10 +142,7 @@ pub fn spawn_kind_supervisor(
                 () = async {}, if *stop_watch.borrow() => sm::Event::Shutdown,
                 () = tx_clone.closed() => sm::Event::DownstreamClosed,
                 Some((id, syms)) = event_rx.recv() => sm::Event::SessionEnded { id, symbols: syms },
-                outcome = async { in_flight_start.as_mut().unwrap().await }, if in_flight_start.is_some() => {
-                    // Map outcome to Event::ProviderStartSucceeded/Failed
-                    in_flight_start = None;
-                    let (id, res) = outcome;
+                Some((id, res)) = start_rx.recv() => {
                     match res {
                         Ok((handle, prx, symbols)) => {
                             let allowed = supervisor.provider_allow.get(id).cloned();
@@ -173,9 +160,7 @@ pub fn spawn_kind_supervisor(
                             session_tasks.insert(id, ActiveSession { join: spawned.join, stop_tx: spawned.stop_tx });
                             sm::Event::ProviderStartSucceeded { id, symbols }
                         }
-                        Err(e) => {
-                            sm::Event::ProviderStartFailed { id, error: e }
-                        }
+                        Err(e) => sm::Event::ProviderStartFailed { id, error: e },
                     }
                 }
                 () = async { backoff_timer.as_mut().unwrap().await }, if backoff_timer.is_some() => sm::Event::BackoffTick,
@@ -187,28 +172,26 @@ pub fn spawn_kind_supervisor(
             for action in actions {
                 match action {
                     sm::Action::RequestStart { id, instruments } => {
-                        if in_flight_start.is_none() {
-                            let provider = Arc::clone(&providers[id]);
-                            let syms: Arc<[Symbol]> = Arc::from(
-                                instruments
-                                    .iter()
-                                    .map(|inst| inst.symbol().clone())
-                                    .collect::<Vec<_>>()
-                                    .into_boxed_slice(),
-                            );
-                            let fut = async move {
-                                let provider_name = provider.name();
-                                let res = match provider.as_stream_provider() {
-                                    Some(sp) => match sp.stream_quotes(&instruments).await {
-                                        Ok((handle, prx)) => Ok((handle, prx, syms)),
-                                        Err(err) => Err(crate::core::tag_err(provider_name, err)),
-                                    },
-                                    None => Err(BorsaError::unsupported("stream_quotes")),
-                                };
-                                (id, res)
+                        let provider = Arc::clone(&providers[id]);
+                        let syms: Arc<[Symbol]> = Arc::from(
+                            instruments
+                                .iter()
+                                .map(|inst| inst.symbol().clone())
+                                .collect::<Vec<_>>()
+                                .into_boxed_slice(),
+                        );
+                        let start_tx_clone = start_tx.clone();
+                        tokio::spawn(async move {
+                            let provider_name = provider.name();
+                            let res = match provider.as_stream_provider() {
+                                Some(sp) => match sp.stream_quotes(&instruments).await {
+                                    Ok((handle, prx)) => Ok((handle, prx, syms)),
+                                    Err(err) => Err(crate::core::tag_err(provider_name, err)),
+                                },
+                                None => Err(BorsaError::unsupported("stream_quotes")),
                             };
-                            in_flight_start = Some(Box::pin(fut));
-                        }
+                            let _ = start_tx_clone.send((id, res));
+                        });
                     }
                     sm::Action::StopAll => {
                         for sess in session_tasks.values_mut() {

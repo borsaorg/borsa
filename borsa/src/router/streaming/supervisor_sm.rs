@@ -12,6 +12,10 @@ pub enum ProviderState {
     Idle,
     /// Set on `BackoffTick` when clearing cooldowns; next success may reset backoff
     IdleFromCooldown,
+    /// A start request has been issued for this provider and is in-flight
+    Connecting {
+        symbols: Arc<[Symbol]>,
+    },
     Active {
         session_meta: SessionMeta,
         symbols: Arc<[Symbol]>,
@@ -155,7 +159,9 @@ impl Supervisor {
         self.providers
             .iter()
             .filter_map(|p| match p {
-                ProviderState::Active { symbols, .. } => Some(symbols),
+                ProviderState::Active { symbols, .. } | ProviderState::Connecting { symbols } => {
+                    Some(symbols)
+                }
                 _ => None,
             })
             .filter(|symbols| symbols.iter().any(|s| s == sym))
@@ -167,6 +173,7 @@ impl Supervisor {
             j < provider_index
                 && match state {
                     ProviderState::Active { symbols, .. } => symbols.iter().any(|s2| s2 == sym),
+                    ProviderState::Connecting { symbols } => symbols.iter().any(|s2| s2 == sym),
                     _ => false,
                 }
         })
@@ -189,7 +196,7 @@ impl Supervisor {
         !self.round_exhausted && self.has_idle_providers_with_work()
     }
 
-    pub fn compute_needed_starts(&self) -> Vec<Action> {
+    pub fn compute_needed_starts(&mut self) -> Vec<Action> {
         let len = self.providers.len();
         if len == 0 || self.round_exhausted {
             return Vec::new();
@@ -197,6 +204,7 @@ impl Supervisor {
         let mut i = self.scan_cursor % len;
         let start = self.start_index % len;
         let mut first = true;
+        let mut actions: Vec<Action> = Vec::new();
         loop {
             if let Some(state) = self.providers.get(i)
                 && Self::is_provider_idle(state)
@@ -204,7 +212,18 @@ impl Supervisor {
             {
                 let instruments = self.compute_needed_instruments_for(i);
                 if !instruments.is_empty() {
-                    return vec![Action::RequestStart { id: i, instruments }];
+                    // mark provider as connecting with the planned symbol set
+                    let syms: Arc<[Symbol]> = Arc::from(
+                        instruments
+                            .iter()
+                            .map(|inst| inst.symbol().clone())
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    );
+                    self.providers[i] = ProviderState::Connecting {
+                        symbols: Arc::clone(&syms),
+                    };
+                    actions.push(Action::RequestStart { id: i, instruments });
                 }
             }
             if !first && i == start {
@@ -213,7 +232,7 @@ impl Supervisor {
             first = false;
             i = (i + 1) % len;
         }
-        Vec::new()
+        actions
     }
 
     pub fn has_any_active(&self) -> bool {
