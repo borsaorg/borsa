@@ -41,21 +41,63 @@ impl SymId {
 
 #[derive(Clone, Debug)]
 enum Action {
-    ProviderSendsUpdate { provider: u8, sym: u8, ts: i64 },
-    ProviderStreamFails { provider: u8 },
-    AdvanceTime { millis: u16 },
+    ProviderSendsUpdate {
+        provider: u8,
+        sym: u8,
+        ts: i64,
+    },
+    ProviderStreamFails {
+        provider: u8,
+    },
+    AdvanceTime {
+        millis: u16,
+    },
+    ProviderFailsAfterDelay {
+        provider: u8,
+        delay_ms: u16,
+    },
+    ProviderSendsBurst {
+        provider: u8,
+        sym: u8,
+        start_ts: i64,
+        count: u8,
+    },
+    NetworkPartition {
+        providers: Vec<u8>,
+        duration_ms: u16,
+    },
 }
 
 fn arb_action() -> impl Strategy<Value = Action> {
     use proptest::prelude::*;
     prop_oneof![
-        (0u8..=2, 0u8..=2, 0i64..=10_000i64).prop_map(|(p, s, ts)| Action::ProviderSendsUpdate {
+        // Weight: 6 - Most common action is sending updates
+        6 => (0u8..=2, 0u8..=2, 0i64..=10_000i64).prop_map(|(p, s, ts)| Action::ProviderSendsUpdate {
             provider: p,
             sym: s,
             ts
         }),
-        (0u8..=2).prop_map(|p| Action::ProviderStreamFails { provider: p }),
-        (1u16..=10u16).prop_map(|ms| Action::AdvanceTime { millis: ms }),
+        // Weight: 2 - Time advances help simulate real-world timing
+        2 => (1u16..=10u16).prop_map(|ms| Action::AdvanceTime { millis: ms }),
+        // Weight: 1 - Immediate failures
+        1 => (0u8..=2).prop_map(|p| Action::ProviderStreamFails { provider: p }),
+        // Weight: 1 - Delayed failures to test race conditions
+        1 => (0u8..=2, 1u16..=20u16).prop_map(|(p, delay)| Action::ProviderFailsAfterDelay {
+            provider: p,
+            delay_ms: delay
+        }),
+        // Weight: 2 - Burst of updates to test backpressure
+        2 => (0u8..=2, 0u8..=2, 0i64..=10_000i64, 1u8..=5u8).prop_map(|(p, s, ts, count)| Action::ProviderSendsBurst {
+            provider: p,
+            sym: s,
+            start_ts: ts,
+            count
+        }),
+        // Weight: 1 - Network partitions (multiple providers failing together)
+        1 => (proptest::collection::vec(0u8..=2, 1..=3), 10u16..=50u16).prop_map(|(providers, duration)| Action::NetworkPartition {
+            providers,
+            duration_ms: duration
+        }),
     ]
 }
 
@@ -202,6 +244,59 @@ proptest! {
                     }
                     Action::AdvanceTime { millis } => {
                         tokio::time::advance(std::time::Duration::from_millis(u64::from(millis))).await;
+                        sync_assignments(&providers, &mut seen_requests, &mut assignments).await;
+                        let _ = flush_rx(&mut rx).await;
+                    }
+                    Action::ProviderFailsAfterDelay { provider, delay_ms } => {
+                        if provider > 2 { continue; }
+                        tokio::time::advance(std::time::Duration::from_millis(u64::from(delay_ms))).await;
+                        assignments.remove(&provider);
+                        let (name, ctrl) = &providers[provider as usize];
+                        ctrl.fail_stream(name).await;
+                        let drained = flush_rx(&mut rx).await;
+                        assert!(drained.is_empty(), "no updates expected on delayed failure");
+                        sync_assignments(&providers, &mut seen_requests, &mut assignments).await;
+                    }
+                    Action::ProviderSendsBurst { provider, sym, start_ts, count } => {
+                        if sym > 2 || provider > 2 || count == 0 { continue; }
+                        let sid = sym;
+                        let sym_val = match sid { 0 => SymId::Aapl, 1 => SymId::Msft, _ => SymId::BtcUsd };
+                        let (name, ctrl) = &providers[provider as usize];
+
+                        for i in 0..count {
+                            let ts = start_ts + i64::from(i);
+                            let ts_ch = chrono::Utc.timestamp_opt(ts, 0).unwrap();
+                            let update = QuoteUpdate { symbol: sym_val.symbol(), price: None, previous_close: None, ts: ts_ch, volume: None };
+                            ctrl.push_update(name, update).await;
+                        }
+
+                        let drained = drain_with_time(&mut rx, &providers, &mut seen_requests, &mut assignments).await;
+
+                        // Update last_ts for all received updates
+                        for update in drained {
+                            if let Some(update_sid) = sym_idx_from_symbol(&update.symbol) {
+                                let ts = update.ts.timestamp();
+                                let monotonic_ok = last_ts.get(&update_sid).is_none_or(|prev| ts >= *prev);
+                                if monotonic_ok {
+                                    last_ts.insert(update_sid, ts);
+                                }
+                            }
+                        }
+                    }
+                    Action::NetworkPartition { providers: partition_providers, duration_ms } => {
+                        let valid_providers: Vec<u8> = partition_providers.into_iter().filter(|p| *p <= 2).collect();
+                        if valid_providers.is_empty() { continue; }
+
+                        for &provider in &valid_providers {
+                            assignments.remove(&provider);
+                            let (name, ctrl) = &providers[provider as usize];
+                            ctrl.fail_stream(name).await;
+                        }
+
+                        let drained = flush_rx(&mut rx).await;
+                        assert!(drained.is_empty(), "no updates expected on partition start");
+
+                        tokio::time::advance(std::time::Duration::from_millis(u64::from(duration_ms))).await;
                         sync_assignments(&providers, &mut seen_requests, &mut assignments).await;
                         let _ = flush_rx(&mut rx).await;
                     }
