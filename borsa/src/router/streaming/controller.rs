@@ -7,7 +7,6 @@ use tokio::task::JoinHandle;
 
 use super::backoff::jitter_wait;
 use super::error::collapse_stream_errors;
-use super::filters::MonotonicGate;
 use super::session::SessionManager;
 
 pub struct KindSupervisorParams {
@@ -106,7 +105,6 @@ pub fn spawn_kind_supervisor(
             },
         };
 
-        let monotonic_gate = Arc::new(MonotonicGate::new());
         let (event_tx, mut event_rx) =
             tokio::sync::mpsc::unbounded_channel::<(usize, Arc<[Symbol]>)>();
 
@@ -168,7 +166,6 @@ pub fn spawn_kind_supervisor(
                                 allowed,
                                 stop_watch.clone(),
                                 enforce_monotonic,
-                                Arc::clone(&monotonic_gate),
                                 tx_clone.clone(),
                                 event_tx.clone(),
                                 Arc::clone(&symbols),

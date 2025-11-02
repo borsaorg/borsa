@@ -196,7 +196,7 @@ proptest! {
 
             // Model state
             let providers: [(&'static str, borsa_mock::DynamicMockController); 3] = [("P1", c1), ("P2", c2), ("P3", c3)];
-            let mut last_ts: HashMap<u8, i64> = HashMap::new();
+            let mut last_ts_by_provider: HashMap<(u8, u8), i64> = HashMap::new();
             let mut seen_requests: HashMap<u8, usize> = HashMap::new();
             let mut assignments: HashMap<u8, HashSet<u8>> = HashMap::new();
             sync_assignments(&providers, &mut seen_requests, &mut assignments).await;
@@ -213,7 +213,9 @@ proptest! {
                         let push_ok = ctrl.push_update(name, update).await;
 
                         let drained = drain_with_time(&mut rx, &providers, &mut seen_requests, &mut assignments).await;
-                        let monotonic_ok = last_ts.get(&sid).is_none_or(|prev| ts >= *prev);
+                        let monotonic_ok = last_ts_by_provider
+                            .get(&(provider, sid))
+                            .is_none_or(|prev| ts >= *prev);
                         let provider_has_symbol = assignments
                             .get(&provider)
                             .is_some_and(|set| set.contains(&sid));
@@ -227,7 +229,7 @@ proptest! {
                                 assert_eq!(drained.len(), 1, "expected exactly one forwarded update for sym {sid} from provider {provider}");
                                 assert_eq!(drained[0].symbol, sym_val.symbol());
                                 assert_eq!(drained[0].ts, ts_ch);
-                                last_ts.insert(sid, ts);
+                                last_ts_by_provider.insert((provider, sid), ts);
                             }
                         } else {
                             assert!(drained.is_empty(), "unexpected forwarded update for sym {sid} from provider {provider}");
@@ -236,6 +238,8 @@ proptest! {
                     Action::ProviderStreamFails { provider } => {
                         if provider > 2 { continue; }
                         assignments.remove(&provider);
+                        // Reset per-session monotonic state for this provider
+                        last_ts_by_provider.retain(|(p, _), _| *p != provider);
                         let (name, ctrl) = &providers[provider as usize];
                         ctrl.fail_stream(name).await;
                         let drained = flush_rx(&mut rx).await;
@@ -251,6 +255,8 @@ proptest! {
                         if provider > 2 { continue; }
                         tokio::time::advance(std::time::Duration::from_millis(u64::from(delay_ms))).await;
                         assignments.remove(&provider);
+                        // Reset per-session monotonic state for this provider
+                        last_ts_by_provider.retain(|(p, _), _| *p != provider);
                         let (name, ctrl) = &providers[provider as usize];
                         ctrl.fail_stream(name).await;
                         let drained = flush_rx(&mut rx).await;
@@ -276,9 +282,9 @@ proptest! {
                         for update in drained {
                             if let Some(update_sid) = sym_idx_from_symbol(&update.symbol) {
                                 let ts = update.ts.timestamp();
-                                let monotonic_ok = last_ts.get(&update_sid).is_none_or(|prev| ts >= *prev);
-                                if monotonic_ok {
-                                    last_ts.insert(update_sid, ts);
+                                // Since this burst originated from `provider` for `sid`, update that key only
+                                if update_sid == sid {
+                                    last_ts_by_provider.insert((provider, update_sid), ts);
                                 }
                             }
                         }
@@ -291,6 +297,8 @@ proptest! {
                             assignments.remove(&provider);
                             let (name, ctrl) = &providers[provider as usize];
                             ctrl.fail_stream(name).await;
+                            // Reset per-session monotonic state for this provider
+                            last_ts_by_provider.retain(|(p, _), _| *p != provider);
                         }
 
                         let drained = flush_rx(&mut rx).await;

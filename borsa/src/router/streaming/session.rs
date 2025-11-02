@@ -24,12 +24,13 @@ impl SessionManager {
         allowed: Option<HashSet<Symbol>>,
         mut stop_watch: watch::Receiver<bool>,
         enforce_monotonic: bool,
-        monotonic_gate: Arc<MonotonicGate>,
         tx_out: mpsc::Sender<QuoteUpdate>,
         event_tx: tokio::sync::mpsc::UnboundedSender<(usize, Arc<[Symbol]>)>,
         session_symbols: Arc<[Symbol]>,
     ) -> SpawnedSession {
         let (session_stop_tx, mut session_stop_rx) = oneshot::channel::<()>();
+
+        let monotonic_gate = Arc::new(MonotonicGate::new());
 
         let join = tokio::spawn(async move {
             let mut provider_handle = Some(handle);
