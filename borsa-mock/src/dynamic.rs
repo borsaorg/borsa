@@ -270,6 +270,152 @@ impl HistoryProvider for DynamicMockConnector {
     }
 }
 
+impl DynamicMockConnector {
+    async fn stream_manual_behavior(
+        &self,
+        instruments: &[Instrument],
+    ) -> Result<
+        (
+            borsa_core::stream::StreamHandle,
+            mpsc::Receiver<QuoteUpdate>,
+        ),
+        BorsaError,
+    > {
+        // Filter set
+        let allow: std::collections::HashSet<Symbol> =
+            instruments.iter().map(|i| i.symbol().clone()).collect();
+
+        let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
+        let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
+        let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
+        let (in_tx, mut in_rx) = mpsc::channel::<QuoteUpdate>(1024);
+
+        // Publish kill switches and manual sender for remote control
+        let session_id = {
+            let mut guard = self.state.lock().await;
+            let entry = guard
+                .stream_controllers
+                .entry(self.name)
+                .or_insert_with(|| StreamController::new(StreamBehavior::Manual));
+            entry.behavior = StreamBehavior::Manual;
+            let sid = entry.next_session_id;
+            entry.next_session_id += 1;
+            entry.kill_switches.insert(sid, kill_tx);
+            entry.manual_txs.insert(sid, in_tx.clone());
+            drop(guard);
+            sid
+        };
+
+        let state = Arc::clone(&self.state);
+        let provider_name = self.name;
+
+        let join = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = &mut stop_rx => { break; }
+                    _ = &mut kill_rx => { break; }
+                    maybe_u = in_rx.recv() => {
+                        if let Some(u) = maybe_u {
+                            if !allow.is_empty() && !allow.contains(&u.symbol) {
+                                continue;
+                            }
+                            // Forward; drop if downstream closed
+                            if tx.send(u).await.is_err() { break; }
+                        } else {
+                            // Controller dropped manual sender; wait for stop/kill
+                            // to avoid busy loop
+                            tokio::select! {
+                                _ = &mut stop_rx => {}
+                                _ = &mut kill_rx => {}
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            let mut guard = state.lock().await;
+            if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
+                ctrl.manual_txs.remove(&session_id);
+                ctrl.kill_switches.remove(&session_id);
+            }
+        });
+
+        Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
+    }
+
+    async fn stream_success_behavior(
+        &self,
+        instruments: &[Instrument],
+        updates: Vec<QuoteUpdate>,
+    ) -> Result<
+        (
+            borsa_core::stream::StreamHandle,
+            mpsc::Receiver<QuoteUpdate>,
+        ),
+        BorsaError,
+    > {
+        // Filter set
+        let allow: std::collections::HashSet<Symbol> =
+            instruments.iter().map(|i| i.symbol().clone()).collect();
+
+        let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
+        let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
+        let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
+
+        // Publish kill switch for remote failure
+        let session_id = {
+            let mut guard = self.state.lock().await;
+            let entry = guard
+                .stream_controllers
+                .entry(self.name)
+                .or_insert_with(|| StreamController::new(StreamBehavior::Success(Vec::new())));
+            entry.behavior = StreamBehavior::Success(Vec::new());
+            let sid = entry.next_session_id;
+            entry.next_session_id += 1;
+            entry.kill_switches.insert(sid, kill_tx);
+            entry.manual_txs.clear();
+            drop(guard);
+            sid
+        };
+
+        let state = Arc::clone(&self.state);
+        let provider_name = self.name;
+
+        let join = tokio::spawn(async move {
+            // Send scripted updates, respecting allow filter, until stopped/killed.
+            for u in updates {
+                if !allow.is_empty() && !allow.contains(&u.symbol) {
+                    continue;
+                }
+                tokio::select! {
+                    biased;
+                    _ = &mut stop_rx => { return; }
+                    _ = &mut kill_rx => { return; }
+                    res = tx.send(u) => {
+                        if res.is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+            // Keep the channel open until a stop/kill arrives, then drop sender
+            tokio::select! {
+                _ = &mut stop_rx => {}
+                _ = &mut kill_rx => {}
+            }
+
+            let mut guard = state.lock().await;
+            if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
+                ctrl.kill_switches.remove(&session_id);
+            }
+        });
+
+        Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
+    }
+}
+
 #[async_trait]
 impl StreamProvider for DynamicMockConnector {
     async fn stream_quotes(
@@ -307,128 +453,9 @@ impl StreamProvider for DynamicMockConnector {
                 std::future::pending::<()>().await;
                 unreachable!()
             }
-            Some(StreamBehavior::Manual) => {
-                // Filter set
-                let allow: std::collections::HashSet<Symbol> =
-                    instruments.iter().map(|i| i.symbol().clone()).collect();
-
-                let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
-                let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
-                let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
-                let (in_tx, mut in_rx) = mpsc::channel::<QuoteUpdate>(1024);
-
-                // Publish kill switches and manual sender for remote control
-                let session_id = {
-                    let mut guard = self.state.lock().await;
-                    let entry = guard
-                        .stream_controllers
-                        .entry(self.name)
-                        .or_insert_with(|| StreamController::new(StreamBehavior::Manual));
-                    entry.behavior = StreamBehavior::Manual;
-                    let sid = entry.next_session_id;
-                    entry.next_session_id += 1;
-                    entry.kill_switches.insert(sid, kill_tx);
-                    entry.manual_txs.insert(sid, in_tx.clone());
-                    sid
-                };
-
-                let state = Arc::clone(&self.state);
-                let provider_name = self.name;
-
-                let join = tokio::spawn(async move {
-                    loop {
-                        tokio::select! {
-                            biased;
-                            _ = &mut stop_rx => { break; }
-                            _ = &mut kill_rx => { break; }
-                            maybe_u = in_rx.recv() => {
-                                if let Some(u) = maybe_u {
-                                    if !allow.is_empty() && !allow.contains(&u.symbol) {
-                                        continue;
-                                    }
-                                    // Forward; drop if downstream closed
-                                    if tx.send(u).await.is_err() { break; }
-                                } else {
-                                    // Controller dropped manual sender; wait for stop/kill
-                                    // to avoid busy loop
-                                    tokio::select! {
-                                        _ = &mut stop_rx => {}
-                                        _ = &mut kill_rx => {}
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    let mut guard = state.lock().await;
-                    if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
-                        ctrl.manual_txs.remove(&session_id);
-                        ctrl.kill_switches.remove(&session_id);
-                    }
-                });
-
-                Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
-            }
+            Some(StreamBehavior::Manual) => self.stream_manual_behavior(instruments).await,
             Some(StreamBehavior::Success(updates)) => {
-                // Filter set
-                let allow: std::collections::HashSet<Symbol> =
-                    instruments.iter().map(|i| i.symbol().clone()).collect();
-
-                let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
-                let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
-                let (kill_tx, mut kill_rx) = oneshot::channel::<()>();
-
-                // Publish kill switch for remote failure
-                let session_id = {
-                    let mut guard = self.state.lock().await;
-                    let entry = guard
-                        .stream_controllers
-                        .entry(self.name)
-                        .or_insert_with(|| {
-                            StreamController::new(StreamBehavior::Success(Vec::new()))
-                        });
-                    entry.behavior = StreamBehavior::Success(Vec::new());
-                    let sid = entry.next_session_id;
-                    entry.next_session_id += 1;
-                    entry.kill_switches.insert(sid, kill_tx);
-                    entry.manual_txs.clear();
-                    sid
-                };
-
-                let state = Arc::clone(&self.state);
-                let provider_name = self.name;
-
-                let join = tokio::spawn(async move {
-                    // Send scripted updates, respecting allow filter, until stopped/killed.
-                    for u in updates {
-                        if !allow.is_empty() && !allow.contains(&u.symbol) {
-                            continue;
-                        }
-                        tokio::select! {
-                            biased;
-                            _ = &mut stop_rx => { return; }
-                            _ = &mut kill_rx => { return; }
-                            res = tx.send(u) => {
-                                if res.is_err() {
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                    // Keep the channel open until a stop/kill arrives, then drop sender
-                    tokio::select! {
-                        _ = &mut stop_rx => {}
-                        _ = &mut kill_rx => {}
-                    }
-
-                    let mut guard = state.lock().await;
-                    if let Some(ctrl) = guard.stream_controllers.get_mut(provider_name) {
-                        ctrl.kill_switches.remove(&session_id);
-                    }
-                });
-
-                Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
+                self.stream_success_behavior(instruments, updates).await
             }
             None => Err(BorsaError::unsupported("stream_quotes")),
         }

@@ -124,39 +124,11 @@ impl Supervisor {
             }
             (
                 Phase::Startup {
-                    mut initial_tx,
-                    mut accumulated_errors,
+                    initial_tx,
+                    accumulated_errors,
                 },
                 Event::ProviderStartFailed { id, error },
-            ) => {
-                accumulated_errors.push(error);
-                self.advance_scan_cursor_for_failure(id);
-
-                if self.should_terminate_startup()
-                    && let Some(tx) = initial_tx.take()
-                {
-                    return (
-                        Self {
-                            phase: Phase::Terminated,
-                            ..self
-                        },
-                        vec![Action::NotifyInitial {
-                            tx,
-                            result: Err(collapse_stream_errors(accumulated_errors)),
-                        }],
-                    );
-                }
-                (
-                    Self {
-                        phase: Phase::Startup {
-                            initial_tx,
-                            accumulated_errors,
-                        },
-                        ..self
-                    },
-                    Vec::new(),
-                )
-            }
+            ) => self.handle_startup_failure(id, error, initial_tx, accumulated_errors),
             (phase @ Phase::Running, Event::ProviderStartFailed { id, .. }) => {
                 self.advance_scan_cursor_for_failure(id);
                 (Self { phase, ..self }, Vec::new())
@@ -167,46 +139,7 @@ impl Supervisor {
                 };
                 (Self { phase, ..self }, Vec::new())
             }
-            (phase, Event::BackoffTick) => {
-                for p in &mut self.providers {
-                    if matches!(p, ProviderState::InCooldown { .. }) {
-                        *p = ProviderState::IdleFromCooldown;
-                    }
-                }
-                if self.attempted_since_last_tick {
-                    if self.has_any_active() {
-                        self.increase_backoff();
-                    } else {
-                        if self.round_exhausted
-                            && let Phase::Startup {
-                                initial_tx: Some(tx),
-                                accumulated_errors,
-                            } = phase
-                        {
-                            return (
-                                Self {
-                                    phase: Phase::Terminated,
-                                    ..self
-                                },
-                                vec![Action::NotifyInitial {
-                                    tx,
-                                    result: Err(collapse_stream_errors(accumulated_errors)),
-                                }],
-                            );
-                        }
-                        self.increase_backoff();
-                        self.start_index = 0;
-                    }
-                }
-                self.attempted_since_last_tick = false;
-                self.scan_cursor = self.start_index;
-                self.round_exhausted = false;
-                let delay = self.current_delay_ms();
-                (
-                    Self { phase, ..self },
-                    vec![Action::ScheduleBackoffTick { delay_ms: delay }],
-                )
-            }
+            (phase, Event::BackoffTick) => self.handle_backoff_tick(phase),
             (_, Event::Shutdown | Event::DownstreamClosed) => (
                 Self {
                     phase: Phase::ShuttingDown,
@@ -404,6 +337,87 @@ impl Supervisor {
 
     fn should_terminate_startup(&self) -> bool {
         !self.has_any_active() && self.round_exhausted
+    }
+
+    fn handle_startup_failure(
+        mut self,
+        id: usize,
+        error: BorsaError,
+        initial_tx: Option<oneshot::Sender<Result<(), BorsaError>>>,
+        mut accumulated_errors: Vec<BorsaError>,
+    ) -> (Self, Vec<Action>) {
+        accumulated_errors.push(error);
+        self.advance_scan_cursor_for_failure(id);
+
+        if self.should_terminate_startup()
+            && let Some(tx) = initial_tx
+        {
+            return (
+                Self {
+                    phase: Phase::Terminated,
+                    ..self
+                },
+                vec![Action::NotifyInitial {
+                    tx,
+                    result: Err(collapse_stream_errors(accumulated_errors)),
+                }],
+            );
+        }
+
+        (
+            Self {
+                phase: Phase::Startup {
+                    initial_tx,
+                    accumulated_errors,
+                },
+                ..self
+            },
+            Vec::new(),
+        )
+    }
+
+    fn handle_backoff_tick(mut self, phase: Phase) -> (Self, Vec<Action>) {
+        for p in &mut self.providers {
+            if matches!(p, ProviderState::InCooldown { .. }) {
+                *p = ProviderState::IdleFromCooldown;
+            }
+        }
+
+        if self.attempted_since_last_tick {
+            if self.has_any_active() {
+                self.increase_backoff();
+            } else {
+                if self.round_exhausted
+                    && let Phase::Startup {
+                        initial_tx: Some(tx),
+                        accumulated_errors,
+                    } = phase
+                {
+                    return (
+                        Self {
+                            phase: Phase::Terminated,
+                            ..self
+                        },
+                        vec![Action::NotifyInitial {
+                            tx,
+                            result: Err(collapse_stream_errors(accumulated_errors)),
+                        }],
+                    );
+                }
+                self.increase_backoff();
+                self.start_index = 0;
+            }
+        }
+
+        self.attempted_since_last_tick = false;
+        self.scan_cursor = self.start_index;
+        self.round_exhausted = false;
+        let delay = self.current_delay_ms();
+
+        (
+            Self { phase, ..self },
+            vec![Action::ScheduleBackoffTick { delay_ms: delay }],
+        )
     }
 
     fn increase_backoff(&mut self) {
