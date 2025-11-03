@@ -299,11 +299,12 @@ fn not_found_for(
     target: Option<&str>,
     explicit_symbol: Option<String>,
 ) -> BorsaError {
-    if let Some(symbol) = explicit_symbol.or_else(|| target.map(std::string::ToString::to_string)) {
-        BorsaError::not_found(symbol)
-    } else {
-        BorsaError::not_found(capability.to_string())
-    }
+    explicit_symbol
+        .or_else(|| target.map(std::string::ToString::to_string))
+        .map_or_else(
+            || BorsaError::not_found(capability.to_string()),
+            BorsaError::not_found,
+        )
 }
 
 fn message_indicates_missing_data(lower: &str) -> bool {
