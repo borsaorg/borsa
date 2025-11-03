@@ -103,6 +103,7 @@ pub use borsa_core::{
 };
 pub use core::{Borsa, BorsaBuilder};
 pub use router::download::DownloadBuilder;
+pub use router::util::{collapse_errors, join_with_deadline};
 
 // Re-export core types for convenience
 pub use borsa_core::{
