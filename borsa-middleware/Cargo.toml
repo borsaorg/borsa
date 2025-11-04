@@ -19,7 +19,6 @@ tokio = { workspace = true, features = ["sync"] }
 serde_json = { workspace = true }
 borsa-macros = { workspace = true }
 moka = { version = "0.12", default-features = false, features = ["future"] }
-lru = "0.12"
 
 [dev-dependencies]
 borsa-mock = { workspace = true }

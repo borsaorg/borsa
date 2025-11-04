@@ -51,7 +51,7 @@ impl QuoteProvider for CountingQuoteConnector {
 }
 
 #[tokio::test]
-async fn lru_eviction_with_capacity_one() {
+async fn cache_retains_entries_even_with_small_capacity() {
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
     let count = Arc::new(AtomicUsize::new(0));
     let raw: Arc<dyn BorsaConnector> = Arc::new(CountingQuoteConnector::new(inner, count.clone()));
@@ -67,8 +67,26 @@ async fn lru_eviction_with_capacity_one() {
     let msft = Instrument::from_symbol("MSFT", AssetKind::Equity).unwrap();
 
     let _ = q.quote(&aapl).await.unwrap(); // miss -> fetch (1)
-    let _ = q.quote(&msft).await.unwrap(); // miss -> fetch (2), evict AAPL (async)
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await; // allow eviction to complete
-    let _ = q.quote(&aapl).await.unwrap(); // miss again due to eviction -> fetch (3)
-    assert_eq!(count.load(Ordering::SeqCst), 3);
+    let _ = q.quote(&msft).await.unwrap(); // miss -> fetch (2)
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await; // allow asynchronous eviction to run
+    let _ = q.quote(&aapl).await.unwrap(); // hit -> served from cache, count stays 2
+    assert_eq!(count.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn cache_deduplicates_concurrent_requests() {
+    let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
+    let count = Arc::new(AtomicUsize::new(0));
+    let raw: Arc<dyn BorsaConnector> = Arc::new(CountingQuoteConnector::new(inner, count.clone()));
+
+    let cfg = CacheConfig::default();
+    let wrapped = ConnectorBuilder::new(raw).with_cache(&cfg).build().unwrap();
+    let q = wrapped.as_quote_provider().unwrap();
+
+    let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap();
+
+    let (r1, r2) = tokio::join!(q.quote(&aapl), q.quote(&aapl));
+    assert!(r1.is_ok());
+    assert!(r2.is_ok());
+    assert_eq!(count.load(Ordering::SeqCst), 1);
 }

@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,8 +21,7 @@ use borsa_core::{
     RecommendationRow, RecommendationSummary, SearchRequest, SearchResponse, UpgradeDowngradeRow,
 };
 use borsa_types::{CacheConfig, Capability};
-use lru::LruCache;
-use tokio::sync::Mutex;
+use moka::future::Cache;
 
 /// Small helper: identity of an instrument for caching discrimination.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -174,57 +175,58 @@ impl std::hash::Hash for NewsTabKey {
     }
 }
 
+type CacheStoreFuture<V> = Pin<Box<dyn Future<Output = Result<V, BorsaError>> + Send>>;
+type CacheLoader<K, V> = Arc<dyn Fn(K) -> CacheStoreFuture<V> + Send + Sync>;
+
 #[async_trait]
 trait CacheStore<K, V>: Send + Sync {
-    async fn get(&self, key: &K) -> Option<V>;
-    async fn put(&self, key: K, value: V);
+    async fn get_or_try_put_with(&self, key: K, loader: CacheLoader<K, V>)
+    -> Result<V, BorsaError>;
 }
 
-struct Entry<V> {
-    value: V,
-    expires_at: std::time::Instant,
+struct MokaStore<K, V> {
+    cache: Cache<K, V>,
 }
 
-struct LruTtlStore<K, V> {
-    inner: Mutex<LruCache<K, Entry<V>>>,
-    ttl: Duration,
-}
-
-impl<K, V> LruTtlStore<K, V>
-where
-    K: std::hash::Hash + Eq,
-{
-    fn new(capacity: usize, ttl: Duration) -> Self {
-        // Avoid zero capacity panics
-        let cap = capacity.max(1);
-        let cap_nz = std::num::NonZeroUsize::new(cap).unwrap();
-        Self {
-            inner: Mutex::new(LruCache::new(cap_nz)),
-            ttl,
-        }
-    }
-}
-
-#[async_trait]
-impl<K, V> CacheStore<K, V> for LruTtlStore<K, V>
+impl<K, V> MokaStore<K, V>
 where
     K: Clone + std::hash::Hash + Eq + Send + Sync + 'static,
     V: Clone + Send + Sync + 'static,
 {
-    async fn get(&self, key: &K) -> Option<V> {
-        let mut guard = self.inner.lock().await;
-        if let Some(entry) = guard.get_mut(key)
-            && std::time::Instant::now() <= entry.expires_at
-        {
-            return Some(entry.value.clone());
-        }
-        // If expired, remove it and return None
-        guard.pop(key).and_then(|_| None)
+    fn new(capacity: usize, ttl: Duration) -> Self {
+        let cap = capacity.max(1);
+        let cap_u64 = u64::try_from(cap).unwrap_or(u64::MAX);
+        let cache = Cache::builder()
+            .max_capacity(cap_u64)
+            .time_to_live(ttl)
+            .build();
+        Self { cache }
     }
-    async fn put(&self, key: K, value: V) {
-        let expires_at = std::time::Instant::now() + self.ttl;
-        let mut guard = self.inner.lock().await;
-        guard.put(key, Entry { value, expires_at });
+    async fn get_or_try_put_with(
+        &self,
+        key: K,
+        loader: CacheLoader<K, V>,
+    ) -> Result<V, BorsaError> {
+        let future = loader(key.clone());
+        self.cache
+            .try_get_with(key, future)
+            .await
+            .map_err(|err| (*err).clone())
+    }
+}
+
+#[async_trait]
+impl<K, V> CacheStore<K, V> for MokaStore<K, V>
+where
+    K: Clone + std::hash::Hash + Eq + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    async fn get_or_try_put_with(
+        &self,
+        key: K,
+        loader: CacheLoader<K, V>,
+    ) -> Result<V, BorsaError> {
+        self.get_or_try_put_with(key, loader).await
     }
 }
 
@@ -307,8 +309,23 @@ impl CachingConnector {
     {
         let ttl = cfg.ttl_for(cap)?;
         let capacity = cfg.capacity_for(cap);
-        let store = LruTtlStore::<K, V>::new(capacity, ttl);
+        let store = MokaStore::<K, V>::new(capacity, ttl);
         Some(Arc::new(store))
+    }
+
+    async fn cached_or_load<K, T>(
+        store: Option<&Arc<dyn CacheStore<K, Arc<T>>>>,
+        key: K,
+        loader: CacheLoader<K, Arc<T>>,
+    ) -> Result<Arc<T>, BorsaError>
+    where
+        K: Clone + std::hash::Hash + Eq + Send + Sync + 'static,
+        T: Clone + Send + Sync + 'static,
+    {
+        if let Some(store) = store {
+            return store.get_or_try_put_with(key, Arc::clone(&loader)).await;
+        }
+        loader(key).await
     }
 
     #[must_use]
@@ -365,72 +382,69 @@ impl borsa_core::Middleware for CachingConnector {
 #[async_trait]
 impl QuoteProvider for CachingConnector {
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
-        if let Some(store) = &self.stores.quote {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_quote_provider()
-                .ok_or_else(|| BorsaError::unsupported("quote"))?;
-            let value = inner.quote(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_quote_provider()
-            .ok_or_else(|| BorsaError::unsupported("quote"))?
-            .quote(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Quote>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_quote_provider()
+                    .ok_or_else(|| BorsaError::unsupported("quote"))?;
+                let value = provider.quote(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.quote.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
 #[async_trait]
 impl ProfileProvider for CachingConnector {
     async fn profile(&self, instrument: &Instrument) -> Result<Profile, BorsaError> {
-        if let Some(store) = &self.stores.profile {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_profile_provider()
-                .ok_or_else(|| BorsaError::unsupported("profile"))?;
-            let value = inner.profile(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_profile_provider()
-            .ok_or_else(|| BorsaError::unsupported("profile"))?
-            .profile(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Profile>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_profile_provider()
+                    .ok_or_else(|| BorsaError::unsupported("profile"))?;
+                let value = provider.profile(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.profile.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
 #[async_trait]
 impl IsinProvider for CachingConnector {
     async fn isin(&self, instrument: &Instrument) -> Result<Option<Isin>, BorsaError> {
-        if let Some(store) = &self.stores.isin {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_isin_provider()
-                .ok_or_else(|| BorsaError::unsupported("isin"))?;
-            let value = inner.isin(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_isin_provider()
-            .ok_or_else(|| BorsaError::unsupported("isin"))?
-            .isin(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Option<Isin>>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_isin_provider()
+                    .ok_or_else(|| BorsaError::unsupported("isin"))?;
+                let value = provider.isin(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.isin.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -441,24 +455,25 @@ impl HistoryProvider for CachingConnector {
         instrument: &Instrument,
         req: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
-        if let Some(store) = &self.stores.history {
-            let key = HistoryKey::from_request(instrument, &req);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_history_provider()
-                .ok_or_else(|| BorsaError::unsupported("history"))?;
-            let value = inner.history(instrument, req).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_history_provider()
-            .ok_or_else(|| BorsaError::unsupported("history"))?
-            .history(instrument, req)
-            .await
+        let key = HistoryKey::from_request(instrument, &req);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let req_clone = req.clone();
+        let loader: CacheLoader<HistoryKey, Arc<HistoryResponse>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            let request = req_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_history_provider()
+                    .ok_or_else(|| BorsaError::unsupported("history"))?;
+                let value = provider.history(&instrument, request).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.history.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 
     fn supported_history_intervals(&self, kind: AssetKind) -> &'static [Interval] {
@@ -473,24 +488,23 @@ impl HistoryProvider for CachingConnector {
 #[async_trait]
 impl EarningsProvider for CachingConnector {
     async fn earnings(&self, instrument: &Instrument) -> Result<Earnings, BorsaError> {
-        if let Some(store) = &self.stores.earnings {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_earnings_provider()
-                .ok_or_else(|| BorsaError::unsupported("earnings"))?;
-            let value = inner.earnings(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_earnings_provider()
-            .ok_or_else(|| BorsaError::unsupported("earnings"))?
-            .earnings(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Earnings>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_earnings_provider()
+                    .ok_or_else(|| BorsaError::unsupported("earnings"))?;
+                let value = provider.earnings(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.earnings.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -501,27 +515,27 @@ impl IncomeStatementProvider for CachingConnector {
         instrument: &Instrument,
         quarterly: bool,
     ) -> Result<Vec<IncomeStatementRow>, BorsaError> {
-        if let Some(store) = &self.stores.income_stmt {
-            let key = BoolByInstrumentKey {
-                inst: InstrumentKey::from(instrument),
-                flag: quarterly,
-            };
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_income_statement_provider()
-                .ok_or_else(|| BorsaError::unsupported("income_statement"))?;
-            let value = inner.income_statement(instrument, quarterly).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_income_statement_provider()
-            .ok_or_else(|| BorsaError::unsupported("income_statement"))?
-            .income_statement(instrument, quarterly)
-            .await
+        let key = BoolByInstrumentKey {
+            inst: InstrumentKey::from(instrument),
+            flag: quarterly,
+        };
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<BoolByInstrumentKey, Arc<Vec<IncomeStatementRow>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_income_statement_provider()
+                        .ok_or_else(|| BorsaError::unsupported("income_statement"))?;
+                    let value = provider.income_statement(&instrument, quarterly).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(self.stores.income_stmt.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -532,27 +546,27 @@ impl BalanceSheetProvider for CachingConnector {
         instrument: &Instrument,
         quarterly: bool,
     ) -> Result<Vec<BalanceSheetRow>, BorsaError> {
-        if let Some(store) = &self.stores.balance_sheet {
-            let key = BoolByInstrumentKey {
-                inst: InstrumentKey::from(instrument),
-                flag: quarterly,
-            };
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_balance_sheet_provider()
-                .ok_or_else(|| BorsaError::unsupported("balance_sheet"))?;
-            let value = inner.balance_sheet(instrument, quarterly).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_balance_sheet_provider()
-            .ok_or_else(|| BorsaError::unsupported("balance_sheet"))?
-            .balance_sheet(instrument, quarterly)
-            .await
+        let key = BoolByInstrumentKey {
+            inst: InstrumentKey::from(instrument),
+            flag: quarterly,
+        };
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<BoolByInstrumentKey, Arc<Vec<BalanceSheetRow>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_balance_sheet_provider()
+                        .ok_or_else(|| BorsaError::unsupported("balance_sheet"))?;
+                    let value = provider.balance_sheet(&instrument, quarterly).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(self.stores.balance_sheet.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -563,51 +577,50 @@ impl CashflowProvider for CachingConnector {
         instrument: &Instrument,
         quarterly: bool,
     ) -> Result<Vec<CashflowRow>, BorsaError> {
-        if let Some(store) = &self.stores.cashflow {
-            let key = BoolByInstrumentKey {
-                inst: InstrumentKey::from(instrument),
-                flag: quarterly,
-            };
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_cashflow_provider()
-                .ok_or_else(|| BorsaError::unsupported("cashflow"))?;
-            let value = inner.cashflow(instrument, quarterly).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_cashflow_provider()
-            .ok_or_else(|| BorsaError::unsupported("cashflow"))?
-            .cashflow(instrument, quarterly)
-            .await
+        let key = BoolByInstrumentKey {
+            inst: InstrumentKey::from(instrument),
+            flag: quarterly,
+        };
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<BoolByInstrumentKey, Arc<Vec<CashflowRow>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_cashflow_provider()
+                        .ok_or_else(|| BorsaError::unsupported("cashflow"))?;
+                    let value = provider.cashflow(&instrument, quarterly).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(self.stores.cashflow.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
 #[async_trait]
 impl CalendarProvider for CachingConnector {
     async fn calendar(&self, instrument: &Instrument) -> Result<Calendar, BorsaError> {
-        if let Some(store) = &self.stores.calendar {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_calendar_provider()
-                .ok_or_else(|| BorsaError::unsupported("calendar"))?;
-            let value = inner.calendar(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_calendar_provider()
-            .ok_or_else(|| BorsaError::unsupported("calendar"))?
-            .calendar(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Calendar>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_calendar_provider()
+                    .ok_or_else(|| BorsaError::unsupported("calendar"))?;
+                let value = provider.calendar(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.calendar.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -617,24 +630,24 @@ impl RecommendationsProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<RecommendationRow>, BorsaError> {
-        if let Some(store) = &self.stores.recommendations {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_recommendations_provider()
-                .ok_or_else(|| BorsaError::unsupported("recommendations"))?;
-            let value = inner.recommendations(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_recommendations_provider()
-            .ok_or_else(|| BorsaError::unsupported("recommendations"))?
-            .recommendations(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<RecommendationRow>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_recommendations_provider()
+                        .ok_or_else(|| BorsaError::unsupported("recommendations"))?;
+                    let value = provider.recommendations(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(self.stores.recommendations.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -644,24 +657,25 @@ impl RecommendationsSummaryProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<RecommendationSummary, BorsaError> {
-        if let Some(store) = &self.stores.recommendations_summary {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_recommendations_summary_provider()
-                .ok_or_else(|| BorsaError::unsupported("recommendations_summary"))?;
-            let value = inner.recommendations_summary(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_recommendations_summary_provider()
-            .ok_or_else(|| BorsaError::unsupported("recommendations_summary"))?
-            .recommendations_summary(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<RecommendationSummary>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_recommendations_summary_provider()
+                        .ok_or_else(|| BorsaError::unsupported("recommendations_summary"))?;
+                    let value = provider.recommendations_summary(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc =
+            Self::cached_or_load(self.stores.recommendations_summary.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -671,24 +685,25 @@ impl UpgradesDowngradesProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<UpgradeDowngradeRow>, BorsaError> {
-        if let Some(store) = &self.stores.upgrades_downgrades {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_upgrades_downgrades_provider()
-                .ok_or_else(|| BorsaError::unsupported("upgrades_downgrades"))?;
-            let value = inner.upgrades_downgrades(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_upgrades_downgrades_provider()
-            .ok_or_else(|| BorsaError::unsupported("upgrades_downgrades"))?
-            .upgrades_downgrades(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<UpgradeDowngradeRow>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_upgrades_downgrades_provider()
+                        .ok_or_else(|| BorsaError::unsupported("upgrades_downgrades"))?;
+                    let value = provider.upgrades_downgrades(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc =
+            Self::cached_or_load(self.stores.upgrades_downgrades.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -698,24 +713,24 @@ impl AnalystPriceTargetProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<PriceTarget, BorsaError> {
-        if let Some(store) = &self.stores.analyst_price_target {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_analyst_price_target_provider()
-                .ok_or_else(|| BorsaError::unsupported("analyst_price_target"))?;
-            let value = inner.analyst_price_target(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_analyst_price_target_provider()
-            .ok_or_else(|| BorsaError::unsupported("analyst_price_target"))?
-            .analyst_price_target(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<PriceTarget>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_analyst_price_target_provider()
+                    .ok_or_else(|| BorsaError::unsupported("analyst_price_target"))?;
+                let value = provider.analyst_price_target(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc =
+            Self::cached_or_load(self.stores.analyst_price_target.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -725,24 +740,24 @@ impl MajorHoldersProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
-        if let Some(store) = &self.stores.major_holders {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_major_holders_provider()
-                .ok_or_else(|| BorsaError::unsupported("major_holders"))?;
-            let value = inner.major_holders(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_major_holders_provider()
-            .ok_or_else(|| BorsaError::unsupported("major_holders"))?
-            .major_holders(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<borsa_core::MajorHolder>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_major_holders_provider()
+                        .ok_or_else(|| BorsaError::unsupported("major_holders"))?;
+                    let value = provider.major_holders(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(self.stores.major_holders.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -752,24 +767,25 @@ impl InstitutionalHoldersProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
-        if let Some(store) = &self.stores.institutional_holders {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_institutional_holders_provider()
-                .ok_or_else(|| BorsaError::unsupported("institutional_holders"))?;
-            let value = inner.institutional_holders(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_institutional_holders_provider()
-            .ok_or_else(|| BorsaError::unsupported("institutional_holders"))?
-            .institutional_holders(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<borsa_core::InstitutionalHolder>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_institutional_holders_provider()
+                        .ok_or_else(|| BorsaError::unsupported("institutional_holders"))?;
+                    let value = provider.institutional_holders(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc =
+            Self::cached_or_load(self.stores.institutional_holders.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -779,24 +795,25 @@ impl MutualFundHoldersProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
-        if let Some(store) = &self.stores.mutual_fund_holders {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_mutual_fund_holders_provider()
-                .ok_or_else(|| BorsaError::unsupported("mutual_fund_holders"))?;
-            let value = inner.mutual_fund_holders(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_mutual_fund_holders_provider()
-            .ok_or_else(|| BorsaError::unsupported("mutual_fund_holders"))?
-            .mutual_fund_holders(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<borsa_core::InstitutionalHolder>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_mutual_fund_holders_provider()
+                        .ok_or_else(|| BorsaError::unsupported("mutual_fund_holders"))?;
+                    let value = provider.mutual_fund_holders(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc =
+            Self::cached_or_load(self.stores.mutual_fund_holders.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -806,24 +823,25 @@ impl InsiderTransactionsProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
-        if let Some(store) = &self.stores.insider_transactions {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_insider_transactions_provider()
-                .ok_or_else(|| BorsaError::unsupported("insider_transactions"))?;
-            let value = inner.insider_transactions(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_insider_transactions_provider()
-            .ok_or_else(|| BorsaError::unsupported("insider_transactions"))?
-            .insider_transactions(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<borsa_core::InsiderTransaction>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_insider_transactions_provider()
+                        .ok_or_else(|| BorsaError::unsupported("insider_transactions"))?;
+                    let value = provider.insider_transactions(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc =
+            Self::cached_or_load(self.stores.insider_transactions.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -833,24 +851,24 @@ impl InsiderRosterHoldersProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
-        if let Some(store) = &self.stores.insider_roster {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_insider_roster_holders_provider()
-                .ok_or_else(|| BorsaError::unsupported("insider_roster_holders"))?;
-            let value = inner.insider_roster_holders(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_insider_roster_holders_provider()
-            .ok_or_else(|| BorsaError::unsupported("insider_roster_holders"))?
-            .insider_roster_holders(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<borsa_core::InsiderRosterHolder>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_insider_roster_holders_provider()
+                        .ok_or_else(|| BorsaError::unsupported("insider_roster_holders"))?;
+                    let value = provider.insider_roster_holders(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(self.stores.insider_roster.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -860,48 +878,52 @@ impl NetSharePurchaseActivityProvider for CachingConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
-        if let Some(store) = &self.stores.net_share_purchase_activity {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_net_share_purchase_activity_provider()
-                .ok_or_else(|| BorsaError::unsupported("net_share_purchase_activity"))?;
-            let value = inner.net_share_purchase_activity(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_net_share_purchase_activity_provider()
-            .ok_or_else(|| BorsaError::unsupported("net_share_purchase_activity"))?
-            .net_share_purchase_activity(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Option<borsa_core::NetSharePurchaseActivity>>> =
+            Arc::new(move |_key| {
+                let inner = Arc::clone(&inner);
+                let instrument = instrument_clone.clone();
+                Box::pin(async move {
+                    let provider = inner
+                        .as_net_share_purchase_activity_provider()
+                        .ok_or_else(|| BorsaError::unsupported("net_share_purchase_activity"))?;
+                    let value = provider.net_share_purchase_activity(&instrument).await?;
+                    Ok(Arc::new(value))
+                })
+            });
+
+        let arc = Self::cached_or_load(
+            self.stores.net_share_purchase_activity.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
+        Ok((*arc).clone())
     }
 }
 
 #[async_trait]
 impl EsgProvider for CachingConnector {
     async fn sustainability(&self, instrument: &Instrument) -> Result<EsgScores, BorsaError> {
-        if let Some(store) = &self.stores.esg {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_esg_provider()
-                .ok_or_else(|| BorsaError::unsupported("sustainability"))?;
-            let value = inner.sustainability(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_esg_provider()
-            .ok_or_else(|| BorsaError::unsupported("sustainability"))?
-            .sustainability(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<EsgScores>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_esg_provider()
+                    .ok_or_else(|| BorsaError::unsupported("sustainability"))?;
+                let value = provider.sustainability(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.esg.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -912,28 +934,29 @@ impl NewsProvider for CachingConnector {
         instrument: &Instrument,
         req: NewsRequest,
     ) -> Result<Vec<NewsArticle>, BorsaError> {
-        if let Some(store) = &self.stores.news {
-            let key = NewsKey {
-                inst: InstrumentKey::from(instrument),
-                count: req.count,
-                tab: NewsTabKey(req.tab),
-            };
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_news_provider()
-                .ok_or_else(|| BorsaError::unsupported("news"))?;
-            let value = inner.news(instrument, req).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_news_provider()
-            .ok_or_else(|| BorsaError::unsupported("news"))?
-            .news(instrument, req)
-            .await
+        let key = NewsKey {
+            inst: InstrumentKey::from(instrument),
+            count: req.count,
+            tab: NewsTabKey(req.tab),
+        };
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let req_clone = req;
+        let loader: CacheLoader<NewsKey, Arc<Vec<NewsArticle>>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            let request = req_clone;
+            Box::pin(async move {
+                let provider = inner
+                    .as_news_provider()
+                    .ok_or_else(|| BorsaError::unsupported("news"))?;
+                let value = provider.news(&instrument, request).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.news.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -960,24 +983,24 @@ impl StreamProvider for CachingConnector {
 #[async_trait]
 impl OptionsExpirationsProvider for CachingConnector {
     async fn options_expirations(&self, instrument: &Instrument) -> Result<Vec<i64>, BorsaError> {
-        if let Some(store) = &self.stores.options_expirations {
-            let key = InstrumentKey::from(instrument);
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_options_expirations_provider()
-                .ok_or_else(|| BorsaError::unsupported("options_expirations"))?;
-            let value = inner.options_expirations(instrument).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_options_expirations_provider()
-            .ok_or_else(|| BorsaError::unsupported("options_expirations"))?
-            .options_expirations(instrument)
-            .await
+        let key = InstrumentKey::from(instrument);
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<InstrumentKey, Arc<Vec<i64>>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_options_expirations_provider()
+                    .ok_or_else(|| BorsaError::unsupported("options_expirations"))?;
+                let value = provider.options_expirations(&instrument).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc =
+            Self::cached_or_load(self.stores.options_expirations.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
@@ -988,54 +1011,52 @@ impl OptionChainProvider for CachingConnector {
         instrument: &Instrument,
         date: Option<i64>,
     ) -> Result<OptionChain, BorsaError> {
-        if let Some(store) = &self.stores.option_chain {
-            let key = OptionChainKey {
-                inst: InstrumentKey::from(instrument),
-                date,
-            };
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_option_chain_provider()
-                .ok_or_else(|| BorsaError::unsupported("option_chain"))?;
-            let value = inner.option_chain(instrument, date).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_option_chain_provider()
-            .ok_or_else(|| BorsaError::unsupported("option_chain"))?
-            .option_chain(instrument, date)
-            .await
+        let key = OptionChainKey {
+            inst: InstrumentKey::from(instrument),
+            date,
+        };
+        let inner = Arc::clone(&self.inner);
+        let instrument_clone = instrument.clone();
+        let loader: CacheLoader<OptionChainKey, Arc<OptionChain>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let instrument = instrument_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_option_chain_provider()
+                    .ok_or_else(|| BorsaError::unsupported("option_chain"))?;
+                let value = provider.option_chain(&instrument, date).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.option_chain.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
 
 #[async_trait]
 impl SearchProvider for CachingConnector {
     async fn search(&self, req: SearchRequest) -> Result<SearchResponse, BorsaError> {
-        if let Some(store) = &self.stores.search {
-            let key = SearchKey {
-                query: req.query().to_string(),
-                kind: req.kind(),
-                limit: req.limit(),
-            };
-            if let Some(v) = store.get(&key).await {
-                return Ok((*v).clone());
-            }
-            let inner = self
-                .inner
-                .as_search_provider()
-                .ok_or_else(|| BorsaError::unsupported("search"))?;
-            let value = inner.search(req).await?;
-            store.put(key, Arc::new(value.clone())).await;
-            return Ok(value);
-        }
-        self.inner
-            .as_search_provider()
-            .ok_or_else(|| BorsaError::unsupported("search"))?
-            .search(req)
-            .await
+        let key = SearchKey {
+            query: req.query().to_string(),
+            kind: req.kind(),
+            limit: req.limit(),
+        };
+        let inner = Arc::clone(&self.inner);
+        let req_clone = req.clone();
+        let loader: CacheLoader<SearchKey, Arc<SearchResponse>> = Arc::new(move |_key| {
+            let inner = Arc::clone(&inner);
+            let request = req_clone.clone();
+            Box::pin(async move {
+                let provider = inner
+                    .as_search_provider()
+                    .ok_or_else(|| BorsaError::unsupported("search"))?;
+                let value = provider.search(request).await?;
+                Ok(Arc::new(value))
+            })
+        });
+
+        let arc = Self::cached_or_load(self.stores.search.as_ref(), key, loader).await?;
+        Ok((*arc).clone())
     }
 }
