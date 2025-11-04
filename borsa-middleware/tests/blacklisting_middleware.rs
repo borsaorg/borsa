@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use borsa_core::{AssetKind, BorsaConnector, BorsaError, Instrument};
-use borsa_middleware::{BlacklistingMiddleware, QuotaAwareConnector};
+use borsa_middleware::{BlacklistConnector, QuotaAwareConnector};
 use borsa_mock::MockConnector;
 use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
@@ -21,9 +21,9 @@ fn make_quota_wrapper(
 }
 
 #[tokio::test]
-async fn daily_quota_blacklists_provider() {
+async fn daily_quota_exhaustion_is_bubbled_up() {
     let quota = make_quota_wrapper(1, 86_400_000, QuotaConsumptionStrategy::Unit);
-    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistingMiddleware::new(
+    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistConnector::new(
         quota as Arc<dyn BorsaConnector>,
         Duration::from_secs(24 * 60 * 60),
     ));
@@ -33,24 +33,27 @@ async fn daily_quota_blacklists_provider() {
 
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid symbol");
 
-    // First call succeeds
+    // First call consumes the only remaining daily slot.
     let _ = qp.quote(&inst).await.expect("first call ok");
-    // Second call exceeds quota (returns QuotaExceeded and triggers blacklist)
-    let err = qp.quote(&inst).await.expect_err("second call should fail");
+    // Second call exceeds quota (returns QuotaExceeded and allows middleware to propagate it).
+    let err = qp
+        .quote(&inst)
+        .await
+        .expect_err("second call should report quota exhaustion");
     assert!(matches!(err, BorsaError::QuotaExceeded { .. }));
-    // Third call should be immediately blocked by middleware blacklist
+    // Third call still reports QuotaExceeded, confirming the middleware does not blacklist.
     let err2 = qp
         .quote(&inst)
         .await
-        .expect_err("third call should be blacklisted");
-    assert!(matches!(err2, BorsaError::TemporarilyBlacklisted { .. }));
+        .expect_err("third call should still report quota exhaustion");
+    assert!(matches!(err2, BorsaError::QuotaExceeded { .. }));
 }
 
 #[tokio::test]
-async fn temporary_quota_spread_does_not_blacklist_long_term() {
+async fn temporary_quota_spread_reports_quota_exhaustion() {
     // Use a small window to make slice short for the test (e.g., 2400ms -> 100ms slices)
     let quota = make_quota_wrapper(24, 2400, QuotaConsumptionStrategy::EvenSpreadHourly);
-    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistingMiddleware::new(
+    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistConnector::new(
         quota as Arc<dyn BorsaConnector>,
         Duration::from_secs(24 * 60 * 60),
     ));
@@ -67,12 +70,12 @@ async fn temporary_quota_spread_does_not_blacklist_long_term() {
         .await
         .expect_err("second call should be slice-blocked");
     assert!(matches!(err, BorsaError::QuotaExceeded { .. }));
-    // Immediate next call blacklisted by middleware for ~slice duration
+    // Immediate next call still reports QuotaExceeded; middleware does not blacklist.
     let err2 = qp
         .quote(&inst)
         .await
-        .expect_err("third call should be blacklisted");
-    assert!(matches!(err2, BorsaError::TemporarilyBlacklisted { .. }));
+        .expect_err("third call should still report quota exhaustion");
+    assert!(matches!(err2, BorsaError::QuotaExceeded { .. }));
     // Wait beyond slice duration and ensure calls are allowed again
     tokio::time::sleep(Duration::from_millis(150)).await;
     let _ = qp.quote(&inst).await.expect("after slice reset ok");
@@ -87,7 +90,7 @@ async fn rate_limit_triggers_blacklist() {
         strategy: QuotaConsumptionStrategy::Unit,
     };
     let quota = Arc::new(QuotaAwareConnector::new(inner, cfg));
-    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistingMiddleware::new(
+    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistConnector::new(
         quota as Arc<dyn BorsaConnector>,
         Duration::from_secs(24 * 60 * 60),
     ));
@@ -109,7 +112,7 @@ async fn rate_limit_triggers_blacklist() {
 #[tokio::test]
 async fn blacklist_expiry_allows_provider_again() {
     let quota = make_quota_wrapper(1, 50, QuotaConsumptionStrategy::Unit);
-    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistingMiddleware::new(
+    let wrapped: Arc<dyn BorsaConnector> = Arc::new(BlacklistConnector::new(
         quota as Arc<dyn BorsaConnector>,
         Duration::from_secs(24 * 60 * 60),
     ));

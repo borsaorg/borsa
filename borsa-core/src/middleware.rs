@@ -299,7 +299,7 @@ pub trait Middleware: Send + Sync {
 /// # Example
 /// ```ignore
 /// fn validate(&self, ctx: &ValidationContext) -> Result<(), BorsaError> {
-///     require_middleware_outer!(ctx, BlacklistingMiddleware, "QuotaAware requires Blacklisting to be outermost");
+///     require_middleware_outer!(ctx, BlacklistConnector, "QuotaAware requires Blacklisting to be outermost");
 ///     Ok(())
 /// }
 /// ```

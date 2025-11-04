@@ -77,7 +77,7 @@ impl ConnectorBuilder {
     fn enforce_ordering(&mut self) {
         self.layers.sort_by_key(|d| match d.name() {
             "CachingMiddleware" => 0,
-            "BlacklistingMiddleware" => 1,
+            "BlacklistConnector" => 1,
             "QuotaAwareConnector" => 2,
             _ => 3,
         });
@@ -170,7 +170,7 @@ impl ConnectorBuilder {
     /// If blacklist middleware already exists, it is removed and replaced.
     #[must_use]
     pub fn with_blacklist(mut self, duration: Duration) -> Self {
-        self.layers.retain(|d| d.name() != "BlacklistingMiddleware");
+        self.layers.retain(|d| d.name() != "BlacklistConnector");
         self.layers.push(MiddlewareDescriptor::new(
             crate::blacklist::BlacklistMiddleware::new(duration),
         ));
@@ -181,7 +181,7 @@ impl ConnectorBuilder {
     /// Remove blacklist if present.
     #[must_use]
     pub fn without_blacklist(mut self) -> Self {
-        self.layers.retain(|d| d.name() != "BlacklistingMiddleware");
+        self.layers.retain(|d| d.name() != "BlacklistConnector");
         self
     }
 
@@ -316,7 +316,7 @@ impl ConnectorBuilder {
                         crate::quota::QuotaMiddleware::new(cfg),
                     ));
                 }
-                "BlacklistingMiddleware" => {
+                "BlacklistConnector" => {
                     let dur_ms = l
                         .config
                         .get("default_duration_ms")

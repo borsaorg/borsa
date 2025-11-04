@@ -26,6 +26,6 @@ async fn builder_ordering_policy_is_enforced() {
     let names: Vec<_> = stack.layers.iter().map(|l| l.name.as_str()).collect();
     assert!(names.len() >= 3);
     assert_eq!(names[0], "CachingMiddleware");
-    assert_eq!(names[1], "BlacklistingMiddleware");
+    assert_eq!(names[1], "BlacklistConnector");
     assert_eq!(names[2], "QuotaAwareConnector");
 }

@@ -11,13 +11,13 @@ use borsa_core::connector::BorsaConnector;
 use borsa_core::{BorsaError, CallContext, CallOrigin, Middleware};
 
 /// Middleware that blacklists its inner connector for a period upon quota exhaustion.
-pub struct BlacklistingMiddleware {
+pub struct BlacklistConnector {
     inner: Arc<dyn BorsaConnector>,
     state: Mutex<Option<Instant>>, // blacklist-until; None means active
     default_duration: Duration,
 }
 
-impl BlacklistingMiddleware {
+impl BlacklistConnector {
     pub fn new(inner: Arc<dyn BorsaConnector>, default_duration: Duration) -> Self {
         Self {
             inner,
@@ -47,27 +47,25 @@ impl BlacklistingMiddleware {
     }
 
     fn handle_error(&self, err: BorsaError) -> BorsaError {
-        match err.clone() {
-            BorsaError::RateLimitExceeded {
-                limit: _,
-                window_ms,
-            } => {
-                // Provider indicated an external rate limit. Honor the provider window when available
-                // otherwise fall back to the configured default.
-                let duration = if window_ms > 0 {
-                    Duration::from_millis(window_ms)
-                } else {
-                    self.default_duration
-                };
-                self.blacklist_until(Instant::now() + duration);
-            }
-            _ => {}
+        if let BorsaError::RateLimitExceeded {
+            limit: _,
+            window_ms,
+        } = err.clone()
+        {
+            // Provider indicated an external rate limit. Honor the provider window when available
+            // otherwise fall back to the configured default.
+            let duration = if window_ms > 0 {
+                Duration::from_millis(window_ms)
+            } else {
+                self.default_duration
+            };
+            self.blacklist_until(Instant::now() + duration);
         }
         err
     }
 }
 
-/// Middleware config for constructing a [`BlacklistingMiddleware`].
+/// Middleware config for constructing a [`BlacklistConnector`].
 pub struct BlacklistMiddleware {
     pub duration: Duration,
 }
@@ -81,11 +79,11 @@ impl BlacklistMiddleware {
 
 impl Middleware for BlacklistMiddleware {
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
-        Arc::new(BlacklistingMiddleware::new(inner, self.duration))
+        Arc::new(BlacklistConnector::new(inner, self.duration))
     }
 
     fn name(&self) -> &'static str {
-        "BlacklistingMiddleware"
+        "BlacklistConnector"
     }
 
     fn config_json(&self) -> serde_json::Value {
@@ -97,16 +95,16 @@ impl Middleware for BlacklistMiddleware {
 
 #[borsa_macros::delegate_connector(inner)]
 #[borsa_macros::delegate_all_providers(inner)]
-impl BlacklistingMiddleware {}
+impl BlacklistConnector {}
 
 #[async_trait]
-impl Middleware for BlacklistingMiddleware {
+impl Middleware for BlacklistConnector {
     fn apply(self: Box<Self>, _inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
-        unreachable!("BlacklistingMiddleware is already applied")
+        unreachable!("BlacklistConnector is already applied")
     }
 
     fn name(&self) -> &'static str {
-        "BlacklistingMiddleware"
+        "BlacklistConnector"
     }
 
     fn config_json(&self) -> serde_json::Value {

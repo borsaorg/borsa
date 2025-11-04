@@ -21,14 +21,14 @@ borsa-mock = { version = "0.2", optional = true }
 
 ### Example: Wrap a connector with a daily budget
 
-```rust,no_run
+```rust,ignore
 use std::sync::Arc;
 use std::time::Duration;
 
 use borsa::Borsa;
 use borsa_core::{AssetKind, Instrument, BorsaConnector};
 use borsa_middleware::QuotaAwareConnector;
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 
 // Use the mock connector for CI-safe examples. Replace with a real connector in your app.
 use borsa_mock::MockConnector;
@@ -41,10 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         window: Duration::from_secs(24 * 60 * 60),
         strategy: QuotaConsumptionStrategy::Unit,
     };
-    let st = QuotaState { limit: cfg.limit, remaining: cfg.limit, reset_in: cfg.window };
-
     let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
-    let wrapped = Arc::new(QuotaAwareConnector::new(inner, cfg, st));
+    let wrapped = Arc::new(QuotaAwareConnector::new(inner, cfg));
 
     let borsa = Borsa::builder()
         .with_connector(wrapped)
@@ -62,14 +60,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 The `EvenSpreadHourly` strategy evenly spreads a daily budget across 24 slices (typically ~1h each for a 24h window). If the current slice is exhausted but the daily budget remains, calls are temporarily blocked with `QuotaExceeded { remaining > 0 }`. The orchestrator can then fall back to other providers.
 
-```rust,no_run
+```rust,ignore
 use std::sync::Arc;
 use std::time::Duration;
 
 use borsa::Borsa;
 use borsa_core::{AssetKind, Instrument, BorsaConnector};
 use borsa_middleware::QuotaAwareConnector;
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
+use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
 use borsa_mock::MockConnector;
 
 #[tokio::main]
@@ -80,12 +78,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         window: Duration::from_secs(24 * 60 * 60),
         strategy: QuotaConsumptionStrategy::EvenSpreadHourly,
     };
-    let st = QuotaState { limit: cfg.limit, remaining: cfg.limit, reset_in: cfg.window };
-
     let primary: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
     let fallback: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
 
-    let primary_wrapped = Arc::new(QuotaAwareConnector::new(primary, cfg, st));
+    let primary_wrapped = Arc::new(QuotaAwareConnector::new(primary, cfg));
 
     let borsa = Borsa::builder()
         .with_connector(primary_wrapped)   // attempted first

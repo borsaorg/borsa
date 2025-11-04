@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// A single middleware layer with a name and free-form JSON configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiddlewareLayer {
-    /// Human-readable layer name (e.g., "`BlacklistingMiddleware`", "`QuotaAwareConnector`").
+    /// Human-readable layer name (e.g., "`BlacklistConnector`", "`QuotaAwareConnector`").
     pub name: String,
     /// Opaque configuration blob; concrete layers should document their schema.
     pub config: serde_json::Value,

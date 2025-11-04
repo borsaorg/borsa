@@ -10,7 +10,7 @@ fn rate_limited_builder_produces_expected_stack_and_name() {
         stack
             .layers
             .iter()
-            .any(|l| l.name == "BlacklistingMiddleware")
+            .any(|l| l.name == "BlacklistConnector")
     );
     assert!(stack.layers.iter().any(|l| l.name == "QuotaAwareConnector"));
     assert!(stack.layers.iter().any(|l| l.name == "RawConnector"));
