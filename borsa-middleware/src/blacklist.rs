@@ -48,23 +48,6 @@ impl BlacklistingMiddleware {
 
     fn handle_error(&self, err: BorsaError) -> BorsaError {
         match err.clone() {
-            BorsaError::QuotaExceeded {
-                remaining,
-                reset_in_ms,
-            } => {
-                // Only long-term exhaustion (remaining == 0) should trigger a longer blacklist.
-                let duration = if remaining == 0 {
-                    if reset_in_ms > 0 {
-                        Duration::from_millis(reset_in_ms)
-                    } else {
-                        self.default_duration
-                    }
-                } else {
-                    // Temporary slice exhaustion; still respect reset_in for brief blacklist to avoid immediate retries.
-                    Duration::from_millis(reset_in_ms.max(1))
-                };
-                self.blacklist_until(Instant::now() + duration);
-            }
             BorsaError::RateLimitExceeded {
                 limit: _,
                 window_ms,
