@@ -244,94 +244,120 @@ impl ConnectorBuilder {
     #[must_use]
     pub fn from_stack(raw: Arc<dyn BorsaConnector>, stack: &MiddlewareStack) -> Self {
         // Convert known layers to typed middleware; ignore unknowns for forward compatibility
-        let mut layers: Vec<MiddlewareDescriptor> = Vec::new();
-        for l in &stack.layers {
-            match l.name.as_str() {
-                "CachingMiddleware" => {
-                    let default_ttl_ms = l
-                        .config
-                        .get("default_ttl_ms")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(300_000);
-                    let default_max_entries = l
-                        .config
-                        .get("default_max_entries")
-                        .and_then(serde_json::Value::as_u64)
-                        .and_then(|n| usize::try_from(n).ok())
-                        .unwrap_or(2000);
-                    let per_cap_ttl = l
-                        .config
-                        .get("per_capability_ttl_ms")
-                        .and_then(serde_json::Value::as_object)
-                        .cloned()
-                        .unwrap_or_default();
-                    let per_cap_capacity = l
-                        .config
-                        .get("per_capability_max_entries")
-                        .and_then(serde_json::Value::as_object)
-                        .cloned()
-                        .unwrap_or_default();
-                    let cfg = CacheConfig {
-                        default_ttl_ms,
-                        default_max_entries,
-                        per_capability_ttl_ms: per_cap_ttl
-                            .into_iter()
-                            .filter_map(|(k, v)| v.as_u64().map(|ms| (k, ms)))
-                            .collect(),
-                        per_capability_max_entries: per_cap_capacity
-                            .into_iter()
-                            .filter_map(|(k, v)| {
-                                v.as_u64()
-                                    .and_then(|n| usize::try_from(n).ok())
-                                    .map(|n| (k, n))
-                            })
-                            .collect(),
-                    };
-                    layers.push(MiddlewareDescriptor::new(
-                        crate::cache::CacheMiddleware::new(cfg),
-                    ));
-                }
-                "QuotaAwareConnector" => {
-                    let limit = l
-                        .config
-                        .get("limit")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(1);
-                    let window_ms = l
-                        .config
-                        .get("window_ms")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(60_000);
-                    let strategy = match l.config.get("strategy").and_then(|v| v.as_str()) {
-                        Some("EvenSpreadHourly") => QuotaConsumptionStrategy::EvenSpreadHourly,
-                        Some("Weighted") => QuotaConsumptionStrategy::Weighted,
-                        _ => QuotaConsumptionStrategy::Unit,
-                    };
-                    let cfg = QuotaConfig {
-                        limit,
-                        window: Duration::from_millis(window_ms),
-                        strategy,
-                    };
-                    layers.push(MiddlewareDescriptor::new(
-                        crate::quota::QuotaMiddleware::new(cfg),
-                    ));
-                }
-                "BlacklistConnector" => {
-                    let dur_ms = l
-                        .config
-                        .get("default_duration_ms")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(300_000);
-                    layers.push(MiddlewareDescriptor::new(
-                        crate::blacklist::BlacklistMiddleware::new(Duration::from_millis(dur_ms)),
-                    ));
-                }
-                _ => {}
-            }
-        }
+        let layers: Vec<MiddlewareDescriptor> = stack
+            .layers
+            .iter()
+            .filter_map(Self::descriptor_from_layer)
+            .collect();
         let mut builder = Self { raw, layers };
         builder.enforce_ordering();
         builder
+    }
+
+    fn descriptor_from_layer(layer: &MiddlewareLayer) -> Option<MiddlewareDescriptor> {
+        match layer.name.as_str() {
+            "CachingMiddleware" => {
+                let cfg = Self::parse_cache_config_from(&layer.config);
+                Some(MiddlewareDescriptor::new(
+                    crate::cache::CacheMiddleware::new(cfg),
+                ))
+            }
+            "QuotaAwareConnector" => {
+                let cfg = Self::parse_quota_config_from(&layer.config);
+                Some(MiddlewareDescriptor::new(
+                    crate::quota::QuotaMiddleware::new(cfg),
+                ))
+            }
+            "BlacklistConnector" => {
+                let duration = Self::parse_blacklist_duration_from(&layer.config);
+                Some(MiddlewareDescriptor::new(
+                    crate::blacklist::BlacklistMiddleware::new(duration),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    fn parse_cache_config_from(config: &serde_json::Value) -> CacheConfig {
+        let default_ttl_ms = config
+            .get("default_ttl_ms")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(300_000);
+        let default_max_entries = config
+            .get("default_max_entries")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|n| usize::try_from(n).ok())
+            .unwrap_or(2000);
+        let per_cap_ttl = config
+            .get("per_capability_ttl_ms")
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        let per_cap_capacity = config
+            .get("per_capability_max_entries")
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        let default_negative_ttl_ms = config
+            .get("default_negative_ttl_ms")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or_else(|| CacheConfig::default().default_negative_ttl_ms);
+        let per_cap_negative_ttl = config
+            .get("per_capability_negative_ttl_ms")
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+
+        CacheConfig {
+            default_ttl_ms,
+            per_capability_ttl_ms: per_cap_ttl
+                .into_iter()
+                .filter_map(|(k, v)| v.as_u64().map(|ms| (k, ms)))
+                .collect(),
+            default_max_entries,
+            per_capability_max_entries: per_cap_capacity
+                .into_iter()
+                .filter_map(|(k, v)| {
+                    v.as_u64()
+                        .and_then(|n| usize::try_from(n).ok())
+                        .map(|n| (k, n))
+                })
+                .collect(),
+            default_negative_ttl_ms,
+            per_capability_negative_ttl_ms: per_cap_negative_ttl
+                .into_iter()
+                .filter_map(|(k, v)| v.as_u64().map(|ms| (k, ms)))
+                .collect(),
+        }
+    }
+
+    fn parse_quota_config_from(config: &serde_json::Value) -> QuotaConfig {
+        let limit = config
+            .get("limit")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(1);
+        let window_ms = config
+            .get("window_ms")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(60_000);
+        let strategy = match config.get("strategy").and_then(|v| v.as_str()) {
+            Some("EvenSpreadHourly") => QuotaConsumptionStrategy::EvenSpreadHourly,
+            Some("Weighted") => QuotaConsumptionStrategy::Weighted,
+            _ => QuotaConsumptionStrategy::Unit,
+        };
+        QuotaConfig {
+            limit,
+            window: Duration::from_millis(window_ms),
+            strategy,
+        }
+    }
+
+    fn parse_blacklist_duration_from(config: &serde_json::Value) -> Duration {
+        let dur_ms = config
+            .get("default_duration_ms")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(300_000);
+        Duration::from_millis(dur_ms)
     }
 
     /// Validate the middleware stack without building.
