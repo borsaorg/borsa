@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-11-XX
+
+This release focuses heavily on production reliability and developer experience. The streaming system has been completely rewritten to handle network failures, provider outages, and edge cases gracefully, with fixes for memory leaks and stale data. The new middleware system is the flagship feature, enabling automatic quota management, intelligent rate limiting, provider blacklisting, and caching. Type safety improvements throughout (particularly the Capability enum and proper Symbol types) reduce runtime errors. Extensive property-based testing and the new dynamic mock connector significantly improve testability for applications built on borsa.
+
+### Added
+
+- **Middleware System**: Introduced comprehensive middleware infrastructure with quota management, provider blacklisting, and caching support
+  - Quota enforcement with `EvenSpreadHourly` strategy to prevent rate limit violations
+  - Automatic provider blacklisting on rate limit errors with configurable timeouts
+  - Type-safe middleware validation and ordering
+  - Proc-macro based middleware delegation to reduce boilerplate
+- **Streaming Improvements**:
+  - Per-symbol monotonic timestamp enforcement (enabled by default)
+  - Manual stream control via `push_update` for external updates in mock connector
+  - Concurrent multi-session streaming architecture for improved reliability
+- **Enhanced Info API**: Added `volume` field to `FastInfo` and additional `Info` fields
+- **Search Enhancements**: Yahoo Finance search now supports `lang` and `region` parameters
+- **Mock Connector**: New dynamic mock connector/controller for testing
+- **Error Handling**: Added retry classification and structured error handling helpers
+- **Type Safety**: `OptionContract` now re-exported from `borsa_core` for convenience
+- **Builder Enhancement**: New method to create unconfigured `YfConnectorBuilder`
+
+### Breaking Changes
+
+- **Streaming Architecture**: Complete rewrite of streaming implementation with policy-based per-symbol routing and improved failover
+- **Capability System**: Replaced string-based capability labels with type-safe `Capability` enum
+- **Symbol Types**: Now using `paft::domain::Symbol` type instead of raw `String` for better type safety
+
+### Changed
+
+- Improved provider failover logic to maintain subscription coverage during transitions
+- Better error normalization across providers with structured connector errors
+- Quota window boundaries now align to prevent drift in rate limiting
+- Streaming now properly handles wildcard subscriptions merged with explicit symbol groups
+- Middleware ordering ensures unsupported operations skip quota checks
+
+### Fixed
+
+- **Streaming Reliability**:
+  - Prevented delayed failover by tracking connection states and allowing concurrent starts
+  - Fixed memory leaks via per-session gates with TTL
+  - Resolved stale ordering issues after reconnection by resetting monotonic gates
+  - Prevented dropped updates during provider failover
+- **Routing**: Mixed-currency history requests now use priority-based fault attribution
+- **Search**: Provider errors now included in warnings for partial results
+- **Builder**: Quota fields now properly preserved across chained setters
+- **Blacklist**: Now mutes providers on `RateLimitExceeded` errors with appropriate timeouts
+
+### Dependencies
+
+- Updated `paft` to 0.7.2
+- Updated `yfinance-rs` to 0.7.2
+- Added `sync` feature to `tokio` dependency
+
+### Documentation
+
+- Documented middleware ordering conventions in builder
+- Added comprehensive middleware README
+- Rewrote fundamentals deep dive example
+- Reorganized examples to `borsa/examples` directory
+
+### Removed
+
+- **ESG Provider**: Disabled on borsa-yfinance due to missing Yahoo Finance API endpoint
+
+
 ## [0.2.0] - 2025-10-21
 
 ### Added
