@@ -17,7 +17,7 @@ Most users only depend on `borsa` or `borsa-core`, which re-export these types f
 
 ```toml
 [dependencies]
-borsa-types = "0.2.0"
+borsa-types = "0.3.0"
 ```
 
 ## Documentation

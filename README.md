@@ -61,10 +61,10 @@ Add the crates you need to your project:
 
 ```toml
 [dependencies]
-borsa = "0.2.0"
-borsa-yfinance = "0.2.0"
+borsa = "0.3.0"
+borsa-yfinance = "0.3.0"
 # Optional: only needed directly for advanced usage
-# borsa-types = "0.2.0"
+# borsa-types = "0.3.0"
 ```
 
 ## Quickstart

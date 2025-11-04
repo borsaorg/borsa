@@ -8,7 +8,7 @@ Add the crate as a dev-dependency and enable it in tests or examples:
 
 ```toml
 [dev-dependencies]
-borsa-mock = "0.2.0"
+borsa-mock = "0.3.0"
 ```
 
 Then wire it as a provider when constructing `borsa::Borsa` in your tests.

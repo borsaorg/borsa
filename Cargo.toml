@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Giovanni Ramistella <contact@borsa.rs>"]
 edition = "2024"
 license = "MIT"
@@ -57,13 +57,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 
-borsa-yfinance = { path = "borsa-yfinance", version = "0.2.0" }
-borsa-core = { path = "borsa-core", version = "0.2.0" }
-borsa = { path = "borsa", version = "0.2.0" }
-borsa-macros = { path = "borsa-macros", version = "0.2.0" }
-borsa-mock = { path = "borsa-mock", version = "0.2.0" }
-borsa-types = { path = "borsa-types", version = "0.2.0" }
-borsa-middleware = { path = "borsa-middleware", version = "0.2.0" }
+borsa-yfinance = { path = "borsa-yfinance", version = "0.3.0" }
+borsa-core = { path = "borsa-core", version = "0.3.0" }
+borsa = { path = "borsa", version = "0.3.0" }
+borsa-macros = { path = "borsa-macros", version = "0.3.0" }
+borsa-mock = { path = "borsa-mock", version = "0.3.0" }
+borsa-types = { path = "borsa-types", version = "0.3.0" }
+borsa-middleware = { path = "borsa-middleware", version = "0.3.0" }
 
 trybuild = "1.0.112"
 tokio-test = "0.4.4"
