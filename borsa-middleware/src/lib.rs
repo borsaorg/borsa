@@ -8,7 +8,7 @@ mod builder;
 mod cache;
 mod quota;
 
-pub use crate::blacklist::{BlacklistMiddleware, BlacklistConnector};
+pub use crate::blacklist::{BlacklistConnector, BlacklistMiddleware};
 pub use crate::builder::ConnectorBuilder;
 pub use crate::cache::{CacheMiddleware, CachingConnector};
 pub use crate::quota::{QuotaAwareConnector, QuotaMiddleware};

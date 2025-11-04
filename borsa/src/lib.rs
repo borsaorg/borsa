@@ -105,7 +105,7 @@ pub use core::{Borsa, BorsaBuilder};
 pub use router::download::DownloadBuilder;
 pub use router::util::{collapse_errors, join_with_deadline};
 
-pub use borsa_middleware::{QuotaMiddleware, CacheMiddleware, BlacklistMiddleware};
+pub use borsa_middleware::{BlacklistMiddleware, CacheMiddleware, QuotaMiddleware};
 
 // Re-export core types for convenience
 pub use borsa_core::{
@@ -114,7 +114,9 @@ pub use borsa_core::{
     // Foundational types
     AssetKind,
     BalanceSheetRow,
+    BorsaConnector,
     BorsaError,
+    CacheConfig,
     Calendar,
     Candle,
     Capability,
@@ -154,6 +156,10 @@ pub use borsa_core::{
     OptionContract,
     PriceTarget,
     Profile,
+    QuotaConfig,
+    QuotaConsumptionStrategy,
+    QuotaState,
+
     Quote,
     QuoteUpdate,
     RecommendationRow,
@@ -163,11 +169,4 @@ pub use borsa_core::{
 
     SearchResult,
     UpgradeDowngradeRow,
-
-    CacheConfig,
-    QuotaConfig,
-    QuotaConsumptionStrategy,
-    QuotaState,
-    
-    BorsaConnector
 };

@@ -10,8 +10,8 @@ pub use borsa_types::{
     Attribution, BackoffConfig, BorsaConfig, DownloadReport, FetchStrategy, InfoReport,
     MergeStrategy, Resampling, SearchReport, Span,
 };
+pub use borsa_types::{CacheConfig, QuotaConfig, QuotaConsumptionStrategy, QuotaState};
 pub use borsa_types::{Preference, RoutingContext, RoutingPolicy, RoutingPolicyBuilder, ScopeKey};
-pub use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState, CacheConfig};
 
 pub use paft::domain::{AssetKind, Exchange, Figi, Instrument, Isin, MarketState, Period, Symbol};
 
