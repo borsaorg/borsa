@@ -180,7 +180,10 @@ pub struct CacheConfig {
     /// Per-capability TTL overrides in milliseconds keyed by capability string (see `Capability::as_str()`).
     ///
     /// Example keys: "quote", "profile", "history", ...
-    #[serde(default)]
+    ///
+    /// When omitted during deserialization, an opinionated set of sensible defaults is used
+    /// instead of an empty map.
+    #[serde(default = "default_per_capability_ttl_ms")]
     pub per_capability_ttl_ms: HashMap<String, u64>,
 
     /// Default max entries for each per-capability cache when not explicitly overridden.
@@ -204,7 +207,7 @@ impl Default for CacheConfig {
         Self {
             // Sensible default: 5 minutes
             default_ttl_ms: 5 * 60 * 1000,
-            per_capability_ttl_ms: HashMap::new(),
+            per_capability_ttl_ms: default_per_capability_ttl_ms(),
             // Sensible default capacity per capability
             default_max_entries: 2000,
             per_capability_max_entries: HashMap::new(),
@@ -213,6 +216,106 @@ impl Default for CacheConfig {
             per_capability_negative_ttl_ms: HashMap::new(),
         }
     }
+}
+
+fn default_per_capability_ttl_ms() -> HashMap<String, u64> {
+    let mut map = HashMap::new();
+    // Ultra-fresh endpoints
+    map.insert(crate::Capability::Quote.as_str().to_string(), 2_000); // 2s quotes
+    map.insert(crate::Capability::OptionChain.as_str().to_string(), 30_000); // 30s options chain
+    map.insert(crate::Capability::StreamQuotes.as_str().to_string(), 0); // disable caching for streaming
+
+    // News flows relatively quickly but not per-second
+    map.insert(crate::Capability::News.as_str().to_string(), 120_000); // 2m
+
+    // History endpoints are large; moderate freshness
+    map.insert(crate::Capability::History.as_str().to_string(), 900_000); // 15m
+    map.insert(
+        crate::Capability::DownloadHistory.as_str().to_string(),
+        3_600_000,
+    ); // 60m
+
+    // Discovery
+    map.insert(crate::Capability::Search.as_str().to_string(), 21_600_000); // 6h
+
+    // Static-ish reference data
+    map.insert(crate::Capability::Profile.as_str().to_string(), 86_400_000); // 24h
+    map.insert(crate::Capability::Isin.as_str().to_string(), 604_800_000); // 7d
+
+    // Fundamentals (quarterly)
+    map.insert(
+        crate::Capability::IncomeStatement.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(
+        crate::Capability::BalanceSheet.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(
+        crate::Capability::Cashflow.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(crate::Capability::Earnings.as_str().to_string(), 86_400_000); // 24h
+    map.insert(crate::Capability::Calendar.as_str().to_string(), 43_200_000); // 12h
+
+    // Analysis
+    map.insert(
+        crate::Capability::Recommendations.as_str().to_string(),
+        43_200_000,
+    ); // 12h
+    map.insert(
+        crate::Capability::RecommendationsSummary
+            .as_str()
+            .to_string(),
+        43_200_000,
+    ); // 12h
+    map.insert(
+        crate::Capability::UpgradesDowngrades.as_str().to_string(),
+        21_600_000,
+    ); // 6h
+    map.insert(
+        crate::Capability::AnalystPriceTarget.as_str().to_string(),
+        86_400_000,
+    ); // 24h
+
+    // Holders (infrequent)
+    map.insert(
+        crate::Capability::MajorHolders.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(
+        crate::Capability::InstitutionalHolders.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(
+        crate::Capability::MutualFundHolders.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(
+        crate::Capability::InsiderTransactions.as_str().to_string(),
+        86_400_000,
+    ); // 24h
+    map.insert(
+        crate::Capability::InsiderRoster.as_str().to_string(),
+        604_800_000,
+    ); // 7d
+    map.insert(
+        crate::Capability::NetSharePurchaseActivity
+            .as_str()
+            .to_string(),
+        86_400_000,
+    ); // 24h
+
+    // ESG (slow-changing)
+    map.insert(crate::Capability::Esg.as_str().to_string(), 604_800_000); // 7d
+
+    // Options metadata
+    map.insert(
+        crate::Capability::OptionsExpirations.as_str().to_string(),
+        86_400_000,
+    ); // 24h
+
+    map
 }
 
 impl CacheConfig {
