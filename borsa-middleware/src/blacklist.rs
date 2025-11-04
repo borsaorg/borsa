@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use borsa_core::connector::BorsaConnector;
 use borsa_core::{BorsaError, CallContext, CallOrigin, Middleware};
+#[cfg(feature = "tracing")]
+use tracing::{debug, info, warn};
 
 /// Middleware that blacklists its inner connector for a period upon quota exhaustion.
 pub struct BlacklistConnector {
@@ -19,11 +21,22 @@ pub struct BlacklistConnector {
 
 impl BlacklistConnector {
     pub fn new(inner: Arc<dyn BorsaConnector>, default_duration: Duration) -> Self {
-        Self {
+        let s = Self {
             inner,
             state: Mutex::new(None),
             default_duration,
+        };
+        #[cfg(feature = "tracing")]
+        {
+            info!(
+                target = "borsa::middleware::blacklist",
+                event = "init",
+                default_duration_ms =
+                    u64::try_from(default_duration.as_millis()).unwrap_or(u64::MAX),
+                "initialized blacklist middleware"
+            );
         }
+        s
     }
 
     fn blacklist_remaining_ms(&self) -> Option<u64> {
@@ -60,6 +73,14 @@ impl BlacklistConnector {
                 self.default_duration
             };
             self.blacklist_until(Instant::now() + duration);
+            #[cfg(feature = "tracing")]
+            warn!(
+                target = "borsa::middleware::blacklist",
+                event = "blacklist_set",
+                window_ms = window_ms,
+                applied_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
+                "blacklist window set due to upstream rate-limit"
+            );
         }
         err
     }
@@ -79,6 +100,15 @@ impl BlacklistMiddleware {
 
 impl Middleware for BlacklistMiddleware {
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
+        #[cfg(feature = "tracing")]
+        {
+            info!(
+                target = "borsa::middleware::blacklist",
+                event = "apply",
+                default_duration_ms = u64::try_from(self.duration.as_millis()).unwrap_or(u64::MAX),
+                "applying blacklist middleware"
+            );
+        }
         Arc::new(BlacklistConnector::new(inner, self.duration))
     }
 
@@ -117,7 +147,23 @@ impl Middleware for BlacklistConnector {
         if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
             return Ok(());
         }
+        #[cfg(feature = "tracing")]
+        debug!(
+            target = "borsa::middleware::blacklist",
+            event = "pre_call",
+            capability = %ctx.capability(),
+            origin = ?ctx.origin(),
+            "blacklist pre-call check"
+        );
         if let Some(ms) = self.blacklist_remaining_ms() {
+            #[cfg(feature = "tracing")]
+            warn!(
+                target = "borsa::middleware::blacklist",
+                event = "blocked",
+                capability = %ctx.capability(),
+                reset_in_ms = ms,
+                "blocked by blacklist"
+            );
             return Err(BorsaError::TemporarilyBlacklisted { reset_in_ms: ms });
         }
         Ok(())
@@ -127,6 +173,15 @@ impl Middleware for BlacklistConnector {
         if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
             err
         } else {
+            #[cfg(feature = "tracing")]
+            debug!(
+                target = "borsa::middleware::blacklist",
+                event = "map_error",
+                capability = %ctx.capability(),
+                origin = ?ctx.origin(),
+                %err,
+                "blacklist mapping provider error"
+            );
             self.handle_error(err)
         }
     }

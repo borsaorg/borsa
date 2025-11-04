@@ -15,7 +15,7 @@ categories = ["api-bindings", "finance", "web-programming::http-client"]
 [features]
 default = []
 dataframe = ["borsa-core/dataframe"]
-tracing = ["dep:tracing", "borsa-core/tracing"]
+tracing = ["dep:tracing", "borsa-core/tracing", "borsa-middleware/tracing"]
 
 [dependencies]
 borsa-core = { workspace = true }

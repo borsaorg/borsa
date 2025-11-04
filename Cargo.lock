@@ -342,6 +342,7 @@ dependencies = [
  "moka",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

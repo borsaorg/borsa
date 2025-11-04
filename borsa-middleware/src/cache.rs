@@ -22,6 +22,8 @@ use borsa_core::{
 };
 use borsa_types::{CacheConfig, Capability};
 use moka::future::Cache;
+#[cfg(feature = "tracing")]
+use tracing::{debug, info, warn};
 
 /// Small helper: identity of an instrument for caching discrimination.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -186,6 +188,8 @@ trait CacheStore<K, V>: Send + Sync {
 
 struct MokaStore<K, V> {
     cache: Cache<K, V>,
+    #[cfg(feature = "tracing")]
+    ttl: std::time::Duration,
 }
 
 impl<K, V> MokaStore<K, V>
@@ -200,18 +204,81 @@ where
             .max_capacity(cap_u64)
             .time_to_live(ttl)
             .build();
-        Self { cache }
+        #[cfg(feature = "tracing")]
+        {
+            let ttl_ms: u64 = ttl.as_millis().try_into().unwrap_or(u64::MAX);
+            info!(
+                target = "borsa::middleware::cache",
+                event = "store_init",
+                max_capacity = cap_u64,
+                ttl_ms = ttl_ms,
+                "initialized per-capability cache store"
+            );
+        }
+        Self {
+            cache,
+            #[cfg(feature = "tracing")]
+            ttl,
+        }
     }
     async fn get_or_try_put_with(
         &self,
         key: K,
         loader: CacheLoader<K, V>,
     ) -> Result<V, BorsaError> {
-        let future = loader(key.clone());
-        self.cache
-            .try_get_with(key, future)
+        #[cfg(feature = "tracing")]
+        let did_load = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        #[cfg(feature = "tracing")]
+        let loaded_flag = did_load.clone();
+
+        #[cfg(feature = "tracing")]
+        let wrapped_loader: CacheLoader<K, V> = Arc::new(move |k: K| {
+            loaded_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            loader(k)
+        });
+
+        #[cfg(not(feature = "tracing"))]
+        let wrapped_loader = loader;
+
+        let future = wrapped_loader(key.clone());
+        let res = self
+            .cache
+            .try_get_with(key.clone(), future)
             .await
-            .map_err(|err| (*err).clone())
+            .map_err(|err| (*err).clone());
+
+        #[cfg(feature = "tracing")]
+        match &res {
+            Ok(_) => {
+                let is_miss_insert = did_load.load(std::sync::atomic::Ordering::Relaxed);
+                let ttl_ms: u64 = self.ttl.as_millis().try_into().unwrap_or(u64::MAX);
+                if is_miss_insert {
+                    debug!(
+                        target = "borsa::middleware::cache",
+                        event = "insert",
+                        ttl_ms = ttl_ms,
+                        "cache miss -> loaded and inserted"
+                    );
+                } else {
+                    debug!(
+                        target = "borsa::middleware::cache",
+                        event = "hit",
+                        "cache hit"
+                    );
+                }
+            }
+            Err(err) => {
+                warn!(
+                    target = "borsa::middleware::cache",
+                    event = "error",
+                    %err,
+                    "cache lookup failed"
+                );
+            }
+        }
+
+        res
     }
 }
 
@@ -245,6 +312,20 @@ impl CacheMiddleware {
 impl borsa_core::Middleware for CacheMiddleware {
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
         let Self { cfg } = *self;
+        #[cfg(feature = "tracing")]
+        {
+            let default_ttl_ms = cfg.default_ttl_ms;
+            let default_max_entries = cfg.default_max_entries;
+            info!(
+                target = "borsa::middleware::cache",
+                event = "apply",
+                default_ttl_ms = default_ttl_ms,
+                default_max_entries = default_max_entries,
+                overrides_ttl = cfg.per_capability_ttl_ms.len(),
+                overrides_capacity = cfg.per_capability_max_entries.len(),
+                "applying cache middleware"
+            );
+        }
         Arc::new(CachingConnector::new(inner, &cfg))
     }
 
@@ -310,6 +391,18 @@ impl CachingConnector {
         let ttl = cfg.ttl_for(cap)?;
         let capacity = cfg.capacity_for(cap);
         let store = MokaStore::<K, V>::new(capacity, ttl);
+        #[cfg(feature = "tracing")]
+        {
+            let ttl_ms: u64 = ttl.as_millis().try_into().unwrap_or(u64::MAX);
+            info!(
+                target = "borsa::middleware::cache",
+                event = "store_create",
+                capability = %cap,
+                capacity = capacity,
+                ttl_ms = ttl_ms,
+                "created per-capability store"
+            );
+        }
         Some(Arc::new(store))
     }
 

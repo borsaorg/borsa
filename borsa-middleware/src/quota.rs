@@ -10,6 +10,8 @@ use async_trait::async_trait;
 use borsa_core::connector::BorsaConnector;
 use borsa_core::{BorsaError, CallContext, CallOrigin, Middleware};
 use borsa_types::{QuotaConfig, QuotaConsumptionStrategy};
+#[cfg(feature = "tracing")]
+use tracing::{debug, info, warn};
 
 /// Wrapper that enforces quotas.
 pub struct QuotaAwareConnector {
@@ -54,7 +56,7 @@ impl QuotaAwareConnector {
             _ => (0, Duration::from_secs(0)),
         };
 
-        Self {
+        let s = Self {
             inner,
             _config: config,
             runtime: Mutex::new(QuotaRuntime {
@@ -69,7 +71,19 @@ impl QuotaAwareConnector {
                 slice_start: Instant::now(),
                 strategy,
             }),
+        };
+        #[cfg(feature = "tracing")]
+        {
+            info!(
+                target = "borsa::middleware::quota",
+                event = "init",
+                limit = limit,
+                window_ms = u64::try_from(window.as_millis()).unwrap_or(u64::MAX),
+                strategy = ?strategy,
+                "initialized quota middleware"
+            );
         }
+        s
     }
 
     /// Access the inner connector.
@@ -136,6 +150,14 @@ impl QuotaAwareConnector {
                     .try_into()
                     .unwrap_or(u64::MAX);
                 let remaining_units = rt.limit.saturating_sub(rt.calls_made_in_window);
+                #[cfg(feature = "tracing")]
+                warn!(
+                    target = "borsa::middleware::quota",
+                    event = "blocked_slice",
+                    remaining = remaining_units,
+                    reset_in_ms = reset_in_ms,
+                    "temporarily blocked by slice policy"
+                );
                 return Err(BorsaError::QuotaExceeded {
                     remaining: remaining_units,
                     reset_in_ms,
@@ -149,6 +171,15 @@ impl QuotaAwareConnector {
             if matches!(rt.strategy, QuotaConsumptionStrategy::EvenSpreadHourly) {
                 rt.calls_made_in_slice += 1;
             }
+            #[cfg(feature = "tracing")]
+            debug!(
+                target = "borsa::middleware::quota",
+                event = "allow",
+                made_in_window = rt.calls_made_in_window,
+                limit = rt.limit,
+                strategy = ?rt.strategy,
+                "quota allows call"
+            );
             return Ok(());
         }
 
@@ -166,6 +197,14 @@ impl QuotaAwareConnector {
             reset_in_ms: remaining_ms,
         };
         drop(rt);
+        #[cfg(feature = "tracing")]
+        warn!(
+            target = "borsa::middleware::quota",
+            event = "blocked_window",
+            remaining = remaining_units,
+            reset_in_ms = remaining_ms,
+            "blocked by window policy"
+        );
         Err(err)
     }
 
@@ -199,6 +238,17 @@ impl QuotaMiddleware {
 
 impl Middleware for QuotaMiddleware {
     fn apply(self: Box<Self>, inner: Arc<dyn BorsaConnector>) -> Arc<dyn BorsaConnector> {
+        #[cfg(feature = "tracing")]
+        {
+            info!(
+                target = "borsa::middleware::quota",
+                event = "apply",
+                limit = self.config.limit,
+                window_ms = u64::try_from(self.config.window.as_millis()).unwrap_or(u64::MAX),
+                strategy = ?self.config.strategy,
+                "applying quota middleware"
+            );
+        }
         Arc::new(QuotaAwareConnector::new(inner, self.config))
     }
 
@@ -245,6 +295,14 @@ impl Middleware for QuotaAwareConnector {
         if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
             return Ok(());
         }
+        #[cfg(feature = "tracing")]
+        debug!(
+            target = "borsa::middleware::quota",
+            event = "pre_call",
+            capability = %ctx.capability(),
+            origin = ?ctx.origin(),
+            "quota pre-call check"
+        );
         self.should_allow_call()
     }
 
@@ -252,6 +310,15 @@ impl Middleware for QuotaAwareConnector {
         if matches!(ctx.origin(), CallOrigin::Internal { .. }) {
             err
         } else {
+            #[cfg(feature = "tracing")]
+            debug!(
+                target = "borsa::middleware::quota",
+                event = "map_error",
+                capability = %ctx.capability(),
+                origin = ?ctx.origin(),
+                %err,
+                "quota mapping provider error"
+            );
             Self::translate_provider_error(err)
         }
     }
