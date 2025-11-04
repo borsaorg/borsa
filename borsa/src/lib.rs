@@ -105,6 +105,8 @@ pub use core::{Borsa, BorsaBuilder};
 pub use router::download::DownloadBuilder;
 pub use router::util::{collapse_errors, join_with_deadline};
 
+pub use borsa_middleware::{QuotaMiddleware, CacheMiddleware, BlacklistMiddleware};
+
 // Re-export core types for convenience
 pub use borsa_core::{
     // Response types & Data Structures
@@ -161,4 +163,11 @@ pub use borsa_core::{
 
     SearchResult,
     UpgradeDowngradeRow,
+
+    CacheConfig,
+    QuotaConfig,
+    QuotaConsumptionStrategy,
+    QuotaState,
+    
+    BorsaConnector
 };

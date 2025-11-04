@@ -11,6 +11,7 @@ pub use borsa_types::{
     MergeStrategy, Resampling, SearchReport, Span,
 };
 pub use borsa_types::{Preference, RoutingContext, RoutingPolicy, RoutingPolicyBuilder, ScopeKey};
+pub use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState, CacheConfig};
 
 pub use paft::domain::{AssetKind, Exchange, Figi, Instrument, Isin, MarketState, Period, Symbol};
 
