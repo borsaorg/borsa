@@ -188,6 +188,15 @@ pub struct CacheConfig {
     /// Per-capability max entries overrides keyed by capability string.
     #[serde(default)]
     pub per_capability_max_entries: HashMap<String, usize>,
+
+    /// Default TTL for negative caching of permanent errors (Unsupported/NotFound/etc.).
+    ///
+    /// Set to 0 to disable negative caching by default.
+    #[serde(default = "default_negative_ttl_ms")]
+    pub default_negative_ttl_ms: u64,
+    /// Per-capability overrides for negative TTLs in milliseconds.
+    #[serde(default)]
+    pub per_capability_negative_ttl_ms: HashMap<String, u64>,
 }
 
 impl Default for CacheConfig {
@@ -199,6 +208,9 @@ impl Default for CacheConfig {
             // Sensible default capacity per capability
             default_max_entries: 2000,
             per_capability_max_entries: HashMap::new(),
+            // Short negative cache by default to avoid quota hammering on permanent failures
+            default_negative_ttl_ms: default_negative_ttl_ms(),
+            per_capability_negative_ttl_ms: HashMap::new(),
         }
     }
 }
@@ -229,4 +241,24 @@ impl CacheConfig {
             .copied()
             .unwrap_or(self.default_max_entries)
     }
+
+    /// Returns the negative TTL for a capability, or `None` if disabled (TTL == 0).
+    #[must_use]
+    pub fn negative_ttl_for(&self, cap: crate::Capability) -> Option<Duration> {
+        let key = cap.as_str();
+        let ms = self
+            .per_capability_negative_ttl_ms
+            .get(key)
+            .copied()
+            .unwrap_or(self.default_negative_ttl_ms);
+        if ms == 0 {
+            None
+        } else {
+            Some(Duration::from_millis(ms))
+        }
+    }
+}
+
+const fn default_negative_ttl_ms() -> u64 {
+    60_000
 }

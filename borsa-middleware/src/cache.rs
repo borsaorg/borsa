@@ -184,6 +184,12 @@ type CacheLoader<K, V> = Arc<dyn Fn(K) -> CacheStoreFuture<V> + Send + Sync>;
 trait CacheStore<K, V>: Send + Sync {
     async fn get_or_try_put_with(&self, key: K, loader: CacheLoader<K, V>)
     -> Result<V, BorsaError>;
+
+    /// Return a value if already present in the cache without invoking a loader.
+    async fn get_if_present(&self, key: &K) -> Option<V>;
+
+    /// Insert a value into the cache with the store's configured TTL.
+    async fn insert(&self, key: K, value: V);
 }
 
 struct MokaStore<K, V> {
@@ -295,6 +301,14 @@ where
     ) -> Result<V, BorsaError> {
         self.get_or_try_put_with(key, loader).await
     }
+
+    async fn get_if_present(&self, key: &K) -> Option<V> {
+        self.cache.get(key).await
+    }
+
+    async fn insert(&self, key: K, value: V) {
+        self.cache.insert(key, value).await;
+    }
 }
 
 /// Declarative wrapper that applies caching when building a connector stack.
@@ -339,12 +353,15 @@ impl borsa_core::Middleware for CacheMiddleware {
             "default_max_entries": self.cfg.default_max_entries,
             "per_capability_ttl_ms": self.cfg.per_capability_ttl_ms,
             "per_capability_max_entries": self.cfg.per_capability_max_entries,
+            "default_negative_ttl_ms": self.cfg.default_negative_ttl_ms,
+            "per_capability_negative_ttl_ms": self.cfg.per_capability_negative_ttl_ms,
         })
     }
 }
 
 // Per-capability typed stores; `None` means disabled (e.g., TTL=0).
 struct Stores {
+    // positive caches
     quote: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Quote>>>>,
     profile: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Profile>>>>,
     isin: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Option<Isin>>>>>,
@@ -375,6 +392,32 @@ struct Stores {
     options_expirations: Option<Arc<dyn CacheStore<InstrumentKey, Arc<Vec<i64>>>>>,
     option_chain: Option<Arc<dyn CacheStore<OptionChainKey, Arc<OptionChain>>>>,
     search: Option<Arc<dyn CacheStore<SearchKey, Arc<SearchResponse>>>>,
+
+    // negative caches (permanent errors)
+    quote_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    profile_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    isin_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    history_neg: Option<Arc<dyn CacheStore<HistoryKey, Arc<BorsaError>>>>,
+    earnings_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    income_stmt_neg: Option<Arc<dyn CacheStore<BoolByInstrumentKey, Arc<BorsaError>>>>,
+    balance_sheet_neg: Option<Arc<dyn CacheStore<BoolByInstrumentKey, Arc<BorsaError>>>>,
+    cashflow_neg: Option<Arc<dyn CacheStore<BoolByInstrumentKey, Arc<BorsaError>>>>,
+    calendar_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    recommendations_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    recommendations_summary_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    upgrades_downgrades_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    analyst_price_target_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    major_holders_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    institutional_holders_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    mutual_fund_holders_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    insider_transactions_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    insider_roster_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    net_share_purchase_activity_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    esg_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    news_neg: Option<Arc<dyn CacheStore<NewsKey, Arc<BorsaError>>>>,
+    options_expirations_neg: Option<Arc<dyn CacheStore<InstrumentKey, Arc<BorsaError>>>>,
+    option_chain_neg: Option<Arc<dyn CacheStore<OptionChainKey, Arc<BorsaError>>>>,
+    search_neg: Option<Arc<dyn CacheStore<SearchKey, Arc<BorsaError>>>>,
 }
 
 pub struct CachingConnector {
@@ -406,8 +449,34 @@ impl CachingConnector {
         Some(Arc::new(store))
     }
 
-    async fn cached_or_load<K, T>(
-        store: Option<&Arc<dyn CacheStore<K, Arc<T>>>>,
+    fn maybe_negative_store<K>(
+        cfg: &CacheConfig,
+        cap: Capability,
+    ) -> Option<Arc<dyn CacheStore<K, Arc<BorsaError>>>>
+    where
+        K: Clone + std::hash::Hash + Eq + Send + Sync + 'static,
+    {
+        let ttl = cfg.negative_ttl_for(cap)?;
+        let capacity = cfg.capacity_for(cap);
+        let store = MokaStore::<K, Arc<BorsaError>>::new(capacity, ttl);
+        #[cfg(feature = "tracing")]
+        {
+            let ttl_ms: u64 = ttl.as_millis().try_into().unwrap_or(u64::MAX);
+            info!(
+                target = "borsa::middleware::cache",
+                event = "store_create_neg",
+                capability = %cap,
+                capacity = capacity,
+                ttl_ms = ttl_ms,
+                "created per-capability negative store"
+            );
+        }
+        Some(Arc::new(store))
+    }
+
+    async fn cached_or_load_neg<K, T>(
+        pos: Option<&Arc<dyn CacheStore<K, Arc<T>>>>,
+        neg: Option<&Arc<dyn CacheStore<K, Arc<BorsaError>>>>,
         key: K,
         loader: CacheLoader<K, Arc<T>>,
     ) -> Result<Arc<T>, BorsaError>
@@ -415,10 +484,31 @@ impl CachingConnector {
         K: Clone + std::hash::Hash + Eq + Send + Sync + 'static,
         T: Clone + Send + Sync + 'static,
     {
-        if let Some(store) = store {
-            return store.get_or_try_put_with(key, Arc::clone(&loader)).await;
+        if let Some(neg_store) = neg
+            && let Some(err) = neg_store.get_if_present(&key).await
+        {
+            return Err((*err).clone());
         }
-        loader(key).await
+
+        let res = if let Some(pos_store) = pos {
+            pos_store
+                .get_or_try_put_with(key.clone(), Arc::clone(&loader))
+                .await
+        } else {
+            loader(key.clone()).await
+        };
+
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.is_permanent()
+                    && let Some(neg_store) = neg
+                {
+                    neg_store.insert(key, Arc::new(e.clone())).await;
+                }
+                Err(e)
+            }
+        }
     }
 
     #[must_use]
@@ -451,6 +541,52 @@ impl CachingConnector {
             options_expirations: Self::maybe_store(cfg, Capability::OptionsExpirations),
             option_chain: Self::maybe_store(cfg, Capability::OptionChain),
             search: Self::maybe_store(cfg, Capability::Search),
+
+            quote_neg: Self::maybe_negative_store(cfg, Capability::Quote),
+            profile_neg: Self::maybe_negative_store(cfg, Capability::Profile),
+            isin_neg: Self::maybe_negative_store(cfg, Capability::Isin),
+            history_neg: Self::maybe_negative_store(cfg, Capability::History),
+            earnings_neg: Self::maybe_negative_store(cfg, Capability::Earnings),
+            income_stmt_neg: Self::maybe_negative_store(cfg, Capability::IncomeStatement),
+            balance_sheet_neg: Self::maybe_negative_store(cfg, Capability::BalanceSheet),
+            cashflow_neg: Self::maybe_negative_store(cfg, Capability::Cashflow),
+            calendar_neg: Self::maybe_negative_store(cfg, Capability::Calendar),
+            recommendations_neg: Self::maybe_negative_store(cfg, Capability::Recommendations),
+            recommendations_summary_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::RecommendationsSummary,
+            ),
+            upgrades_downgrades_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::UpgradesDowngrades,
+            ),
+            analyst_price_target_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::AnalystPriceTarget,
+            ),
+            major_holders_neg: Self::maybe_negative_store(cfg, Capability::MajorHolders),
+            institutional_holders_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::InstitutionalHolders,
+            ),
+            mutual_fund_holders_neg: Self::maybe_negative_store(cfg, Capability::MutualFundHolders),
+            insider_transactions_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::InsiderTransactions,
+            ),
+            insider_roster_neg: Self::maybe_negative_store(cfg, Capability::InsiderRoster),
+            net_share_purchase_activity_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::NetSharePurchaseActivity,
+            ),
+            esg_neg: Self::maybe_negative_store(cfg, Capability::Esg),
+            news_neg: Self::maybe_negative_store(cfg, Capability::News),
+            options_expirations_neg: Self::maybe_negative_store(
+                cfg,
+                Capability::OptionsExpirations,
+            ),
+            option_chain_neg: Self::maybe_negative_store(cfg, Capability::OptionChain),
+            search_neg: Self::maybe_negative_store(cfg, Capability::Search),
         };
         Self { inner, stores }
     }
@@ -490,7 +626,13 @@ impl QuoteProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.quote.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.quote.as_ref(),
+            self.stores.quote_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -513,7 +655,13 @@ impl ProfileProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.profile.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.profile.as_ref(),
+            self.stores.profile_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -536,7 +684,13 @@ impl IsinProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.isin.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.isin.as_ref(),
+            self.stores.isin_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -565,7 +719,13 @@ impl HistoryProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.history.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.history.as_ref(),
+            self.stores.history_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 
@@ -596,7 +756,13 @@ impl EarningsProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.earnings.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.earnings.as_ref(),
+            self.stores.earnings_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -627,7 +793,13 @@ impl IncomeStatementProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(self.stores.income_stmt.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.income_stmt.as_ref(),
+            self.stores.income_stmt_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -658,7 +830,13 @@ impl BalanceSheetProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(self.stores.balance_sheet.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.balance_sheet.as_ref(),
+            self.stores.balance_sheet_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -689,7 +867,13 @@ impl CashflowProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(self.stores.cashflow.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.cashflow.as_ref(),
+            self.stores.cashflow_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -712,7 +896,13 @@ impl CalendarProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.calendar.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.calendar.as_ref(),
+            self.stores.calendar_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -739,7 +929,13 @@ impl RecommendationsProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(self.stores.recommendations.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.recommendations.as_ref(),
+            self.stores.recommendations_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -766,8 +962,13 @@ impl RecommendationsSummaryProvider for CachingConnector {
                 })
             });
 
-        let arc =
-            Self::cached_or_load(self.stores.recommendations_summary.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.recommendations_summary.as_ref(),
+            self.stores.recommendations_summary_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -794,8 +995,13 @@ impl UpgradesDowngradesProvider for CachingConnector {
                 })
             });
 
-        let arc =
-            Self::cached_or_load(self.stores.upgrades_downgrades.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.upgrades_downgrades.as_ref(),
+            self.stores.upgrades_downgrades_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -821,8 +1027,13 @@ impl AnalystPriceTargetProvider for CachingConnector {
             })
         });
 
-        let arc =
-            Self::cached_or_load(self.stores.analyst_price_target.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.analyst_price_target.as_ref(),
+            self.stores.analyst_price_target_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -849,7 +1060,13 @@ impl MajorHoldersProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(self.stores.major_holders.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.major_holders.as_ref(),
+            self.stores.major_holders_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -876,8 +1093,13 @@ impl InstitutionalHoldersProvider for CachingConnector {
                 })
             });
 
-        let arc =
-            Self::cached_or_load(self.stores.institutional_holders.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.institutional_holders.as_ref(),
+            self.stores.institutional_holders_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -904,8 +1126,13 @@ impl MutualFundHoldersProvider for CachingConnector {
                 })
             });
 
-        let arc =
-            Self::cached_or_load(self.stores.mutual_fund_holders.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.mutual_fund_holders.as_ref(),
+            self.stores.mutual_fund_holders_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -932,8 +1159,13 @@ impl InsiderTransactionsProvider for CachingConnector {
                 })
             });
 
-        let arc =
-            Self::cached_or_load(self.stores.insider_transactions.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.insider_transactions.as_ref(),
+            self.stores.insider_transactions_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -960,7 +1192,13 @@ impl InsiderRosterHoldersProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(self.stores.insider_roster.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.insider_roster.as_ref(),
+            self.stores.insider_roster_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -987,8 +1225,9 @@ impl NetSharePurchaseActivityProvider for CachingConnector {
                 })
             });
 
-        let arc = Self::cached_or_load(
+        let arc = Self::cached_or_load_neg(
             self.stores.net_share_purchase_activity.as_ref(),
+            self.stores.net_share_purchase_activity_neg.as_ref(),
             key,
             loader,
         )
@@ -1015,7 +1254,13 @@ impl EsgProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.esg.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.esg.as_ref(),
+            self.stores.esg_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -1048,7 +1293,13 @@ impl NewsProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.news.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.news.as_ref(),
+            self.stores.news_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -1091,8 +1342,13 @@ impl OptionsExpirationsProvider for CachingConnector {
             })
         });
 
-        let arc =
-            Self::cached_or_load(self.stores.options_expirations.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.options_expirations.as_ref(),
+            self.stores.options_expirations_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -1122,7 +1378,13 @@ impl OptionChainProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.option_chain.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.option_chain.as_ref(),
+            self.stores.option_chain_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
@@ -1149,7 +1411,13 @@ impl SearchProvider for CachingConnector {
             })
         });
 
-        let arc = Self::cached_or_load(self.stores.search.as_ref(), key, loader).await?;
+        let arc = Self::cached_or_load_neg(
+            self.stores.search.as_ref(),
+            self.stores.search_neg.as_ref(),
+            key,
+            loader,
+        )
+        .await?;
         Ok((*arc).clone())
     }
 }
