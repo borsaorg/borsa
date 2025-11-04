@@ -11,16 +11,15 @@ use crate::YfConnector;
 pub type YfConnectorBuilder = GenericConnectorBuilder;
 
 impl YfConnector {
-    
     /// Returns an unconfigured builder with the default connector.
-    /// 
-    /// Customize with the builder methods before calling `.build()`. 
+    ///
+    /// Customize with the builder methods before calling `.build()`.
     #[must_use]
-    pub fn new() -> YfConnectorBuilder {
+    pub fn builder() -> YfConnectorBuilder {
         let raw: Arc<dyn BorsaConnector> = Arc::new(Self::new_default());
         GenericConnectorBuilder::new(raw)
     }
-    
+
     /// Returns a builder with a conservative rate limit (1 request every ~4 seconds).
     ///
     /// Users can further customize before calling `.build()`.
