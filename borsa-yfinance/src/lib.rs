@@ -359,7 +359,7 @@ impl IncomeStatementProvider for YfConnector {
         feature = "tracing",
         tracing::instrument(
             name = "borsa_yfinance::income_statement",
-            skip(self, instrument),
+            skip(self, instrument, quarterly),
             fields(symbol = %instrument.symbol(), quarterly = quarterly),
         )
     )]
@@ -382,7 +382,7 @@ impl BalanceSheetProvider for YfConnector {
         feature = "tracing",
         tracing::instrument(
             name = "borsa_yfinance::balance_sheet",
-            skip(self, instrument),
+            skip(self, instrument, quarterly),
             fields(symbol = %instrument.symbol(), quarterly = quarterly),
         )
     )]
@@ -405,7 +405,7 @@ impl CashflowProvider for YfConnector {
         feature = "tracing",
         tracing::instrument(
             name = "borsa_yfinance::cashflow",
-            skip(self, instrument),
+            skip(self, instrument, quarterly),
             fields(symbol = %instrument.symbol(), quarterly = quarterly),
         )
     )]

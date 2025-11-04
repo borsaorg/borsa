@@ -313,7 +313,7 @@ impl Borsa {
         feature = "tracing",
         tracing::instrument(
             name = "borsa::core::provider_call_with_timeout",
-            skip(fut),
+            skip(fut, connector_name, capability, timeout),
             fields(
                 connector = connector_name,
                 capability = %capability,
@@ -430,7 +430,7 @@ impl Borsa {
         feature = "tracing",
         tracing::instrument(
             name = "borsa::core::fetch_single",
-            skip(self, call),
+            skip(self, inst, call, capability_label, not_found_label),
             fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
         )
     )]
@@ -470,7 +470,7 @@ impl Borsa {
         feature = "tracing",
         tracing::instrument(
             name = "borsa::core::fetch_single_priority_with_fallback",
-            skip(self, call),
+            skip(self, inst, call, capability_label, not_found_label),
             fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
         )
     )]

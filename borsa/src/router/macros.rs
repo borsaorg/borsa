@@ -26,7 +26,7 @@ macro_rules! borsa_router_method {
             feature = "tracing",
             tracing::instrument(
                 target = "borsa::router",
-                skip(self $(, $arg_ident)*),
+                skip(self, $inst_ident $(, $arg_ident)*),
                 fields(symbol = %$inst_ident.symbol()),
             )
         )]
