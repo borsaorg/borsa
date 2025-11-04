@@ -27,69 +27,20 @@ Add `borsa` and a connector to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-borsa = "0.2.0"
-borsa-yfinance = "0.2.0"
+borsa = "0.3.0"
+borsa-yfinance = "0.3.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
 ## Usage
 
-### Fetch your first quote
-
-```rust
-use borsa::Borsa;
-use borsa_core::{AssetKind, Instrument};
-use borsa_yfinance::YfConnector;
-use std::sync::Arc;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a connector and build the client
-    let yf = Arc::new(YfConnector::new_default());
-    let borsa = Borsa::builder().with_connector(yf).build()?;
-
-    // Define the instrument (validated + uppercased automatically)
-    let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
-
-    // Fetch the quote
-    let quote = borsa.quote(&aapl).await?;
-    if let Some(price) = &quote.price {
-        println!("{} last: {}", quote.symbol.as_str(), price.format());
-    }
-
-    Ok(())
-}
-```
+- Simple quote: see the runnable example `./examples/01_simple_quote.rs`.
 
 ## Concepts
 
 ### Middleware (quota-aware wrappers)
 
-`borsa-middleware` provides wrappers like `QuotaAwareConnector` that enforce request budgets and normalize provider rate-limit errors. Wrap your connectors before registering them with the builder.
-
-```rust
-use std::sync::Arc;
-use std::time::Duration;
-use borsa::{Borsa, MergeStrategy, FetchStrategy};
-use borsa_core::{AssetKind, Instrument, BorsaConnector};
-use borsa_middleware::QuotaAwareConnector;
-use borsa_types::{QuotaConfig, QuotaConsumptionStrategy, QuotaState};
-use borsa_mock::MockConnector; // for CI-safe examples; replace with a real connector
-
-let cfg = QuotaConfig { limit: 1000, window: Duration::from_secs(24*60*60), strategy: QuotaConsumptionStrategy::Unit };
-let st = QuotaState { limit: cfg.limit, remaining: cfg.limit, reset_in: cfg.window };
-let inner: Arc<dyn BorsaConnector> = Arc::new(MockConnector::new());
-let wrapped = Arc::new(QuotaAwareConnector::new(inner, cfg, st));
-
-let borsa = Borsa::builder()
-    .with_connector(wrapped)
-    .fetch_strategy(FetchStrategy::PriorityWithFallback)
-    .merge_history_strategy(MergeStrategy::Fallback)
-    .build()?;
-
-let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
-let _ = borsa.quote(&aapl).await?;
-```
+See `./examples/24_quota_middleware.rs` for a runnable demonstration of `QuotaAwareConnector`.
 
 #### Error handling behavior
 
@@ -99,333 +50,41 @@ let _ = borsa.quote(&aapl).await?;
 
 ## Observability (optional)
 
-Enable the `tracing` feature to emit structured spans from router entry points and core orchestration helpers:
-
-```toml
-[dependencies]
-borsa = { version = "0.2", features = ["tracing"] }
-```
-
-Initialize a subscriber in your application:
-
-```rust
-tracing_subscriber::fmt()
-    .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-    .init();
-```
-
-See the top-level `examples/examples/00_tracing.rs` for a working end-to-end sample.
+See `./examples/00_tracing.rs` for a runnable tracing setup. Enable the `tracing` feature on `borsa` when needed.
 
 ### Connectors
 
-Connectors are plugins that fetch data from specific providers. `borsa` comes with:
-
-- **`borsa-yfinance`**: Yahoo Finance connector (free, no API key required)
+See the workspace for available connectors (e.g., `borsa-yfinance`).
 
 ### Instruments
 
-An `Instrument` represents a financial asset:
-
-```rust
-use borsa_core::{AssetKind, Instrument};
-
-// Stocks
-let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)
-    .expect("valid symbol");
-let tsla = Instrument::from_symbol("TSLA", AssetKind::Equity)
-    .expect("valid symbol");
-
-// Cryptocurrencies
-let btc = Instrument::from_symbol("BTC-USD", AssetKind::Crypto)
-    .expect("valid symbol");
-
-// ETFs
-let spy = Instrument::from_symbol("SPY", AssetKind::Equity)
-    .expect("valid symbol");
-```
+An `Instrument` represents a financial asset. See `./examples/03_search.rs` for creation and search basics.
 
 ### Priority Configuration
 
-Configure which connectors to use for different assets:
-
-```rust
-use std::sync::Arc;
-use borsa_core::{AssetKind, BorsaConnector, RoutingPolicyBuilder};
-let yf_connector = Arc::new(YfConnector::new_default());
-let alpha_vantage_connector = Arc::new(AlphaVantageConnector::new_with_key("..."));
-
-let routing = RoutingPolicyBuilder::new()
-    // Prefer Alpha Vantage for crypto (type-safe, ergonomic API)
-    .providers_for_kind(
-        AssetKind::Crypto,
-        &[
-            alpha_vantage_connector.key(),
-            yf_connector.key(),
-        ],
-    )
-    // Use specific connector for TSLA
-    .providers_for_symbol(
-        "TSLA",
-        &[
-            alpha_vantage_connector.key(),
-            yf_connector.key(),
-        ],
-    )
-    // Prefer Yahoo for NASDAQ-listed instruments
-    .providers_for_exchange(
-        borsa_core::Exchange::try_from_str("NASDAQ").unwrap(),
-        &[yf_connector.key(), alpha_vantage_connector.key()],
-    )
-    .build();
-
-let borsa = Borsa::builder()
-    .with_connector(yf_connector.clone())
-    .with_connector(alpha_vantage_connector.clone())
-    .routing_policy(routing)
-    .build()?;
-```
-
-Routing semantics at a glance:
-
-- Provider rules: the most specific matching rule wins (counts set fields among `symbol`, `kind`, `exchange`). If tied, precedence is Symbol > Kind > Exchange; if still tied, the rule defined last wins. Mark a rule `strict` to disable fallback to unlisted providers in that context.
-- Exchange preferences: used only for search de-duplication and resolved by Symbol > Kind > Global; they do not change which providers are eligible.
-
-Migration note: the old builder methods `prefer_for_kind` and `prefer_symbol` have been replaced with a unified `routing_policy(...)` API built via `RoutingPolicyBuilder`.
+See routing policy examples `./examples/12_per_symbol_priority.rs` and `./examples/15_routing_policy_exchange_and_strict.rs`.
 
 ## Data Types
 
-### Quotes & Market Data
+- Quotes: `./examples/01_simple_quote.rs`
+- Info snapshot: `./examples/07_financial_snapshot.rs`
+- History: `./examples/02_history_merge.rs`
+- Fundamentals: `./examples/06_fundamentals_deep_dive.rs`
+- Options: `./examples/05_options_chain.rs`
+- Analysis: `./examples/10_analyst_recommendations.rs`, `./examples/04_price_target.rs`
+- News: `./examples/19_news.rs`
 
-```rust
-// Get live quote
-let quote = borsa.quote(&aapl).await?;
-if let Some(price) = &quote.price {
-    println!("{} price: {}", quote.symbol.as_str(), price.format());
-}
+## DataFrames (paft integration)
 
-// Get comprehensive info (snapshot + warnings)
-let report = borsa.info(&aapl).await?;
-if let Some(info) = report.info {
-    if let Some(price) = &info.last {
-        println!("{} last: {}", info.symbol.as_str(), price.format());
-    }
-    println!("Market state: {}", info.market_state.map_or("N/A".into(), |s| s.to_string()));
-    let warnings = report
-        .warnings
-        .iter()
-        .map(|e| e.to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
-    println!("Warnings: {}", warnings);
-}
-```
-
-### Historical Data
-
-```rust
-use borsa_core::{HistoryRequest, Range, Interval};
-
-// Get 6 months of daily data
-let req = HistoryRequest::try_from_range(Range::M6, Interval::D1)?;
-let history = borsa.history(&aapl, req.clone()).await?;
-
-println!("Fetched {} candles", history.candles.len());
-if let Some(last) = history.candles.last() {
-    println!("Latest close: {}", last.close.format());
-}
-
-// Get data with attribution (see which connector provided each piece)
-let (history, attribution) = borsa.history_with_attribution(&aapl, req).await?;
-for (connector, span) in attribution.spans {
-    println!("{}: {} -> {}", connector, span.start, span.end);
-}
-```
-
-### Fundamentals
-
-```rust
-// Income Statement
-let income = borsa.income_statement(&aapl, true).await?; // quarterly
-if let Some(latest) = income.first() {
-    if let Some(revenue) = &latest.total_revenue {
-        println!("Revenue: {}", revenue.format());
-    }
-}
-
-// Balance Sheet
-let balance = borsa.balance_sheet(&aapl, true).await?;
-if let Some(latest) = balance.first() {
-    if let Some(assets) = &latest.total_assets {
-        println!("Total Assets: {}", assets.format());
-    }
-}
-
-// Cash Flow
-let cashflow = borsa.cashflow(&aapl, true).await?;
-if let Some(latest) = cashflow.first() {
-    if let Some(fcf) = &latest.free_cash_flow {
-        println!("Free Cash Flow: {}", fcf.format());
-    }
-}
-```
-
-### Options Data
-
-```rust
-// Get available expiration dates
-let expirations = borsa.options_expirations(&aapl).await?;
-println!("Found {} expiration dates", expirations.len());
-
-// Get option chain for nearest expiration
-if let Some(&next_expiry) = expirations.first() {
-    let chain = borsa.option_chain(&aapl, Some(next_expiry)).await?;
-    println!("Calls: {}, Puts: {}", chain.calls.len(), chain.puts.len());
-}
-```
-
-### Analysis & Recommendations
-
-```rust
-// Analyst recommendations
-let recs = borsa.recommendations(&aapl).await?;
-let summary = borsa.recommendations_summary(&aapl).await?;
-println!("Mean recommendation: {}", summary.mean.unwrap_or(0.0));
-
-// Price targets
-let target = borsa.analyst_price_target(&aapl).await?;
-let mean = target.mean.as_ref().map(|m| m.format()).unwrap_or_else(|| "N/A".into());
-let low = target.low.as_ref().map(|m| m.format()).unwrap_or_else(|| "N/A".into());
-let high = target.high.as_ref().map(|m| m.format()).unwrap_or_else(|| "N/A".into());
-println!("Target: {mean} (low: {low}, high: {high})");
-```
-
-### News & Events
-
-```rust
-use borsa_core::types::NewsRequest;
-
-// Get recent news
-let news_req = NewsRequest::default();
-let news = borsa.news(&aapl, news_req).await?;
-for article in news.iter().take(5) {
-    println!("{}: {}", article.title, article.publisher.as_deref().unwrap_or(""));
-}
-
-// Get upcoming events
-let calendar = borsa.calendar(&aapl).await?;
-for ts in calendar.earnings_dates.iter().take(3) {
-    println!("Earnings at: {}", ts);
-}
-```
-
-## DataFrames (PAFT integration)
-
-`borsa` builds on [`paft`](https://github.com/paft-rs/paft). Enabling the `dataframe` feature on `borsa` activates paft's Polars integration, allowing you to call `.to_dataframe()` on returned types.
-
-Enable it in your `Cargo.toml`:
-
-```toml
-[dependencies]
-borsa = { version = "0.2", features = ["dataframe"] }
-```
-
-Example:
-
-```rust
-use borsa_core::ToDataFrame; // bring the extension trait into scope
-
-let quote = borsa.quote(&aapl).await?;
-let df = quote.to_dataframe()?; // -> polars::DataFrame
-```
+Enable the `dataframe` feature to use `.to_dataframe()` on returned types. See `./examples/23_dataframe.rs`.
 
 ## Advanced Features
 
-### Bulk Operations
-
-Download data for multiple instruments efficiently:
-
-```rust
-let instruments = [
-    Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid symbol"),
-    Instrument::from_symbol("GOOGL", AssetKind::Equity).expect("valid symbol"),
-    Instrument::from_symbol("MSFT", AssetKind::Equity).expect("valid symbol"),
-];
-
-let summary = borsa.download()
-    .instruments(&instruments)?
-    .range(Range::Y1)
-    .interval(Interval::D1)
-    .run()
-    .await?;
-
-if let Some(resp) = summary.response {
-    for entry in resp.entries {
-        println!("{}: {} candles", entry.instrument.symbol().as_str(), entry.history.candles.len());
-    }
-}
-```
-
-### Automatic Resampling
-
-Configure automatic data resampling:
-
-```rust
-use borsa::Resampling;
-
-let borsa = Borsa::builder()
-    .with_connector(yf_connector)
-    // Always convert to daily bars
-    .resampling(Resampling::Daily)
-    // Or convert to weekly bars
-    // .resampling(Resampling::Weekly)
-    .build()?;
-```
-
-### History Merge Strategy
-
-Control how historical data is fetched from multiple providers:
-
-```rust
-use borsa::MergeStrategy;
-
-let borsa = Borsa::builder()
-    .with_connector(yf_connector)
-    .with_connector(alpha_vantage_connector)
-    // Deep merge: fetch from all providers and merge data (default)
-    .merge_history_strategy(MergeStrategy::Deep)
-    // Or fallback: stop at first provider with data (more economical)
-    // .merge_history_strategy(MergeStrategy::Fallback)
-    .build()?;
-```
-
-**Merge Strategies:**
-
-- **`Deep`** (default): Fetches from all eligible providers concurrently and merges their data. This produces the most complete dataset by backfilling gaps from lower-priority providers, but uses more API calls.
-- **`Fallback`**: Iterates through providers sequentially and stops as soon as one returns a non-empty dataset. This is more economical for API rate limits but may miss data from lower-priority providers.
-
-### Multi-Quote Fetching
-
-Get quotes for multiple instruments efficiently:
-
-```rust
-let instruments = [
-    Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid symbol"),
-    Instrument::from_symbol("GOOGL", AssetKind::Equity).expect("valid symbol"),
-    Instrument::from_symbol("BTC-USD", AssetKind::Crypto).expect("valid symbol"),
-];
-
-let (quotes, failures) = borsa.quotes(&instruments).await?;
-for q in quotes {
-    if let Some(price) = &q.price {
-        println!("{}: {}", q.symbol.as_str(), price.format());
-    }
-}
-if !failures.is_empty() {
-    for (inst, err) in failures {
-        eprintln!("failed: {} -> {}", inst.symbol().as_str(), err);
-    }
-}
-```
+- Bulk download: `./examples/21_download_builder.rs`
+- Resampling: `./examples/08_history_resampling.rs`
+- Merge strategies: `./examples/14_merge_strategies.rs`
+- Multi-quote: `./examples/22_multi_quotes.rs`
+- Streaming: `./examples/17_streaming.rs`
 
 ## Architecture
 
@@ -437,65 +96,11 @@ if !failures.is_empty() {
 
 ### Building Custom Connectors
 
-Create your own connector by implementing role traits and advertising them via the `BorsaConnector` capability accessors. A minimal, current skeleton:
-
-```rust
-use async_trait::async_trait;
-use borsa_core::{
-    connector::{BorsaConnector, QuoteProvider, HistoryProvider},
-    types::{AssetKind, Instrument, Interval, HistoryRequest, HistoryResponse, Quote},
-    BorsaError,
-};
-
-pub struct MyConnector;
-
-#[async_trait]
-impl QuoteProvider for MyConnector {
-    async fn quote(&self, inst: &Instrument) -> Result<Quote, BorsaError> {
-        // fetch + map to Quote
-        Err(BorsaError::unsupported("quote"))
-    }
-}
-
-#[async_trait]
-impl HistoryProvider for MyConnector {
-    async fn history(
-        &self,
-        _inst: &Instrument,
-        _req: HistoryRequest,
-    ) -> Result<HistoryResponse, BorsaError> {
-        Err(BorsaError::unsupported("history"))
-    }
-
-    fn supported_history_intervals(&self, _kind: AssetKind) -> &'static [Interval] { &[] }
-}
-
-impl BorsaConnector for MyConnector {
-    fn name(&self) -> &'static str { "my-connector" }
-    fn vendor(&self) -> &'static str { "My Vendor" }
-    fn supports_kind(&self, kind: AssetKind) -> bool { matches!(kind, AssetKind::Equity) }
-
-    fn as_quote_provider(&self) -> Option<&dyn QuoteProvider> { Some(self) }
-    fn as_history_provider(&self) -> Option<&dyn HistoryProvider> { Some(self) }
-}
-```
+See the `borsa-core` crate documentation for role traits and capability accessors.
 
 ## Examples
 
-Check out the [examples package](https://github.com/borsaorg/borsa/blob/main/examples/examples/) for comprehensive usage examples:
-
-- `01_simple_quote.rs` - Basic quote fetching
-- `02_history_merge.rs` - Historical data with multiple sources
-- `03_search.rs` - Symbol search
-- `04_price_target.rs` - Analyst price target
-- `05_options_chain.rs` - Options data
-- `06_fundamentals_deep_dive.rs` - Financial statements
-- `07_financial_snapshot.rs` - Aggregated info snapshot
-- `08_history_resampling.rs` - Resampling and cadence control
-- `09_stock_comparison.rs` - Multi-symbol comparison
-- `10_analyst_recommendations.rs` - Analyst data
-- `11_upcoming_events.rs` - Calendar/events
-- `12_per_symbol_priority.rs` - Per-symbol provider priority
+See the latest runnable examples in `./examples/`.
 
 ## Contributing
 

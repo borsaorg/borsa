@@ -24,75 +24,10 @@
 //!   backoff with jitter reduces synchronized reconnect storms.
 //!
 //! Examples
-//! Building an orchestrator with preferences and strategies:
-//! ```rust,ignore
-//! use std::sync::Arc;
-//! use borsa::{Borsa, MergeStrategy, FetchStrategy, Resampling};
-//! use borsa_core::AssetKind;
-//!
-//! let yf = Arc::new(YfConnector::new_default());
-//! let av = Arc::new(AvConnector::new_with_key("..."));
-//!
-//! let routing = borsa_core::RoutingPolicyBuilder::new()
-//!     .providers_for_kind(
-//!         AssetKind::Equity,
-//!         &[av.key(), yf.key()],
-//!     )
-//!     .build();
-//!
-//! let borsa = Borsa::builder()
-//!     .with_connector(yf.clone())
-//!     .with_connector(av.clone())
-//!     // Type-safe, ergonomic API via typed connector keys
-//!     .routing_policy(routing)
-//!     .merge_history_strategy(MergeStrategy::Deep)
-//!     .fetch_strategy(FetchStrategy::PriorityWithFallback)
-//!     .resampling(Resampling::Daily)
-//!     .build()?;
-//! ```
-//!
-//! Fetching a quote and a merged history series:
-//! ```rust,ignore
-//! use borsa_core::{Instrument, Interval, Range};
-//!
-//! let aapl = Instrument::stock("AAPL");
-//! let quote = borsa.quote(&aapl).await?;
-//! let hist = borsa.history(
-//!     &aapl,
-//!     borsa_core::HistoryRequest{
-//!         range: Some(Range::Y1),
-//!         interval: Interval::D1,
-//!         ..Default::default()
-//!     }
-//! ).await?;
-//! ```
-//!
-//! Streaming with supervised failover:
-//! ```rust,ignore
-//! use borsa_core::Instrument;
-//! let (handle, mut rx) = borsa.stream_quotes(&[Instrument::stock("AAPL")]).await?;
-//! // ... consume updates ...
-//! handle.stop().await;
-//! ```
-//!
-//! Bulk download helper (multi-symbol history):
-//! ```rust,ignore
-//! use borsa_core::{Instrument, Interval, Range};
-//! let report = borsa
-//!     .download()
-//!     .instruments(&[Instrument::stock("AAPL"), Instrument::stock("MSFT")])?
-//!     .range(borsa_core::Range::M6)
-//!     .interval(Interval::D1)
-//!     .run()
-//!     .await?;
-//! if let Some(resp) = report.response.as_ref() {
-//!     if let Some(aapl_history) = resp.series.get("AAPL") {
-//!         // inspect candles returned for AAPL
-//!     }
-//! }
-//! ```
-//!
-//! See `borsa/examples/` for runnable end-to-end demonstrations.
+//! - Basic quote: see `./examples/01_simple_quote.rs`.
+//! - Streaming with supervised failover: see `./examples/17_streaming.rs`.
+//! - Bulk download: see `./examples/21_download_builder.rs`.
+//! - More examples in `./examples/`.
 #![warn(missing_docs)]
 
 pub(crate) mod core;
