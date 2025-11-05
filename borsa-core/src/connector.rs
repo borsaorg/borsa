@@ -267,7 +267,6 @@ pub trait OptionChainProvider: Send + Sync {
 }
 
 /// Main connector trait implemented by provider crates. Exposes capability discovery.
-#[async_trait]
 pub trait BorsaConnector: Send + Sync {
     /// A stable identifier for priority lists (e.g., "borsa-yfinance", "borsa-coinmarketcap").
     fn name(&self) -> &'static str;
