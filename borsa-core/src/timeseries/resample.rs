@@ -343,7 +343,7 @@ fn choose_bucket_minutes(
 /// fn t(sec: i64) -> DateTime<Utc> { DateTime::from_timestamp(sec, 0).unwrap() }
 /// fn m(v: f64, usd: bool) -> Money { Money::new(Decimal::from_f64_retain(v).unwrap(), if usd { Currency::Iso(IsoCurrency::USD) } else { Currency::Iso(IsoCurrency::EUR) }).unwrap() }
 /// let c = |ts: i64, usd: bool| Candle { ts: t(ts), open: m(1.0, usd), high: m(1.0, usd), low: m(1.0, usd), close: m(1.0, usd), close_unadj: None, volume: None };
-/// // Two different days with different currencies → panic on finalize of second bucket
+/// // Two different days with different currencies → error on finalizing second bucket (BorsaError::Data: mixed currencies)
 /// let res = resample_to_daily(vec![c(0, true), c(86_400, false)]);
 /// assert!(res.is_err());
 /// ```
@@ -394,7 +394,7 @@ pub fn resample_to_daily_with_meta(
 /// fn t(sec: i64) -> DateTime<Utc> { DateTime::from_timestamp(sec, 0).unwrap() }
 /// fn m(v: f64, usd: bool) -> Money { Money::new(Decimal::from_f64_retain(v).unwrap(), if usd { Currency::Iso(IsoCurrency::USD) } else { Currency::Iso(IsoCurrency::EUR) }).unwrap() }
 /// let c = |ts: i64, usd: bool| Candle { ts: t(ts), open: m(1.0, usd), high: m(1.0, usd), low: m(1.0, usd), close: m(1.0, usd), close_unadj: None, volume: None };
-/// // Different weeks and currencies → panic
+/// // Different weeks and currencies → error (BorsaError::Data: mixed currencies)
 /// let res = resample_to_weekly(vec![c(0, true), c(7*86_400, false)]);
 /// assert!(res.is_err());
 /// ```
@@ -436,7 +436,7 @@ pub fn resample_to_weekly_with_meta(
 /// fn t(sec: i64) -> DateTime<Utc> { DateTime::from_timestamp(sec, 0).unwrap() }
 /// fn m(v: f64, usd: bool) -> Money { Money::new(Decimal::from_f64_retain(v).unwrap(), if usd { Currency::Iso(IsoCurrency::USD) } else { Currency::Iso(IsoCurrency::EUR) }).unwrap() }
 /// let c = |ts: i64, usd: bool| Candle { ts: t(ts), open: m(1.0, usd), high: m(1.0, usd), low: m(1.0, usd), close: m(1.0, usd), close_unadj: None, volume: None };
-/// // Two minute buckets, different currencies → panic
+/// // Two minute buckets, different currencies → error (BorsaError::Data: mixed currencies)
 /// let res = resample_to_minutes(vec![c(0, true), c(120, false)], 1);
 /// assert!(res.is_err());
 /// ```
