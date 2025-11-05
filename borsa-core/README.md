@@ -143,6 +143,22 @@ impl BorsaConnector for MyConnector {
 }
 ```
 
+### Middleware and Call Flow
+
+`borsa-core` exposes a small set of primitives in `borsa_core::middleware` to build robust middleware stacks around connectors. These are the building blocks used by higher-level crates like `borsa` and `borsa-middleware`.
+
+- **`CallOrigin`**: Classifies who initiated a connector call. It is either `External` (end-user/API) or `Internal` with optional parent `Capability` and a stage label. You can scope an async block with a specific origin so downstream middleware can react accordingly.
+
+- **`CallContext`**: Captures the current `Capability` and the `CallOrigin` for a pending provider call. This is passed to middleware hooks so they can make allow/deny and mapping decisions based on what is being called and why.
+
+- **`Middleware`**: Trait implemented by connector layers that wrap an inner `BorsaConnector`. Middleware can validate composition, perform pre-call checks, and translate errors.
+
+- **`MiddlewareDescriptor`**: A runtime descriptor used by builders to track middleware instances in a stack. It exposes the concrete `type_id()`, human-readable `name()`, and the underlying trait object for inspection.
+
+- **`ValidationContext`**: Provided to `Middleware::validate` to check stack-wide constraints and dependencies before any wrapping occurs. It offers helpers like `has_middleware`, `has_middleware_outer`, `has_middleware_inner`, as well as `middleware_types`, `current_position`, and `stack_size` for advanced layout checks.
+
+- **`MiddlewarePosition`**: A portable way to express ordering requirements such as `Outermost`, `OuterThan(TypeId)`, `InnerThan(TypeId)`, or `Any`. Builders can use this to enforce predictable composition.
+
 ## Documentation
 
 - [API Documentation](https://docs.rs/borsa-core)
