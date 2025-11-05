@@ -16,47 +16,11 @@ authors = ["Giovanni Ramistella <contact@borsa.rs>"]
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/borsaorg/borsa"
+homepage = "https://github.com/borsaorg/borsa"
 
 [workspace.dependencies]
-# List common dependencies here to unify versions
-tokio = { version = "1" }
-thiserror = "2.0.17"
-serde = { version = "1.0.228", features = ["derive"] }
-alpha_vantage = "0.11.0"
-async-trait = "0.1"
-bitflags = "2"
 
-paft = { version = "0.7.1", features = ["market", "fundamentals", "aggregates"] }
-#paft = { path = "../paft-workspace/paft", features = ["market", "fundamentals", "aggregates"] }
-yfinance-rs = { version = "0.7.2" }
-#yfinance-rs = { path = "../yfinance-rs" }
-chrono = "0.4.42"
-chrono-tz = "0.10"
-rust_decimal = "1.36"
-futures = "0.3"
-polars = "0.51"
-proc-macro-crate = "3.4.0"
-proc-macro2 = "1.0"
-quote = "1.0.41"
-reqwest = "0.12.24"
-syn = "2.0.107"
-base64 = "0.22"
-futures-util = "0.3"
-prost = "0.14"
-prost-build = "0.14"
-rand = "0.9.2"
-serde_json = "1.0.145"
-tokio-tungstenite = "0.27"
-url = "2.5"
-cmc = "0.4.4"
-proptest = "1.8.0"
-loom = { version = "0.7.2", default-features = false }
-
-# Observability
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-
-
+# ---- Workspace crates ----
 borsa-yfinance = { path = "borsa-yfinance", version = "0.3.0" }
 borsa-core = { path = "borsa-core", version = "0.3.0" }
 borsa = { path = "borsa", version = "0.3.0" }
@@ -65,6 +29,54 @@ borsa-mock = { path = "borsa-mock", version = "0.3.0" }
 borsa-types = { path = "borsa-types", version = "0.3.0" }
 borsa-middleware = { path = "borsa-middleware", version = "0.3.0" }
 
+# ---- Shared ----
+async-trait = "0.1"
+bitflags = "2"
+chrono = "0.4.42"
+chrono-tz = "0.10"
+futures = "0.3"
+rand = "0.9.2"
+rust_decimal = "1.36"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.17"
+tokio = { version = "1" }
+tracing = "0.1"
+
+# ---- Types layer ----
+paft = { version = "0.7.1", features = ["market", "fundamentals", "aggregates"] }
+#paft = { path = "../paft-workspace/paft", features = ["market", "fundamentals", "aggregates"] }
+
+# ---- Macros ----
+proc-macro-crate = "3.4.0"
+proc-macro2 = "1.0"
+quote = "1.0.41"
+syn = "2.0.107"
+
+# ---- Middleware ----
+moka = { version = "0.12", default-features = false }
+
+# ---- Connector: yfinance and networking ----
+yfinance-rs = { version = "0.7.2" }
+#yfinance-rs = { path = "../yfinance-rs" }
+reqwest = "0.12.24"
+base64 = "0.22"
+futures-util = "0.3"
+tokio-tungstenite = "0.27"
+url = "2.5"
+cmc = "0.4.4"
+prost = "0.14"
+prost-build = "0.14"
+
+# ---- Dataframe / examples ----
+polars = "0.51"
+
+# ---- Observability ----
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+# ---- Dev-only (tests/examples) ----
+proptest = "1.8.0"
+loom = { version = "0.7.2", default-features = false }
 trybuild = "1.0.112"
 tokio-test = "0.4.4"
 httpmock = "0.8.2"
