@@ -18,11 +18,13 @@ use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
 /// - `meta`: first non-None wins; otherwise None.
 /// - Actions are concatenated and de-duplicated by full action identity
 ///   (same kind, timestamp, and payload), keeping the first identical one.
+/// - Output candles have `close_unadj` cleared (set to `None`).
 ///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected either
 /// within a single candle or across the merged output series. Currency
-/// consistency is a required invariant for all merged candles.
+/// consistency is a required invariant for all merged candles and the merge
+/// aborts on the first inconsistency (series-wide check).
 pub fn merge_history<I>(responses: I) -> Result<HistoryResponse, BorsaError>
 where
     I: IntoIterator<Item = HistoryResponse>,
@@ -109,11 +111,14 @@ where
 
 /// Merge only candles from multiple series (first series has higher priority).
 ///
-/// Returns a vector of candles with first-wins semantics on duplicate timestamps.
+/// - Returns a vector of candles with first-wins semantics on duplicate timestamps.
+/// - Output candles have `close_unadj` cleared (set to `None`).
+///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected either
 /// within a single candle or across the merged output series. Currency
-/// consistency is required.
+/// consistency is required and the merge aborts on the first inconsistency
+/// (series-wide check).
 pub fn merge_candles_by_priority<I>(series: I) -> Result<Vec<Candle>, BorsaError>
 where
     I: IntoIterator<Item = Vec<Candle>>,

@@ -328,6 +328,7 @@ fn choose_bucket_minutes(
 /// - Close = last close of the day (latest ts)
 /// - Volume = sum of volumes (ignores `None`; if all `None`, result is `None`)
 /// - Output candles have `ts` at the **day start** (00:00:00 UTC).
+/// - Output candles have `close_unadj` set to `None`.
 ///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
@@ -355,9 +356,13 @@ pub fn resample_to_daily(candles: Vec<Candle>) -> Result<Vec<Candle>, BorsaError
 
 /// Resample to daily buckets using `HistoryMeta` timezone/offset when provided.
 ///
+/// - Output candles have `close_unadj` set to `None`.
+/// - Output series must use a single currency across all buckets.
+///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
-/// bucket or across the resampled output series.
+/// bucket or across the resampled output series (error is raised per-bucket or
+/// series-wide on the first inconsistency).
 pub fn resample_to_daily_with_meta(
     candles: Vec<Candle>,
     meta: Option<&HistoryMeta>,
@@ -377,6 +382,7 @@ pub fn resample_to_daily_with_meta(
 /// - Low   = min low
 /// - Close = last close of the week (latest ts)
 /// - Volume = sum of volumes (ignores `None`; if all `None`, result is `None`)
+/// - Output candles have `close_unadj` set to `None`.
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
 /// bucket or across the resampled output series.
@@ -398,9 +404,13 @@ pub fn resample_to_weekly(candles: Vec<Candle>) -> Result<Vec<Candle>, BorsaErro
 
 /// Resample to weekly buckets (Monday start) in market local time using `HistoryMeta` when provided.
 ///
+/// - Output candles have `close_unadj` set to `None`.
+/// - Output series must use a single currency across all buckets.
+///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
-/// bucket or across the resampled output series.
+/// bucket or across the resampled output series (error is raised per-bucket or
+/// series-wide on the first inconsistency).
 pub fn resample_to_weekly_with_meta(
     candles: Vec<Candle>,
     meta: Option<&HistoryMeta>,
@@ -411,6 +421,9 @@ pub fn resample_to_weekly_with_meta(
 /// Resample subdaily candles to an arbitrary minute bucket (e.g., 2m, 90m).
 ///
 /// Assumes input is subdaily. Candles are grouped by `floor(ts / (minutes*60))`.
+///
+/// - Output candles have `close_unadj` set to `None`.
+/// - Output series must use a single currency across all buckets.
 ///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
@@ -440,9 +453,13 @@ pub fn resample_to_minutes(candles: Vec<Candle>, minutes: i64) -> Result<Vec<Can
 
 /// Resample to minute buckets using market local time when `HistoryMeta` is provided.
 ///
+/// - Output candles have `close_unadj` set to `None`.
+/// - Output series must use a single currency across all buckets.
+///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
-/// bucket or across the resampled output series.
+/// bucket or across the resampled output series (error is raised per-bucket or
+/// series-wide on the first inconsistency).
 pub fn resample_to_minutes_with_meta(
     candles: Vec<Candle>,
     minutes: i64,
