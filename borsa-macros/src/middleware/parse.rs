@@ -17,12 +17,6 @@ fn resolve_borsa_core_path() -> Path {
     }
 }
 
-// Filesystem source parsing removed. Codegen is driven by borsa-core macros.
-
-// Deleted brittle env/relative-path scanning helpers.
-
-// Deleted AST discovery helpers.
-
 fn parse_inner_ident(args: Punctuated<Meta, Token![,]>) -> (Ident, Option<String>) {
     let mut inner: Option<Ident> = None;
     for meta in args {
@@ -39,10 +33,6 @@ fn parse_inner_ident(args: Punctuated<Meta, Token![,]>) -> (Ident, Option<String
     let inner_ident = inner.expect("delegate macro requires the inner field ident as first arg, e.g., #[delegate_connector(inner)]");
     (inner_ident, None)
 }
-
-// Accessor name generation no longer needed here; implemented in core macros.
-
-// Validation removed; core macros are now the single source of truth.
 
 pub fn delegate_connector_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
@@ -69,8 +59,6 @@ pub fn delegate_connector_impl(attr: TokenStream, item: TokenStream) -> TokenStr
     expanded.into()
 }
 
-// All per-provider dispatch moved to core macros.
-
 pub fn delegate_all_providers_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with Punctuated::<Meta, Token![,]>::parse_terminated);
     let input_impl = parse_macro_input!(item as ItemImpl);
@@ -86,5 +74,3 @@ pub fn delegate_all_providers_impl(attr: TokenStream, item: TokenStream) -> Toke
 
     expanded.into()
 }
-
-// Removed many per-provider helpers; provided by core macro.
