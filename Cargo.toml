@@ -62,11 +62,7 @@ yfinance-rs = { version = "0.7.2" }
 reqwest = "0.12.24"
 base64 = "0.22"
 futures-util = "0.3"
-tokio-tungstenite = "0.27"
 url = "2.5"
-cmc = "0.4.4"
-prost = "0.14"
-prost-build = "0.14"
 
 # ---- Dataframe / examples ----
 polars = "0.51"
