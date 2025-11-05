@@ -224,9 +224,6 @@ pub fn tag_err(connector: &str, e: BorsaError) -> BorsaError {
     match e {
         e @ (BorsaError::NotFound { .. }
         | BorsaError::ProviderTimeout { .. }
-        | BorsaError::RateLimitExceeded { .. }
-        | BorsaError::QuotaExceeded { .. }
-        | BorsaError::TemporarilyBlacklisted { .. }
         | BorsaError::Connector { .. }
         | BorsaError::RequestTimeout { .. }
         | BorsaError::AllProvidersTimedOut { .. }
@@ -509,12 +506,9 @@ impl Borsa {
                         e @ (BorsaError::ProviderTimeout { .. }
                         | BorsaError::RateLimitExceeded { .. }
                         | BorsaError::QuotaExceeded { .. }
-                        | BorsaError::TemporarilyBlacklisted { .. }),
+                        | BorsaError::TemporarilyBlacklisted { .. })
+                        | e,
                     ) => {
-                        _all_not_found = false;
-                        errors.push(e);
-                    }
-                    Err(e) => {
                         _all_not_found = false;
                         errors.push(crate::core::tag_err(c.name(), e));
                     }
@@ -571,14 +565,15 @@ impl Borsa {
         while let Some((name, res)) = futs.next().await {
             match res {
                 Ok(v) => return Ok(v),
+                Err(e @ (BorsaError::NotFound { .. } | BorsaError::ProviderTimeout { .. })) => {
+                    errors.push(e);
+                }
                 Err(
-                    e @ (BorsaError::ProviderTimeout { .. }
-                    | BorsaError::NotFound { .. }
-                    | BorsaError::RateLimitExceeded { .. }
+                    e @ (BorsaError::RateLimitExceeded { .. }
                     | BorsaError::QuotaExceeded { .. }
                     | BorsaError::TemporarilyBlacklisted { .. }),
                 ) => {
-                    errors.push(e);
+                    errors.push(crate::core::tag_err(name, e));
                 }
                 Err(e) => errors.push(crate::core::tag_err(name, e)),
             }

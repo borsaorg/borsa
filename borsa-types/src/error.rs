@@ -214,7 +214,10 @@ impl BorsaError {
                 }
             }
 
-            // Default: Unknown (e.g., Connector, Data, Other)
+            // Connector: propagate inner classification
+            Self::Connector { error, .. } => error.retry_class(),
+
+            // Default: Unknown (e.g., Data, Other)
             _ => RetryClass::Unknown,
         }
     }
