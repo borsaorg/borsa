@@ -11,25 +11,47 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, watch};
 
 impl Borsa {
-    /// Start streaming quotes with automatic backoff and provider failover.
+    /// Start streaming quotes with automatic backoff, provider failover, and policy-aware routing.
     ///
     /// Parameters:
-    /// - `instruments`: list of instruments to stream (must be non-empty)
-    /// - `backoff_override`: optional backoff settings; defaults to config or built-in
+    /// - `instruments`: non-empty list of instruments to stream
+    /// - `backoff_override`: optional backoff settings; defaults to config/built-ins
     ///
-    /// Behavior and trade-offs:
-    /// - Instruments are grouped by `AssetKind` and streamed via the first provider
-    ///   that successfully connects per kind; on disconnect, a supervised loop
-    ///   rotates to the next eligible provider with exponential backoff and jitter.
-    /// - Jitter reduces synchronized reconnects (thundering herd) at the cost of
-    ///   non-deterministic reconnect delay.
-    /// - When multiple kinds are present, each kind runs independently and their
-    ///   updates are fanned-in to a single channel.
-    /// - The `allow` filter ensures only requested symbols are forwarded.
-    /// - Stopping the returned `StreamHandle` terminates all supervised tasks.
+    /// Grouping:
+    /// - Instruments are grouped by `(AssetKind, Option<Exchange>)` to respect exchange-sensitive
+    ///   routing rules. Each group is managed independently and updates are fanned-in to a single
+    ///   channel.
+    ///
+    /// Provider eligibility and ordering:
+    /// - For each group, eligible streaming providers are scored by the minimum per-symbol rank
+    ///   across the requested instruments (from the routing policy), with ties broken by
+    ///   registration order. Allowed symbol sets are tracked per provider.
+    ///
+    /// Routing modes:
+    /// - Per-symbol preferences: if any instrument in a group has an explicit provider preference
+    ///   (rank != `usize::MAX`), a primary provider is resolved per symbol from the eligible set
+    ///   using the lowest rank (then stable tie-break). One supervisor is spawned per primary
+    ///   provider, with a fallback chain (primary first, then others). Each supervisor subscribes
+    ///   only to the symbols assigned to its primary; overlapping lower-priority sessions are
+    ///   preempted when a higher-priority session activates.
+    /// - Group-level fallback: if no explicit per-symbol preferences exist, a single supervisor
+    ///   manages the whole group, attempting providers in scored order and subscribing each only
+    ///   to the symbols it is allowed to stream. Required symbols are the union of allowed symbols
+    ///   across providers for the requested set.
+    ///
+    /// Strict policy handling:
+    /// - If strict routing rules exclude requested symbols despite available streaming providers,
+    ///   an error is returned listing the rejected symbols.
+    ///
+    /// Backoff and termination:
+    /// - Exponential backoff with jitter is used between attempts; successful activation resets
+    ///   backoff.
+    /// - Optional monotonic timestamp enforcement is applied if enabled in config.
+    /// - Dropping or stopping the returned `StreamHandle` terminates all supervised tasks.
+    ///
     /// # Errors
-    /// Returns an error if streaming initialization fails for all eligible providers of a kind
-    /// or when no streaming-capable providers are available.
+    /// - Returns an error if initialization fails across all providers for all groups, or when no
+    ///   streaming-capable providers are available.
     #[cfg_attr(
         feature = "tracing",
         tracing::instrument(
