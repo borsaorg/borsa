@@ -70,6 +70,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
