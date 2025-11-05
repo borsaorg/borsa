@@ -23,8 +23,28 @@ pub fn by_symbol(s: &str) -> Option<Quote> {
             "990.00",
             Exchange::NASDAQ,
         )),
+        "GOOGL" => Some(q(
+            "GOOGL",
+            "Alphabet Inc. Class A",
+            "150.00",
+            "148.00",
+            Exchange::NASDAQ,
+        )),
         "KO" => Some(q("KO", "Coca-Cola", "60.00", "59.50", Exchange::NYSE)),
         "PEP" => Some(q("PEP", "PepsiCo", "170.00", "168.00", Exchange::NASDAQ)),
+        "BTC-USD" => Some(Quote {
+            symbol: Symbol::new("BTC-USD").unwrap(),
+            shortname: Some("Bitcoin USD".to_string()),
+            price: Some(
+                Money::from_canonical_str("65000.00", Currency::Iso(IsoCurrency::USD)).unwrap(),
+            ),
+            previous_close: Some(
+                Money::from_canonical_str("64000.00", Currency::Iso(IsoCurrency::USD)).unwrap(),
+            ),
+            exchange: None,
+            market_state: None,
+            day_volume: None,
+        }),
         _ => None,
     }
 }
