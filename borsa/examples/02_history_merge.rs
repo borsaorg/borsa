@@ -1,8 +1,6 @@
 mod common;
 use borsa::Borsa;
-use borsa_core::{
-    connector::BorsaConnector, AssetKind, HistoryRequest, Instrument,
-};
+use borsa_core::{AssetKind, HistoryRequest, Instrument, connector::BorsaConnector};
 use borsa_mock::MockConnector;
 use common::get_connector;
 
