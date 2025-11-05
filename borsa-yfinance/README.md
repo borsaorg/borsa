@@ -48,7 +48,7 @@ Enable the `tracing` feature to emit spans for all public provider endpoints (qu
 
 ```toml
 [dependencies]
-borsa-yfinance = { version = "0.2", features = ["tracing"] }
+borsa-yfinance = { version = "0.3.0", features = ["tracing"] }
 ```
 
 Run with the example subscriber setup:

@@ -101,7 +101,7 @@ To enable it:
 
 ```toml
 [dependencies]
-borsa = { version = "0.2", features = ["dataframe"] }
+borsa = { version = "0.3.0", features = ["dataframe"] }
 ```
 
 Usage:

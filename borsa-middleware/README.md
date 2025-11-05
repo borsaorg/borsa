@@ -6,13 +6,13 @@ Reusable middleware for `borsa` connectors. Currently includes a quota-aware wra
 
 ```toml
 [dependencies]
-borsa = "0.2"
-borsa-middleware = "0.2"
-borsa-types = "0.2"
+borsa = "0.3.0"
+borsa-middleware = "0.3.0"
+borsa-types = "0.3.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 # For local testing/examples (uses fixtures, no network)
-borsa-mock = { version = "0.2", optional = true }
+borsa-mock = { version = "0.3.0", optional = true }
 ```
 
 ## Quota-aware wrapper

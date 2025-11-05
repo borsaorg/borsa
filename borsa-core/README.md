@@ -178,7 +178,7 @@ impl BorsaConnector for MyConnector {
 ## Documentation
 
 - [API Documentation](https://docs.rs/borsa-core)
-- Examples: see the workspace `examples/` package
+- Examples: see `borsa/examples/` in this repository
 
 ## Related Crates
 

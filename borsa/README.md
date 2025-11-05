@@ -34,13 +34,13 @@ tokio = { version = "1", features = ["full"] }
 
 ## Usage
 
-- Simple quote: see the runnable example `./examples/01_simple_quote.rs`.
+- Simple quote: see the runnable example `borsa/examples/01_simple_quote.rs`.
 
 ## Concepts
 
 ### Middleware (quota-aware wrappers)
 
-See `./examples/24_quota_middleware.rs` for a runnable demonstration of `QuotaAwareConnector`.
+See `borsa/examples/24_quota_middleware.rs` for a runnable demonstration of `QuotaAwareConnector`.
 
 #### Error handling behavior
 
@@ -50,7 +50,7 @@ See `./examples/24_quota_middleware.rs` for a runnable demonstration of `QuotaAw
 
 ## Observability (optional)
 
-See `./examples/00_tracing.rs` for a runnable tracing setup. Enable the `tracing` feature on `borsa` when needed.
+See `borsa/examples/00_tracing.rs` for a runnable tracing setup. Enable the `tracing` feature on `borsa` when needed.
 
 ### Connectors
 
@@ -58,25 +58,25 @@ See the workspace for available connectors (e.g., `borsa-yfinance`).
 
 ### Instruments
 
-An `Instrument` represents a financial asset. See `./examples/03_search.rs` for creation and search basics.
+An `Instrument` represents a financial asset. See `borsa/examples/03_search.rs` for creation and search basics.
 
 ### Priority Configuration
 
-See routing policy examples `./examples/12_per_symbol_priority.rs` and `./examples/15_routing_policy_exchange_and_strict.rs`.
+See routing policy examples `borsa/examples/12_per_symbol_priority.rs` and `borsa/examples/15_routing_policy_exchange_and_strict.rs`.
 
 ## Data Types
 
-- Quotes: `./examples/01_simple_quote.rs`
-- Info snapshot: `./examples/07_financial_snapshot.rs`
-- History: `./examples/02_history_merge.rs`
-- Fundamentals: `./examples/06_fundamentals_deep_dive.rs`
-- Options: `./examples/05_options_chain.rs`
-- Analysis: `./examples/10_analyst_recommendations.rs`, `./examples/04_price_target.rs`
-- News: `./examples/19_news.rs`
+- Quotes: `borsa/examples/01_simple_quote.rs`
+- Info snapshot: `borsa/examples/07_financial_snapshot.rs`
+- History: `borsa/examples/02_history_merge.rs`
+- Fundamentals: `borsa/examples/06_fundamentals_deep_dive.rs`
+- Options: `borsa/examples/05_options_chain.rs`
+- Analysis: `borsa/examples/10_analyst_recommendations.rs`, `borsa/examples/04_price_target.rs`
+- News: `borsa/examples/19_news.rs`
 
 ## DataFrames (paft integration)
 
-Enable the `dataframe` feature to use `.to_dataframe()` on returned types. See `./examples/23_dataframe.rs`.
+Enable the `dataframe` feature to use `.to_dataframe()` on returned types. See `borsa/examples/23_dataframe.rs`.
 
 ## Advanced Features
 
@@ -100,7 +100,7 @@ See the `borsa-core` crate documentation for role traits and capability accessor
 
 ## Examples
 
-See the latest runnable examples in `./examples/`.
+See the latest runnable examples in `borsa/examples/`.
 
 ## Contributing
 
@@ -123,8 +123,7 @@ cargo test --workspace
 ### Running Examples
 
 ```bash
-cd examples
-cargo run --example 01_simple_quote
+cargo run -p borsa --example 01_simple_quote
 ```
 
 ## License
