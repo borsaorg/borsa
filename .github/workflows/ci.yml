@@ -39,7 +39,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-  # Test individual crates
+  # Test workspace
   test:
     needs: [lint]
     runs-on: ${{ matrix.os }}
@@ -50,13 +50,6 @@ jobs:
           - ubuntu-latest
           - windows-latest
           - macos-latest
-        crate: [borsa, borsa-core, borsa-yfinance]
-        rust: [stable]
-        # Only test beta on ubuntu to reduce CI time
-        include:
-          - os: ubuntu-latest
-            rust: beta
-            crate: borsa
 
     steps:
       - name: Checkout code
@@ -65,7 +58,6 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Install protoc
@@ -76,11 +68,10 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Test crate
+      - name: Test workspace
         shell: bash
         run: |
-          cd ${{ matrix.crate }}          
-          cargo test --verbose
+          cargo test --workspace --all-features --all-targets
 
 
   # Workspace validation and examples
