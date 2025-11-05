@@ -11,6 +11,22 @@ Core types, traits, and utilities shared across the borsa financial data ecosyst
 
 `borsa-core` provides the foundational building blocks for the borsa ecosystem, a unified interface for accessing financial market data from multiple providers. It defines common data structures, the connector trait for implementing data providers, and utilities for working with time series data.
 
+## Async Runtime (Tokio)
+
+`borsa-core` assumes the Tokio ecosystem as the async runtime. Several public APIs are coupled to Tokio types:
+
+- **`stream::StreamHandle`** wraps `tokio::task::JoinHandle<()>` and uses `tokio::sync::oneshot` for cooperative shutdown
+- **`connector::StreamProvider`** returns `(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>)`
+- **`middleware::CallOrigin`** is implemented using `tokio::task_local!`
+
+You must run code that uses streaming or middleware under a Tokio 1.x runtime. We recommend enabling Tokio's `macros` and a runtime in your application:
+
+```toml
+[dependencies]
+borsa-core = "0.3.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
 ## Features
 
 ### Core Components

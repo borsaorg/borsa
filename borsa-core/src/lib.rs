@@ -5,6 +5,21 @@
 //! - `types`: common data structures (quotes, candles, actions, requests).
 //! - `connector`: the `BorsaConnector` trait and capability provider traits.
 //! - `timeseries`: helpers to merge history from multiple connectors.
+//!
+//! Async runtime (Tokio)
+//! ---------------------
+//! This crate assumes the Tokio ecosystem as the async runtime. Several public
+//! APIs are explicitly coupled to Tokio types and facilities:
+//!
+//! - `stream::StreamHandle` wraps `tokio::task::JoinHandle<()>` and uses
+//!   `tokio::sync::oneshot::Sender<()>` for cooperative shutdown.
+//! - `connector::StreamProvider` returns `(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>)`.
+//! - `middleware::CallOrigin` uses `tokio::task_local!` to track call origin
+//!   across async boundaries.
+//!
+//! As a result, code that uses streaming or middleware must run under a Tokio
+//! 1.x runtime.
+//!
 #![warn(missing_docs)]
 
 /// Connector capability traits and the primary `BorsaConnector` interface.
