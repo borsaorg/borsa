@@ -53,6 +53,7 @@ jobs:
 
     steps:
       - name: Clean up runner image
+        if: runner.os == 'Linux'
         run: |
           df -h
           rm -rf /opt/hostedtoolcache
