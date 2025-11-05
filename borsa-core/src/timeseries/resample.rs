@@ -425,6 +425,10 @@ pub fn resample_to_weekly_with_meta(
 /// - Output candles have `close_unadj` set to `None`.
 /// - Output series must use a single currency across all buckets.
 ///
+/// Guardrails: If `minutes <= 0`, this function treats the argument as invalid and
+/// performs no resampling, returning the input `candles` unchanged. If `candles`
+/// is empty, it is also returned unchanged.
+///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
 /// bucket or across the resampled output series.
@@ -455,6 +459,10 @@ pub fn resample_to_minutes(candles: Vec<Candle>, minutes: i64) -> Result<Vec<Can
 ///
 /// - Output candles have `close_unadj` set to `None`.
 /// - Output series must use a single currency across all buckets.
+///
+/// Guardrails: If `minutes <= 0`, this function treats the argument as invalid and
+/// performs no resampling, returning the input `candles` unchanged. If `candles`
+/// is empty, it is also returned unchanged.
 ///
 /// # Errors
 /// Returns `Err(BorsaError::Data)` if mixed currencies are detected within a
