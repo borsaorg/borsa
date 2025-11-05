@@ -1,13 +1,13 @@
 [package]
 name = "borsa-yfinance"
 version.workspace = true
-edition = "2024"
+edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Yahoo Finance API connector for the borsa financial data ecosystem with comprehensive market data and streaming support."
 readme = "README.md"
-repository.workspace = true
-homepage = "https://github.com/borsaorg/borsa"
 documentation = "https://docs.rs/borsa-yfinance"
 keywords = ["finance", "yahoo-finance", "api", "market-data", "stocks"]
 categories = ["api-bindings", "finance", "web-programming::http-client"]

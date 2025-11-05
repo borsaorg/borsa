@@ -1,13 +1,13 @@
 [package]
 name = "borsa-core"
 version.workspace = true
-edition = "2024"
+edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Core types, connector traits, and time-series utilities for the borsa financial data ecosystem."
 readme = "README.md"
-repository.workspace = true
-homepage = "https://github.com/borsaorg/borsa"
 documentation = "https://docs.rs/borsa-core"
 keywords = ["finance", "traits", "time-series", "financial-data", "api"]
 categories = ["api-bindings", "finance", "data-structures"]

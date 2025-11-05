@@ -1,12 +1,13 @@
 [package]
 name = "borsa-middleware"
-version = "0.3.0"
-edition = "2024"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Middleware wrappers for Borsa connectors (e.g., quota-aware wrappers)"
 readme = "README.md"
-repository = "https://github.com/borsaorg/borsa"
-homepage = "https://github.com/borsaorg/borsa"
 documentation = "https://docs.rs/borsa-middleware"
 keywords = ["middleware", "borsa", "finance", "stocks", "trading"]
 categories = ["api-bindings", "finance", "web-programming::http-client"]
@@ -22,7 +23,7 @@ async-trait = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 serde_json = { workspace = true }
 borsa-macros = { workspace = true }
-moka = { version = "0.12", default-features = false, features = ["future"] }
+moka = { workspace = true, features = ["future"] }
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]

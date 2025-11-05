@@ -1,13 +1,13 @@
 [package]
 name = "borsa"
 version.workspace = true
-edition = "2024"
+edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "High-level, pluggable market data API for Rust with multi-provider support."
 readme = "README.md"
-repository.workspace = true
-homepage = "https://github.com/borsaorg/borsa"
 documentation = "https://docs.rs/borsa"
 keywords = ["finance", "stocks", "trading", "api", "market-data"]
 categories = ["api-bindings", "finance", "web-programming::http-client"]

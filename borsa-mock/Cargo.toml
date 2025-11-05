@@ -1,10 +1,11 @@
 [package]
 name = "borsa-mock"
 version.workspace = true
-edition = "2024"
+edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
 description = "Mock Borsa connector with deterministic fixture data for tests and examples"
 readme = "README.md"
 keywords = ["finance", "market-data", "mock", "testing", "borsa"]

@@ -1,11 +1,14 @@
 [package]
 name = "borsa-macros"
-version = "0.3.0"
-edition = "2024"
-license = "MIT"
-repository = "https://github.com/borsaorg/borsa"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Proc macros for the Borsa ecosystem: middleware delegation and more"
 readme = "README.md"
+documentation = "https://docs.rs/borsa-macros"
 keywords = ["borsa", "finance", "stocks", "macros", "proc-macro"]
 categories = ["development-tools::procedural-macro-helpers", "api-bindings", "finance"]
 
@@ -13,8 +16,8 @@ categories = ["development-tools::procedural-macro-helpers", "api-bindings", "fi
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0"
-quote = "1.0"
-syn = { version = "2.0", features = ["full", "parsing"] }
-proc-macro-crate = "3.4.0"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true , features = ["full", "parsing"] }
+proc-macro-crate = { workspace = true }
 
