@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use borsa_core::connector::{
     AnalystPriceTargetProvider, BalanceSheetProvider, BorsaConnector, CalendarProvider,
     CashflowProvider, EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
+    InsiderRosterHoldersProvider, InsiderTransactionsProvider, InstitutionalHoldersProvider,
+    MajorHoldersProvider, MutualFundHoldersProvider, NetSharePurchaseActivityProvider,
     NewsProvider, OptionChainProvider, OptionsExpirationsProvider, ProfileProvider, QuoteProvider,
     RecommendationsProvider, RecommendationsSummaryProvider, SearchProvider,
     UpgradesDowngradesProvider,
@@ -126,6 +128,26 @@ impl BorsaConnector for MockConnector {
     }
     fn as_news_provider(&self) -> Option<&dyn NewsProvider> {
         Some(self as &dyn NewsProvider)
+    }
+    fn as_major_holders_provider(&self) -> Option<&dyn MajorHoldersProvider> {
+        Some(self as &dyn MajorHoldersProvider)
+    }
+    fn as_institutional_holders_provider(&self) -> Option<&dyn InstitutionalHoldersProvider> {
+        Some(self as &dyn InstitutionalHoldersProvider)
+    }
+    fn as_mutual_fund_holders_provider(&self) -> Option<&dyn MutualFundHoldersProvider> {
+        Some(self as &dyn MutualFundHoldersProvider)
+    }
+    fn as_insider_transactions_provider(&self) -> Option<&dyn InsiderTransactionsProvider> {
+        Some(self as &dyn InsiderTransactionsProvider)
+    }
+    fn as_insider_roster_holders_provider(&self) -> Option<&dyn InsiderRosterHoldersProvider> {
+        Some(self as &dyn InsiderRosterHoldersProvider)
+    }
+    fn as_net_share_purchase_activity_provider(
+        &self,
+    ) -> Option<&dyn NetSharePurchaseActivityProvider> {
+        Some(self as &dyn NetSharePurchaseActivityProvider)
     }
     // Stream intentionally unsupported for examples
 }
@@ -305,5 +327,77 @@ impl NewsProvider for MockConnector {
     ) -> Result<Vec<types::NewsArticle>, BorsaError> {
         let s = instrument.symbol_str();
         Ok(fixtures::news::by_symbol(s, req))
+    }
+}
+
+#[async_trait]
+impl MajorHoldersProvider for MockConnector {
+    async fn major_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
+        let s = instrument.symbol_str();
+        Self::maybe_fail_or_timeout(s, "major_holders").await?;
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl InstitutionalHoldersProvider for MockConnector {
+    async fn institutional_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
+        let s = instrument.symbol_str();
+        Self::maybe_fail_or_timeout(s, "institutional_holders").await?;
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl MutualFundHoldersProvider for MockConnector {
+    async fn mutual_fund_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
+        let s = instrument.symbol_str();
+        Self::maybe_fail_or_timeout(s, "mutual_fund_holders").await?;
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl InsiderTransactionsProvider for MockConnector {
+    async fn insider_transactions(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
+        let s = instrument.symbol_str();
+        Self::maybe_fail_or_timeout(s, "insider_transactions").await?;
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl InsiderRosterHoldersProvider for MockConnector {
+    async fn insider_roster_holders(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
+        let s = instrument.symbol_str();
+        Self::maybe_fail_or_timeout(s, "insider_roster_holders").await?;
+        Ok(Vec::new())
+    }
+}
+
+#[async_trait]
+impl NetSharePurchaseActivityProvider for MockConnector {
+    async fn net_share_purchase_activity(
+        &self,
+        instrument: &Instrument,
+    ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
+        let s = instrument.symbol_str();
+        Self::maybe_fail_or_timeout(s, "net_share_purchase_activity").await?;
+        Ok(None)
     }
 }
