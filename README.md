@@ -198,6 +198,7 @@ Notes:
 
 - Build everything: `cargo build --workspace`
 - Run tests: `just test`
+- Note: `just test` uses `cargo-nextest`. Install it with `cargo install cargo-nextest --locked`.
 - Lint: `just lint`
 - Format: `just fmt`
 
