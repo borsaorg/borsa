@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let yf = borsa_yfinance::YfConnector::rate_limited().build();
+    let yf = borsa_yfinance::YfConnector::rate_limited().build()?;
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
     let q = yf.quote(&aapl).await?;
     if let Some(price) = &q.price {
@@ -60,15 +60,18 @@ RUST_LOG=info,borsa=trace,borsa_yfinance=trace \
 ```
 
 ```rust
-use borsa::{Borsa};
+use borsa::Borsa;
 use borsa_yfinance::YfConnector;
-use borsa_core::{connector::QuoteProvider, AssetKind, Currency, Instrument, Money, Symbol};
-use std::sync::Arc;
+use borsa_core::{AssetKind, Instrument};
 
-let yf = borsa_yfinance::YfConnector::rate_limited().build();
-let borsa = Borsa::builder().with_connector(yf).build()?;
-let inst = Instrument::from_symbol("MSFT", AssetKind::Equity)?;
-let quote = borsa.quote(&inst).await?;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let yf = borsa_yfinance::YfConnector::rate_limited().build()?;
+    let borsa = Borsa::builder().with_connector(yf).build()?;
+    let inst = Instrument::from_symbol("MSFT", AssetKind::Equity)?;
+    let quote = borsa.quote(&inst).await?;
+    Ok(())
+}
 ```
 
 ## Designing a connector: the YF blueprint
@@ -83,7 +86,7 @@ pub trait YfHistory { async fn fetch_full(&self, symbol: &str, req: yf::core::se
 // ... YfSearch, YfProfile, YfFundamentals, YfOptions, YfAnalysis, YfHolders, YfNews
 ```
 
-2. Provide an adapter that holds the client once and implements all adapters
+1. Provide an adapter that holds the client once and implements all adapters
 
 ```rust
 #[derive(Clone)]
@@ -91,15 +94,15 @@ pub struct RealAdapter { client: yf::YfClient }
 impl RealAdapter { pub fn new_default() -> Self { Self { client: yf::YfClient::default() } } }
 ```
 
-3. Expose test adapters via closures so unit tests don’t need network access
+1. Expose test adapters via closures so unit tests don’t need network access
 
 ```rust
 impl dyn YfQuotes { pub fn from_fn<F>(f: F) -> Arc<dyn YfQuotes> where F: Send + Sync + 'static + Fn(Vec<String>) -> Result<Vec<yf::core::Quote>, BorsaError> { /* ... */ } }
 ```
 
-4. Return the native paft types (`Symbol`, `Money`, domain enums) directly from adapters.
+1. Return the native paft types (`Symbol`, `Money`, domain enums) directly from adapters.
 
-5. Delegate capability traits and advertise them via `BorsaConnector::as_*_provider`.
+1. Delegate capability traits and advertise them via `BorsaConnector::as_*_provider`.
 
 ```rust
 #[async_trait]
@@ -137,7 +140,7 @@ The orchestrator may resample as needed (e.g., auto-subdaily->daily, weekly).
 
 ## Error mapping
 
-Errors from `yfinance-rs` are converted to `BorsaError::connector("borsa-yfinance", message)` to provide consistent, debuggable failures in multi-provider flows. Missing symbols surface as `BorsaError::NotFound{ .. }` where relevant via router logic.
+Errors from `yfinance-rs` are converted to `BorsaError::connector("borsa-yfinance", BorsaError)` to provide consistent, debuggable failures in multi-provider flows. Missing symbols surface as `BorsaError::NotFound{ .. }` where relevant via router logic.
 
 ## Testing strategy
 
@@ -209,13 +212,16 @@ async fn quote_smoke_test() {
     });
 
     // 3) Build the connector from the adapter
-    let yf = YfConnector::from_adapter(QuotesOnlyAdapter { quotes });
+    let yf = YfConnector::from_adapter(&QuotesOnlyAdapter { quotes });
 
     // 4) Exercise the API
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap();
     let q = yf.quote(&aapl).await.unwrap();
     assert_eq!(q.symbol.as_str(), "AAPL");
-    assert_eq!(q.price.unwrap().format(), "190.0 USD");
+    assert_eq!(
+        q.price.as_ref().map(|m| m.amount().to_string()).as_deref(),
+        Some("190.0")
+    );
 }
 ```
 
@@ -225,7 +231,7 @@ async fn quote_smoke_test() {
 use std::sync::Arc;
 use borsa_yfinance::YfConnector;
 use borsa_yfinance::adapter::{CloneArcAdapters, YfSearch};
-use borsa_core::{AssetKind, SearchRequest, SearchResponse, SearchResult, Symbol};
+use borsa_core::{SearchRequest, connector::SearchProvider};
 
 struct SearchOnlyAdapter { search: Arc<dyn YfSearch> }
 impl CloneArcAdapters for SearchOnlyAdapter {
@@ -236,26 +242,18 @@ impl CloneArcAdapters for SearchOnlyAdapter {
 async fn search_returns_symbols() {
     let search = <dyn YfSearch>::from_fn(|query| {
         assert_eq!(query, "Apple");
-        Ok(SearchResponse {
-            results: vec![
-                SearchResult {
-                    symbol: Symbol::new("AAPL").unwrap(),
-                    name: Some("Apple Inc.".into()),
-                    exchange: None,
-                    kind: AssetKind::Equity,
-                },
-                SearchResult {
-                    symbol: Symbol::new("APPL34").unwrap(),
-                    name: Some("Apple BDR".into()),
-                    exchange: None,
-                    kind: AssetKind::Equity,
-                },
-            ],
-        })
+        Ok(vec![
+            "AAPL".to_string(),
+            "APPL34".to_string(),
+        ])
     });
 
-    let yf = YfConnector::from_adapter(SearchOnlyAdapter { search });
-    let res = yf.search(SearchRequest::new("Apple").with_limit(2)).await.unwrap();
+    let yf = YfConnector::from_adapter(&SearchOnlyAdapter { search });
+    let req = SearchRequest::builder("Apple")
+        .limit(2)
+        .build()
+        .unwrap();
+    let res = yf.search(req).await.unwrap();
     assert_eq!(res.results.len(), 2);
     assert_eq!(res.results[0].symbol.as_str(), "AAPL");
 }
@@ -277,23 +275,30 @@ impl CloneArcAdapters for QuotesOnlyAdapter {
 
 #[tokio::test]
 async fn router_uses_injected_yf() {
-    let quotes = <dyn YfQuotes>::from_fn(|symbols| Ok(vec![yfinance_rs::core::Quote {
-        symbol: symbols[0].clone(),
-        shortname: None,
-        regular_market_price: Some(123.45),
-        regular_market_previous_close: None,
-        currency: None,
-        exchange: None,
-        market_state: None,
-    }]))
-    ;
+    let quotes = <dyn YfQuotes>::from_fn(|symbols| {
+        Ok(vec![yfinance_rs::core::Quote {
+            symbol: borsa_core::Symbol::new(&symbols[0]).unwrap(),
+            shortname: None,
+            price: Some(
+                borsa_core::Money::from_canonical_str(
+                    "123.45",
+                    borsa_core::Currency::Iso(borsa_core::IsoCurrency::USD),
+                )
+                .unwrap(),
+            ),
+            previous_close: None,
+            exchange: None,
+            market_state: None,
+            day_volume: None,
+        }])
+    });
 
-    let yf = Arc::new(YfConnector::from_adapter(QuotesOnlyAdapter { quotes }));
-    let borsa = Borsa::builder().with_connector(yf).build()?;
+    let yf = Arc::new(YfConnector::from_adapter(&QuotesOnlyAdapter { quotes }));
+    let borsa = Borsa::builder().with_connector(yf).build().unwrap();
 
-    let inst = Instrument::new("MSFT", AssetKind::Equity);
+    let inst = Instrument::from_symbol("MSFT", AssetKind::Equity).unwrap();
     let q = borsa.quote(&inst).await.unwrap();
-    assert_eq!(q.symbol, "MSFT");
+    assert_eq!(q.symbol.as_str(), "MSFT");
 }
 ```
 
