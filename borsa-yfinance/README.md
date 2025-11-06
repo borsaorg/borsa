@@ -9,7 +9,7 @@ Yahoo Finance connector for the borsa ecosystem. This crate is both a ready-to-u
 
 ## Overview
 
-`borsa-yfinance` implements `borsa-core::BorsaConnector` using `yfinance-rs` under the hood. It covers a wide set of capabilities: quotes, history, search, profile, fundamentals, options, analysis, holders, sustainability, and news, and can be used as a reference when building a connector.
+`borsa-yfinance` implements `borsa-core::BorsaConnector` using `yfinance-rs` under the hood. It covers a wide set of capabilities: quotes, history, search, profile, fundamentals, options, analysis, holders, and news, and can be used as a reference when building a connector.
 
 Use it directly, or follow its patterns to build your own connector.
 
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Observability
 
-Enable the `tracing` feature to emit spans for all public provider endpoints (quotes, history, search, profile, fundamentals, options, analysis, holders, ESG, news, streaming):
+Enable the `tracing` feature to emit spans for all public provider endpoints (quotes, history, search, profile, fundamentals, options, analysis, holders, news, streaming):
 
 ```toml
 [dependencies]
@@ -80,7 +80,7 @@ let quote = borsa.quote(&inst).await?;
 pub trait YfQuotes { async fn fetch(&self, symbols: &[String]) -> Result<Vec<yf::core::Quote>, BorsaError>; }
 #[async_trait]
 pub trait YfHistory { async fn fetch_full(&self, symbol: &str, req: yf::core::services::HistoryRequest) -> Result<yf::HistoryResponse, BorsaError>; }
-// ... YfSearch, YfProfile, YfFundamentals, YfOptions, YfAnalysis, YfHolders, YfEsg, YfNews
+// ... YfSearch, YfProfile, YfFundamentals, YfOptions, YfAnalysis, YfHolders, YfNews
 ```
 
 2. Provide an adapter that holds the client once and implements all adapters
@@ -125,8 +125,7 @@ This connector advertises and implements the following capabilities:
 
 - Quotes, History, Search, Profile
 - Fundamentals (earnings, statements), Options
-- Analysis (recommendations, price targets), Holders
-- ESG (sustainability scores), News
+- Analysis (recommendations, price targets), Holders, News
 
 ## History intervals
 
