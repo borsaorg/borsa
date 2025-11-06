@@ -127,6 +127,18 @@ let daily_candles = resample_to_daily(candles)?;
 
 ## Architecture
 
+### Core Types and Re-exports
+
+`borsa-types` provides the canonical data model, error types, and configuration/routing primitives used across the borsa ecosystem. `borsa-core` re-exports these types (alongside domain types from `paft`) so most applications can import everything from `borsa-core` alone:
+
+```rust
+use borsa_core::{
+    AssetKind, Instrument, BorsaError, HistoryRequest, Quote, Capability, RoutingPolicy,
+};
+```
+
+If you only need the pure data and configuration types without the connector and middleware utilities, you can depend on `borsa-types` directly.
+
 ### Connector Trait and Capabilities
 
 `BorsaConnector` is a capability hub: providers implement granular role traits and advertise them via `as_*_provider` accessors on the connector. This keeps the core stable and enables mix-and-match features. Use `supports_kind(&AssetKind)` to declare which asset classes the connector can serve.
