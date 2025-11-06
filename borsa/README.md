@@ -93,6 +93,10 @@ Enable the `dataframe` feature to use `.to_dataframe()` on returned types. See `
 - **`borsa`**: High-level client library (this crate)
 - **`borsa-core`**: Core traits and types for building connectors
 - **`borsa-yfinance`**: Yahoo Finance connector
+- **`borsa-mock`**: Mock connector with deterministic fixtures for tests/examples
+- **`borsa-types`**: Shared domain types (errors, reports, configuration, attribution)
+- **`borsa-middleware`**: Reusable middleware for connectors (quota-aware, cache, blacklist)
+- **`borsa-macros`**: Procedural macros used by middleware/connectors
 
 ### Building Custom Connectors
 

@@ -16,6 +16,8 @@ High-level, pluggable market data API for Rust. This monorepo contains the share
 - **`borsa-core`**: Connector traits, time-series utilities, and re-exports from `paft` and `borsa-types`
 - **`borsa`**: High-level router that merges/prioritizes multiple connectors with fallback support
 - **`borsa-mock`**: Mock connector with deterministic fixture data for testing and examples
+- **`borsa-middleware`**: Reusable middleware for connectors (quota-aware, cache, blacklist) and a small builder
+- **`borsa-macros`**: Procedural macros used by middleware/connectors (e.g., `delegate_connector`)
 
 ### Official Connectors (Tier 1)
 

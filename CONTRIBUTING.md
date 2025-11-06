@@ -19,6 +19,9 @@ Please review and follow our [Code of Conduct](https://github.com/borsaorg/borsa
 - `borsa-core`: core traits and utilities; re-exports types from `borsa-types`
 - `borsa`: the high-level router/orchestrator
 - `borsa-yfinance`: Yahoo Finance connector
+- `borsa-mock`: mock connector with deterministic fixtures for tests/examples
+- `borsa-middleware`: reusable middleware (quota-aware, cache, blacklist) and small builder
+- `borsa-macros`: procedural macros used by middleware/connectors
 - `examples/`: runnable example programs
 
 ## What to work on
