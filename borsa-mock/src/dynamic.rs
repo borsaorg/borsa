@@ -189,6 +189,24 @@ impl DynamicMockConnector {
         let me = Arc::new(Self { name, state });
         (me as Arc<dyn BorsaConnector>, controller)
     }
+
+    /// Create a new dynamic mock connector with an initial stream behavior preinstalled.
+    #[must_use]
+    pub fn new_with_controller_and_behavior(
+        name: &'static str,
+        behavior: StreamBehavior,
+    ) -> (Arc<dyn BorsaConnector>, DynamicMockController) {
+        let mut initial = InternalState::default();
+        initial
+            .stream_controllers
+            .insert(name, StreamController::new(behavior));
+        let state = Arc::new(Mutex::new(initial));
+        let controller = DynamicMockController {
+            state: Arc::clone(&state),
+        };
+        let me = Arc::new(Self { name, state });
+        (me as Arc<dyn BorsaConnector>, controller)
+    }
 }
 
 #[async_trait]
