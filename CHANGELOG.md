@@ -57,7 +57,7 @@ This release focuses heavily on production reliability and developer experience.
 
 ### Dependencies
 
-- Updated `paft` to 0.7.2
+- Updated `paft` to 0.7.1
 - Updated `yfinance-rs` to 0.7.2
 - Added `sync` feature to `tokio` dependency
 
@@ -71,7 +71,6 @@ This release focuses heavily on production reliability and developer experience.
 ### Removed
 
 - **ESG Provider**: Disabled on borsa-yfinance due to missing Yahoo Finance API endpoint
-
 
 ## [0.2.0] - 2025-10-21
 
