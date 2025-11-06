@@ -48,6 +48,7 @@ struct HistoryKey {
     inst: InstrumentKey,
     interval: IntervalKey,
     range: RangeKey,
+    period: PeriodKey,
     flags: u8,
 }
 
@@ -75,6 +76,7 @@ impl HistoryKey {
             inst: InstrumentKey::from(inst),
             interval: IntervalKey(req.interval()),
             range: RangeKey(req.range()),
+            period: PeriodKey(req.period().map(|(s, e)| (s.timestamp(), e.timestamp()))),
             flags,
         }
     }
@@ -154,6 +156,15 @@ impl std::hash::Hash for RangeKey {
                 std::mem::discriminant(r).hash(state);
             }
         }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct PeriodKey(Option<(i64, i64)>);
+
+impl std::fmt::Debug for PeriodKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PeriodKey(..)")
     }
 }
 
