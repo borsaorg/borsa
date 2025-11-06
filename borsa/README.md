@@ -32,6 +32,32 @@ borsa-yfinance = "0.3.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
+## Quickstart
+
+```rust
+use std::sync::Arc;
+use borsa::Borsa;
+use borsa_core::{AssetKind, Instrument};
+use borsa_yfinance::YfConnector;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let yf = Arc::new(YfConnector::new_default());
+    let borsa = Borsa::builder().with_connector(yf).build()?;
+
+    let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
+    let q = borsa.quote(&aapl).await?;
+    if let Some(price) = &q.price {
+        println!(
+            "{} last price: {}",
+            q.symbol.as_str(),
+            price.format()
+        );
+    }
+    Ok(())
+}
+```
+
 ## Usage
 
 - Simple quote: see the runnable example `borsa/examples/01_simple_quote.rs`.
@@ -50,7 +76,7 @@ See `borsa/examples/24_quota_middleware.rs` for a runnable demonstration of `Quo
 
 ## Observability (optional)
 
-See `borsa/examples/00_tracing.rs` for a runnable tracing setup. Enable the `tracing` feature on `borsa` when needed.
+See workspace observability guidance in the root README: https://github.com/borsaorg/borsa/blob/main/README.md#observability-tracing
 
 ### Connectors
 
@@ -88,15 +114,7 @@ Enable the `dataframe` feature to use `.to_dataframe()` on returned types. See `
 
 ## Architecture
 
-### The Borsa Ecosystem
-
-- **`borsa`**: High-level client library (this crate)
-- **`borsa-core`**: Core traits and types for building connectors
-- **`borsa-yfinance`**: Yahoo Finance connector
-- **`borsa-mock`**: Mock connector with deterministic fixtures for tests/examples
-- **`borsa-types`**: Shared domain types (errors, reports, configuration, attribution)
-- **`borsa-middleware`**: Reusable middleware for connectors (quota-aware, cache, blacklist)
-- **`borsa-macros`**: Procedural macros used by middleware/connectors
+See the workspace layout and ecosystem overview in the root README: https://github.com/borsaorg/borsa/blob/main/README.md#workspace-layout
 
 ### Building Custom Connectors
 
@@ -110,25 +128,7 @@ See the latest runnable examples in `borsa/examples/`.
 
 We welcome contributions! Please see our [Contributing Guide](https://github.com/borsaorg/borsa/blob/main/CONTRIBUTING.md) and our [Code of Conduct](https://github.com/borsaorg/borsa/blob/main/CODE_OF_CONDUCT.md).
 
-### Building from Source
-
-```bash
-git clone https://github.com/borsaorg/borsa.git
-cd borsa
-cargo build --workspace
-```
-
-### Running Tests
-
-```bash
-cargo test --workspace
-```
-
-### Running Examples
-
-```bash
-cargo run -p borsa --example 01_simple_quote
-```
+For building, testing, and examples, see the root README: https://github.com/borsaorg/borsa/blob/main/README.md
 
 ## License
 

@@ -71,48 +71,11 @@ borsa-yfinance = "0.3.0"
 
 ## Quickstart
 
-```rust
-use std::sync::Arc;
-use borsa::Borsa;
-use borsa_core::{AssetKind, Instrument};
-use borsa_yfinance::YfConnector;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let yf = Arc::new(YfConnector::new_default());
-    let borsa = Borsa::builder().with_connector(yf).build()?;
-
-    let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
-    let q = borsa.quote(&aapl).await?;
-    if let Some(price) = &q.price {
-        println!(
-            "{} last price: {}",
-            q.symbol.as_str(),
-            price.format()
-        );
-    }
-    Ok(())
-}
-```
+See the facade crate's Quickstart: [borsa/README.md#quickstart](https://github.com/borsaorg/borsa/blob/main/borsa/README.md#quickstart).
 
 ## DataFrames
 
-`borsa` builds on [`paft`](https://github.com/paft-rs/paft). Enabling the `dataframe` feature on `borsa` activates paft's Polars integration, allowing you to call `.to_dataframe()` on returned types.
-
-To enable it:
-
-```toml
-[dependencies]
-borsa = { version = "0.3.0", features = ["dataframe"] }
-```
-
-Usage:
-
-```rust
-use borsa_core::ToDataFrame; // same as paft::dataframe::ToDataFrame; 
-let quote = borsa.quote(&aapl).await?;
-let df = quote.to_dataframe()?; // polars::DataFrame
-```
+For DataFrames and paft integration details, see: [borsa/README.md#dataframes-paft-integration](https://github.com/borsaorg/borsa/blob/main/borsa/README.md#dataframes-paft-integration).
 
 ## Router configuration highlights
 
@@ -135,19 +98,24 @@ let borsa = Borsa::builder()
 
 - Composable provider routing (symbol/kind/exchange) and strict rules:
 
+For illustration, this uses `borsa-yfinance` and `borsa-mock` (add both as dependencies).
+
 ```rust
 use std::sync::Arc;
 use borsa_core::{AssetKind, BorsaConnector, Exchange, RoutingPolicyBuilder};
+use borsa_yfinance::YfConnector;
+use borsa_mock::MockConnector;
+
 let yf = Arc::new(YfConnector::new_default());
-let av = Arc::new(AvConnector::new_with_key("..."));
+let mock = Arc::new(MockConnector::default());
 
 let routing = RoutingPolicyBuilder::new()
     // Kind-level default ordering
-    .providers_for_kind(AssetKind::Equity, &[yf.key(), av.key()])
+    .providers_for_kind(AssetKind::Equity, &[yf.key(), mock.key()])
     // Symbol override
-    .providers_for_symbol("AAPL", &[av.key(), yf.key()])
+    .providers_for_symbol("AAPL", &[mock.key(), yf.key()])
     // Exchange override (e.g., prefer Yahoo for NASDAQ)
-    .providers_for_exchange(Exchange::try_from_str("NASDAQ").unwrap(), &[yf.key(), av.key()])
+    .providers_for_exchange(Exchange::try_from_str("NASDAQ").unwrap(), &[yf.key(), mock.key()])
     // Strict rule (no fallback) for Crypto: only Yahoo will be attempted
     .providers_rule(
         borsa_core::Selector { symbol: None, kind: Some(AssetKind::Crypto), exchange: None },
@@ -158,7 +126,7 @@ let routing = RoutingPolicyBuilder::new()
 
 let borsa = Borsa::builder()
     .with_connector(yf.clone())
-    .with_connector(av.clone())
+    .with_connector(mock.clone())
     .routing_policy(routing)
     .build()?;
 ```
