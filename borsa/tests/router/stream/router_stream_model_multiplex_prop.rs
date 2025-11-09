@@ -136,7 +136,9 @@ async fn sync_assignments(
         let entry = assignments.entry(idx_u8).or_default();
         for req in &requests[start..] {
             for inst in req {
-                if let Some(sym_idx) = sym_idx_from_symbol(inst.symbol()) {
+                if let borsa_core::IdentifierScheme::Security(sec) = inst.id()
+                    && let Some(sym_idx) = sym_idx_from_symbol(&sec.symbol)
+                {
                     entry.insert(sym_idx);
                 }
             }

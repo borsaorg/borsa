@@ -37,10 +37,11 @@ impl BorsaConnector for NotFoundProfileConnector {
 impl ProfileProvider for NotFoundProfileConnector {
     async fn profile(&self, instrument: &Instrument) -> Result<borsa_core::Profile, BorsaError> {
         self.count.fetch_add(1, Ordering::SeqCst);
-        Err(BorsaError::not_found(format!(
-            "profile for {}",
-            instrument.symbol()
-        )))
+        let sym = match instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        };
+        Err(BorsaError::not_found(format!("profile for {sym}")))
     }
 }
 

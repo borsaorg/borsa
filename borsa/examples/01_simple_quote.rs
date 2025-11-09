@@ -16,7 +16,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid instrument symbol");
 
     // 4. Fetch the quote. Borsa handles the routing and fallback.
-    println!("Fetching quote for {}...", instrument.symbol());
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching quote for {sym_str}...");
     let quote = borsa.quote(&instrument).await?;
 
     // 5. Print the result.

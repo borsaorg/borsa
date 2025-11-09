@@ -31,7 +31,7 @@ borsa-middleware = { path = "borsa-middleware", version = "0.3.0" }
 
 # ---- Shared ----
 async-trait = "0.1"
-bitflags = "2"
+bitflags = "2.10.0"
 chrono = "0.4.42"
 chrono-tz = "0.10"
 futures = "0.3"
@@ -44,8 +44,9 @@ tokio = { version = "1" }
 tracing = "0.1"
 
 # ---- Types layer ----
-paft = { version = "0.7.1", features = ["market", "fundamentals", "aggregates"] }
-#paft = { path = "../paft-workspace/paft", features = ["market", "fundamentals", "aggregates"] }
+# paft = { version = "0.7.1", features = ["market", "fundamentals", "aggregates"] }
+# paft = { path = "../paft-workspace/paft", features = ["market", "fundamentals", "aggregates", "prediction"] }
+paft = { git = "https://github.com/paft-rs/paft", rev = "50afe29a76062f55ee995093a2e127ce6b70255b", features = ["market", "fundamentals", "aggregates", "prediction"] }
 
 # ---- Macros ----
 proc-macro-crate = "3.4.0"
@@ -57,8 +58,8 @@ syn = "2.0.107"
 moka = { version = "0.12", default-features = false }
 
 # ---- Connector: yfinance and networking ----
-yfinance-rs = { version = "0.7.2" }
-#yfinance-rs = { path = "../yfinance-rs" }
+# yfinance-rs = { version = "0.7.2" }
+yfinance-rs = { git = "https://github.com/gramistella/yfinance-rs", rev = "0cb2b0b81fa7aee3ddef515f938e7611f9700a8f" }
 reqwest = "0.12.24"
 base64 = "0.22"
 futures-util = "0.3"

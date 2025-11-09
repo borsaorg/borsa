@@ -13,7 +13,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Define the instrument.
     let instrument =
         Instrument::from_symbol("META", AssetKind::Equity).expect("valid instrument symbol");
-    println!("Fetching financial snapshot for {}...", instrument.symbol());
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching financial snapshot for {sym_str}...");
 
     // 3. Fetch quote, profile, and earnings data concurrently.
     let (quote_res, profile_res, earnings_res) = tokio::join!(
@@ -23,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("\n========================================");
-    println!("Financial Snapshot for {}", instrument.symbol());
+    println!("Financial Snapshot for {sym_str}");
     println!("========================================");
 
     // 4. Print the quote information.

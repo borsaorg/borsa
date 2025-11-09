@@ -10,7 +10,7 @@ use paft::money::{Currency, IsoCurrency, Money};
 #[test]
 fn info_report_roundtrip() {
     let report = InfoReport {
-        symbol: Symbol::new("AAPL").unwrap(),
+        instrument: Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap(),
         info: Some(Info {
             symbol: Symbol::new("AAPL").unwrap(),
             name: Some("Apple Inc.".into()),

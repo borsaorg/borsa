@@ -65,6 +65,15 @@ impl MockConnector {
     }
 }
 
+fn require_security_symbol_str(inst: &Instrument) -> Result<&str, BorsaError> {
+    match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => Ok(sec.symbol.as_str()),
+        borsa_core::IdentifierScheme::Prediction(_) => Err(BorsaError::unsupported(
+            "instrument scheme (mock/security-only)",
+        )),
+    }
+}
+
 #[async_trait]
 impl BorsaConnector for MockConnector {
     fn name(&self) -> &'static str {
@@ -155,7 +164,7 @@ impl BorsaConnector for MockConnector {
 #[async_trait]
 impl QuoteProvider for MockConnector {
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "quote").await?;
         fixtures::quotes::by_symbol(s).ok_or_else(|| Self::not_found(&format!("quote for {s}")))
     }
@@ -168,7 +177,7 @@ impl HistoryProvider for MockConnector {
         instrument: &Instrument,
         _req: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "history").await?;
         fixtures::history::by_symbol(s).ok_or_else(|| Self::not_found(&format!("history for {s}")))
     }
@@ -189,7 +198,7 @@ impl SearchProvider for MockConnector {
 #[async_trait]
 impl ProfileProvider for MockConnector {
     async fn profile(&self, instrument: &Instrument) -> Result<Profile, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::profile::by_symbol(s))
     }
 }
@@ -197,7 +206,7 @@ impl ProfileProvider for MockConnector {
 #[async_trait]
 impl EarningsProvider for MockConnector {
     async fn earnings(&self, instrument: &Instrument) -> Result<Earnings, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::fundamentals::earnings_by_symbol(s))
     }
 }
@@ -209,7 +218,7 @@ impl IncomeStatementProvider for MockConnector {
         instrument: &Instrument,
         _q: bool,
     ) -> Result<Vec<IncomeStatementRow>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::fundamentals::income_stmt_by_symbol(s))
     }
 }
@@ -221,7 +230,7 @@ impl BalanceSheetProvider for MockConnector {
         instrument: &Instrument,
         _q: bool,
     ) -> Result<Vec<BalanceSheetRow>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::fundamentals::balance_sheet_by_symbol(s))
     }
 }
@@ -233,7 +242,7 @@ impl CashflowProvider for MockConnector {
         instrument: &Instrument,
         _q: bool,
     ) -> Result<Vec<CashflowRow>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::fundamentals::cashflow_by_symbol(s))
     }
 }
@@ -241,7 +250,7 @@ impl CashflowProvider for MockConnector {
 #[async_trait]
 impl CalendarProvider for MockConnector {
     async fn calendar(&self, instrument: &Instrument) -> Result<Calendar, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::calendar::by_symbol(s))
     }
 }
@@ -249,7 +258,7 @@ impl CalendarProvider for MockConnector {
 #[async_trait]
 impl OptionsExpirationsProvider for MockConnector {
     async fn options_expirations(&self, instrument: &Instrument) -> Result<Vec<i64>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::options::expirations_by_symbol(s))
     }
 }
@@ -261,7 +270,7 @@ impl OptionChainProvider for MockConnector {
         instrument: &Instrument,
         date: Option<i64>,
     ) -> Result<OptionChain, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::options::chain_by_symbol_and_date(s, date))
     }
 }
@@ -272,7 +281,7 @@ impl RecommendationsProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<RecommendationRow>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::analysis::recommendations_by_symbol(s))
     }
 }
@@ -283,7 +292,7 @@ impl RecommendationsSummaryProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<RecommendationSummary, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::analysis::recommendations_summary_by_symbol(s))
     }
 }
@@ -294,7 +303,7 @@ impl AnalystPriceTargetProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<borsa_core::PriceTarget, BorsaError> {
-        let _s = instrument.symbol_str();
+        let _s = require_security_symbol_str(instrument)?;
         Ok(fixtures::analysis::price_target_by_symbol(_s))
     }
 }
@@ -305,7 +314,7 @@ impl UpgradesDowngradesProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<UpgradeDowngradeRow>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::analysis::upgrades_downgrades_by_symbol(s))
     }
 }
@@ -313,7 +322,7 @@ impl UpgradesDowngradesProvider for MockConnector {
 #[async_trait]
 impl EsgProvider for MockConnector {
     async fn sustainability(&self, instrument: &Instrument) -> Result<EsgScores, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::esg::by_symbol(s))
     }
 }
@@ -325,7 +334,7 @@ impl NewsProvider for MockConnector {
         instrument: &Instrument,
         req: NewsRequest,
     ) -> Result<Vec<types::NewsArticle>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Ok(fixtures::news::by_symbol(s, req))
     }
 }
@@ -336,7 +345,7 @@ impl MajorHoldersProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "major_holders").await?;
         Ok(Vec::new())
     }
@@ -348,7 +357,7 @@ impl InstitutionalHoldersProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "institutional_holders").await?;
         Ok(Vec::new())
     }
@@ -360,7 +369,7 @@ impl MutualFundHoldersProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "mutual_fund_holders").await?;
         Ok(Vec::new())
     }
@@ -372,7 +381,7 @@ impl InsiderTransactionsProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "insider_transactions").await?;
         Ok(Vec::new())
     }
@@ -384,7 +393,7 @@ impl InsiderRosterHoldersProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "insider_roster_holders").await?;
         Ok(Vec::new())
     }
@@ -396,7 +405,7 @@ impl NetSharePurchaseActivityProvider for MockConnector {
         &self,
         instrument: &Instrument,
     ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
-        let s = instrument.symbol_str();
+        let s = require_security_symbol_str(instrument)?;
         Self::maybe_fail_or_timeout(s, "net_share_purchase_activity").await?;
         Ok(None)
     }

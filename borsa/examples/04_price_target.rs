@@ -13,16 +13,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let instrument =
         Instrument::from_symbol("NVDA", AssetKind::Equity).expect("valid instrument symbol");
 
-    println!(
-        "Fetching analyst price target for {}...",
-        instrument.symbol()
-    );
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching analyst price target for {sym_str}...");
 
     // 3. Fetch the price target data.
     let target = borsa.analyst_price_target(&instrument).await?;
 
     // 4. Print a formatted summary.
-    println!("\n## Analyst Price Target for {}", instrument.symbol());
+    println!("\n## Analyst Price Target for {sym_str}");
     if let (Some(low), Some(mean), Some(high), Some(count)) = (
         target.low,
         target.mean,

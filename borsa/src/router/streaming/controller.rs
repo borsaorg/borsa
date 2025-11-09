@@ -125,7 +125,12 @@ pub fn spawn_kind_supervisor(
                     let syms: Arc<[Symbol]> = Arc::from(
                         instruments
                             .iter()
-                            .map(|inst| inst.symbol().clone())
+                            .filter_map(|inst| match inst.id() {
+                                borsa_core::IdentifierScheme::Security(sec) => {
+                                    Some(sec.symbol.clone())
+                                }
+                                borsa_core::IdentifierScheme::Prediction(_) => None,
+                            })
                             .collect::<Vec<_>>()
                             .into_boxed_slice(),
                     );
@@ -186,7 +191,12 @@ pub fn spawn_kind_supervisor(
                         let syms: Arc<[Symbol]> = Arc::from(
                             instruments
                                 .iter()
-                                .map(|inst| inst.symbol().clone())
+                                .filter_map(|inst| match inst.id() {
+                                    borsa_core::IdentifierScheme::Security(sec) => {
+                                        Some(sec.symbol.clone())
+                                    }
+                                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                                })
                                 .collect::<Vec<_>>()
                                 .into_boxed_slice(),
                         );

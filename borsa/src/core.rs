@@ -253,6 +253,20 @@ where
         .map_err(|_| BorsaError::request_timeout("request"))
 }
 
+const fn symbol_opt(inst: &Instrument) -> Option<&Symbol> {
+    match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+        borsa_core::IdentifierScheme::Prediction(_) => None,
+    }
+}
+
+fn target_label(inst: &Instrument, what: &str) -> String {
+    match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => format!("{what} for {}", sec.symbol),
+        borsa_core::IdentifierScheme::Prediction(_) => what.to_string(),
+    }
+}
+
 impl Borsa {
     /// Enforce that a quote's exchange matches the instrument's desired exchange when provided.
     ///
@@ -263,15 +277,19 @@ impl Borsa {
         inst: &Instrument,
         q: &borsa_core::Quote,
     ) -> Result<(), BorsaError> {
-        let Some(want) = inst.exchange() else {
+        let want_opt: Option<borsa_core::Exchange> = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => None,
+        };
+        let Some(want) = want_opt else {
             return Ok(());
         };
 
         match q.exchange.as_ref() {
-            Some(have) if have == want => Ok(()),
+            Some(have) if have == &want => Ok(()),
             Some(_) => Err(BorsaError::not_found(format!(
-                "quote for {} (exchange mismatch)",
-                inst.symbol()
+                "{} (exchange mismatch)",
+                target_label(inst, "quote"),
             ))),
             None => Ok(()),
         }
@@ -400,11 +418,11 @@ impl Borsa {
     }
 
     pub(crate) fn ordered(&self, inst: &Instrument) -> Vec<Arc<dyn BorsaConnector>> {
-        let ctx = RoutingContext::new(
-            Some(inst.symbol()),
-            Some(*inst.kind()),
-            inst.exchange().cloned(),
-        );
+        let exch_opt: Option<borsa_core::Exchange> = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => None,
+        };
+        let ctx = RoutingContext::new(symbol_opt(inst), Some(*inst.kind()), exch_opt);
         self.ordered_for_context(&ctx)
     }
 
@@ -428,7 +446,7 @@ impl Borsa {
         tracing::instrument(
             name = "borsa::core::fetch_single",
             skip(self, inst, call, capability_label, not_found_label),
-            fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
+            fields(id = ?inst.id(), capability = %capability_label, not_found = %not_found_label),
         )
     )]
     pub(crate) async fn fetch_single<T, F, Fut>(
@@ -468,7 +486,7 @@ impl Borsa {
         tracing::instrument(
             name = "borsa::core::fetch_single_priority_with_fallback",
             skip(self, inst, call, capability_label, not_found_label),
-            fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
+            fields(id = ?inst.id(), capability = %capability_label, not_found = %not_found_label),
         )
     )]
     async fn fetch_single_priority_with_fallback<T, F, Fut>(
@@ -520,7 +538,7 @@ impl Borsa {
             capability_label,
             attempted_any,
             errors,
-            Some(format!("{} for {}", not_found_label, inst.symbol())),
+            Some(target_label(inst, not_found_label)),
         ));
     }
 
@@ -529,7 +547,7 @@ impl Borsa {
         tracing::instrument(
             name = "borsa::core::fetch_single_latency",
             skip(self, call),
-            fields(symbol = %inst.symbol(), capability = %capability_label, not_found = %not_found_label),
+            fields(id = ?inst.id(), capability = %capability_label, not_found = %not_found_label),
         )
     )]
     async fn fetch_single_latency<T, F, Fut>(
@@ -584,7 +602,7 @@ impl Borsa {
                 capability_label,
                 attempted_any,
                 errors,
-                Some(format!("{} for {}", not_found_label, inst.symbol())),
+                Some(target_label(inst, not_found_label)),
             ));
         }
         Err(BorsaError::unsupported(capability_label.to_string()))

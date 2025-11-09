@@ -20,13 +20,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Define the instrument.
     let instrument =
         Instrument::from_symbol("JPM", AssetKind::Equity).expect("valid instrument symbol");
-    println!("Fetching event calendar for {}...", instrument.symbol());
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching event calendar for {sym_str}...");
 
     // 3. Fetch the calendar data.
     let calendar = borsa.calendar(&instrument).await?;
 
     // 4. Print the results.
-    println!("\n## Event Calendar for {}", instrument.symbol());
+    println!("\n## Event Calendar for {sym_str}");
     if let Some(next_earnings) = calendar.earnings_dates.first() {
         println!(
             "- Next Earnings Date: {}",

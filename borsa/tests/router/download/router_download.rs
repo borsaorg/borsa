@@ -11,7 +11,11 @@ impl borsa_core::connector::HistoryProvider for MultiSymbolHist {
         i: &Instrument,
         r: borsa_core::HistoryRequest,
     ) -> Result<borsa_core::HistoryResponse, borsa_core::BorsaError> {
-        match i.symbol_str() {
+        let sym = match i.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "",
+        };
+        match sym {
             "A" => m_hist("conn", &[1, 2]).history(i, r).await,
             "B" => m_hist("conn", &[10, 20]).history(i, r).await,
             "C" => m_hist("conn", &[100, 200]).history(i, r).await,
@@ -74,7 +78,10 @@ async fn download_builder_fetches_for_multiple_instruments() {
         response
             .entries
             .iter()
-            .find(|entry| entry.instrument.symbol_str() == sym)
+            .find(|entry| match entry.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str() == sym,
+                borsa_core::IdentifierScheme::Prediction(_) => false,
+            })
             .expect("entry for symbol")
     };
 

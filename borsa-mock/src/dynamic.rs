@@ -56,6 +56,9 @@ impl StreamController {
 struct InternalState {
     quote_rules: HashMap<Symbol, MockBehavior<Quote>>,
     history_rules: HashMap<Symbol, MockBehavior<HistoryResponse>>,
+    // Prediction support (variant-aware behavior keyed by OutcomeID)
+    quote_rules_prediction: HashMap<String, MockBehavior<Quote>>,
+    history_rules_prediction: HashMap<String, MockBehavior<HistoryResponse>>,
     stream_requests: HashMap<&'static str, Vec<Vec<Instrument>>>,
     stream_controllers: HashMap<&'static str, StreamController>,
 }
@@ -80,6 +83,26 @@ impl DynamicMockController {
     ) {
         let mut guard = self.state.lock().await;
         guard.history_rules.insert(symbol, behavior);
+    }
+
+    /// Set the behavior for `quote` calls for a specific prediction outcome.
+    pub async fn set_prediction_quote_behavior(
+        &self,
+        outcome: String,
+        behavior: MockBehavior<Quote>,
+    ) {
+        let mut guard = self.state.lock().await;
+        guard.quote_rules_prediction.insert(outcome, behavior);
+    }
+
+    /// Set the behavior for `history` calls for a specific prediction outcome.
+    pub async fn set_prediction_history_behavior(
+        &self,
+        outcome: String,
+        behavior: MockBehavior<HistoryResponse>,
+    ) {
+        let mut guard = self.state.lock().await;
+        guard.history_rules_prediction.insert(outcome, behavior);
     }
 
     /// Set the behavior for a provider's stream session.
@@ -209,6 +232,15 @@ impl DynamicMockConnector {
     }
 }
 
+fn require_security_symbol(inst: &Instrument) -> Result<&Symbol, BorsaError> {
+    match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => Ok(&sec.symbol),
+        borsa_core::IdentifierScheme::Prediction(_) => Err(BorsaError::unsupported(
+            "instrument scheme (mock/security-only)",
+        )),
+    }
+}
+
 #[async_trait]
 impl BorsaConnector for DynamicMockConnector {
     fn name(&self) -> &'static str {
@@ -239,11 +271,18 @@ impl BorsaConnector for DynamicMockConnector {
 #[async_trait]
 impl QuoteProvider for DynamicMockConnector {
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
-        let symbol = instrument.symbol();
         // Acquire behavior snapshot without holding the lock across await points
         let behavior = {
             let guard = self.state.lock().await;
-            guard.quote_rules.get(symbol).cloned()
+            match instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => {
+                    guard.quote_rules.get(&sec.symbol).cloned()
+                }
+                borsa_core::IdentifierScheme::Prediction(pred) => {
+                    let key = pred.outcome_id.as_ref().to_string();
+                    guard.quote_rules_prediction.get(&key).cloned()
+                }
+            }
         };
 
         match behavior {
@@ -265,10 +304,17 @@ impl HistoryProvider for DynamicMockConnector {
         instrument: &Instrument,
         _req: HistoryRequest,
     ) -> Result<HistoryResponse, BorsaError> {
-        let symbol = instrument.symbol();
         let behavior = {
             let guard = self.state.lock().await;
-            guard.history_rules.get(symbol).cloned()
+            match instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => {
+                    guard.history_rules.get(&sec.symbol).cloned()
+                }
+                borsa_core::IdentifierScheme::Prediction(pred) => {
+                    let key = pred.outcome_id.as_ref().to_string();
+                    guard.history_rules_prediction.get(&key).cloned()
+                }
+            }
         };
 
         match behavior {
@@ -300,8 +346,13 @@ impl DynamicMockConnector {
         BorsaError,
     > {
         // Filter set
-        let allow: std::collections::HashSet<Symbol> =
-            instruments.iter().map(|i| i.symbol().clone()).collect();
+        let allow: std::collections::HashSet<Symbol> = instruments
+            .iter()
+            .map(require_security_symbol)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .cloned()
+            .collect();
 
         let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
@@ -375,8 +426,13 @@ impl DynamicMockConnector {
         BorsaError,
     > {
         // Filter set
-        let allow: std::collections::HashSet<Symbol> =
-            instruments.iter().map(|i| i.symbol().clone()).collect();
+        let allow: std::collections::HashSet<Symbol> = instruments
+            .iter()
+            .map(require_security_symbol)
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .cloned()
+            .collect();
 
         let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();

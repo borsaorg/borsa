@@ -10,8 +10,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let borsa = Borsa::builder().with_connector(connector).build()?;
 
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
+    let sym_str = match aapl.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
 
-    println!("Starting stream for {}... (running for ~5s)", aapl.symbol());
+    println!("Starting stream for {sym_str}... (running for ~5s)");
     let (handle, mut rx) = match borsa.stream_quotes(std::slice::from_ref(&aapl)).await {
         Ok(parts) => parts,
         Err(e) => {

@@ -216,7 +216,12 @@ impl Supervisor {
                     let syms: Arc<[Symbol]> = Arc::from(
                         instruments
                             .iter()
-                            .map(|inst| inst.symbol().clone())
+                            .filter_map(|inst| match inst.id() {
+                                borsa_core::IdentifierScheme::Security(sec) => {
+                                    Some(sec.symbol.clone())
+                                }
+                                borsa_core::IdentifierScheme::Prediction(_) => None,
+                            })
                             .collect::<Vec<_>>()
                             .into_boxed_slice(),
                     );
@@ -301,7 +306,13 @@ impl Supervisor {
         inst: &Instrument,
         allow_set: &HashSet<Symbol>,
     ) -> bool {
-        let sym = inst.symbol();
+        let sym_opt = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+            borsa_core::IdentifierScheme::Prediction(_) => None,
+        };
+        let Some(sym) = sym_opt else {
+            return false;
+        };
 
         if !allow_set.contains(sym) || !self.required_symbols.contains(sym) {
             return false;

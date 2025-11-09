@@ -76,8 +76,12 @@ impl Borsa {
         // Group instruments by (kind, exchange) to respect provider rules that depend on exchange.
         let mut by_group: HashMap<(AssetKind, Option<Exchange>), Vec<Instrument>> = HashMap::new();
         for inst in instruments.iter().cloned() {
+            let exch_opt = match inst.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+                borsa_core::IdentifierScheme::Prediction(_) => None,
+            };
             by_group
-                .entry((*inst.kind(), inst.exchange().cloned()))
+                .entry((*inst.kind(), exch_opt))
                 .or_default()
                 .push(inst);
         }
@@ -102,8 +106,22 @@ impl Borsa {
                 continue;
             }
 
+            // Extract symbols from Security ids and reject non-Security instruments
+            let mut list_pairs: Vec<(Instrument, Symbol)> = Vec::with_capacity(list.len());
+            for inst in list {
+                let sym = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+                    borsa_core::IdentifierScheme::Prediction(_) => {
+                        return Err(BorsaError::unsupported(
+                            "instrument scheme (stream/security-only)",
+                        ));
+                    }
+                };
+                list_pairs.push((inst, sym));
+            }
+
             // Strict policy failure precheck: find symbols requested but rejected by a strict rule.
-            let requested: HashSet<Symbol> = list.iter().map(|i| i.symbol().clone()).collect();
+            let requested: HashSet<Symbol> = list_pairs.iter().map(|(_, s)| s.clone()).collect();
             let rejected: Vec<Symbol> = requested.difference(&union_symbols).cloned().collect();
             if !rejected.is_empty() {
                 // Determine if strict rules excluded these symbols (vs capability absence).
@@ -145,8 +163,7 @@ impl Borsa {
             // Decide mode: if any symbol in this group has an explicit provider preference
             // (rank != usize::MAX), route per-symbol; otherwise, use group-level fallback.
             let mut group_has_explicit: bool = false;
-            'outer: for inst in &list {
-                let sym = inst.symbol();
+            'outer: for (_, sym) in &list_pairs {
                 for p in &providers {
                     let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
                     if let Some((rank, _)) = self
@@ -228,10 +245,10 @@ impl Borsa {
                             .into_iter()
                             .filter(|s| group_syms_set.contains(s))
                             .collect();
-                        let assigned = list
+                        let assigned = list_pairs
                             .iter()
-                            .filter(|&inst| filtered_allow.contains(inst.symbol()))
-                            .cloned()
+                            .filter(|(_, sym)| filtered_allow.contains(sym))
+                            .map(|(inst, _)| inst.clone())
                             .collect::<Vec<_>>();
                         provider_instruments.push(assigned);
                         provider_allow.push(filtered_allow);
@@ -269,10 +286,10 @@ impl Borsa {
                     Vec::with_capacity(providers.len());
                 let mut provider_allow: Vec<HashSet<Symbol>> = Vec::with_capacity(providers.len());
                 for allow in &provider_symbols {
-                    let assigned = list
+                    let assigned = list_pairs
                         .iter()
-                        .filter(|&inst| allow.contains(inst.symbol()))
-                        .cloned()
+                        .filter(|(_, sym)| allow.contains(sym))
+                        .map(|(inst, _)| inst.clone())
                         .collect::<Vec<_>>();
                     provider_instruments.push(assigned);
                     provider_allow.push(allow.clone());
@@ -285,10 +302,10 @@ impl Borsa {
 
                 let (init_tx, init_rx) = oneshot::channel();
 
-                let required_symbols: HashSet<Symbol> = list
+                let required_symbols: HashSet<Symbol> = list_pairs
                     .iter()
-                    .filter(|inst| union_symbols.contains(inst.symbol()))
-                    .map(|inst| inst.symbol().clone())
+                    .filter(|(_, sym)| union_symbols.contains(sym))
+                    .map(|(_, sym)| sym.clone())
                     .collect();
 
                 let params = KindSupervisorParams {

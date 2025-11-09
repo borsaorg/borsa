@@ -12,23 +12,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Define the two instruments we want to compare.
     let coke = Instrument::from_symbol("KO", AssetKind::Equity).expect("valid instrument symbol");
     let pepsi = Instrument::from_symbol("PEP", AssetKind::Equity).expect("valid instrument symbol");
-    println!(
-        "Fetching quotes for {} vs {}...",
-        coke.symbol(),
-        pepsi.symbol()
-    );
+
+    let coke_sym = match coke.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    let pepsi_sym = match pepsi.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+
+    println!("Fetching quotes for {coke_sym} vs {pepsi_sym}...");
 
     // 3. Fetch both quotes concurrently.
     let (coke_res, pepsi_res) = tokio::join!(borsa.quote(&coke), borsa.quote(&pepsi));
 
     // 4. Print the results in a comparison table.
     println!("\n## Market Comparison");
-    println!(
-        "{:<15} | {:<15} | {:<15}",
-        "Metric",
-        coke.symbol(),
-        pepsi.symbol()
-    );
+    println!("{:<15} | {:<15} | {:<15}", "Metric", coke_sym, pepsi_sym);
     println!("{:-<16}|{:-<17}|{:-<17}", "", "", "");
 
     let coke_price = coke_res

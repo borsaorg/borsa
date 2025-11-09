@@ -18,22 +18,25 @@ struct MapConnector {
 #[async_trait]
 impl borsa_core::connector::QuoteProvider for MapConnector {
     async fn quote(&self, inst: &Instrument) -> Result<Quote, BorsaError> {
-        if let Some(&p) = self.ok_prices.get(inst.symbol()) {
-            Ok(Quote {
-                symbol: inst.symbol().clone(),
+        let sym_opt = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+            borsa_core::IdentifierScheme::Prediction(_) => None,
+        };
+        if let Some(sym) = sym_opt
+            && let Some(&p) = self.ok_prices.get(sym)
+        {
+            return Ok(Quote {
+                symbol: sym.clone(),
                 shortname: None,
                 price: Some(usd(&p.to_string())),
                 previous_close: None,
                 exchange: None,
                 market_state: None,
                 day_volume: None,
-            })
-        } else {
-            Err(BorsaError::not_found(format!(
-                "quote for {}",
-                inst.symbol()
-            )))
+            });
         }
+        let label = sym_opt.map_or("<non-security>", borsa_core::Symbol::as_str);
+        Err(BorsaError::not_found(format!("quote for {label}")))
     }
 }
 

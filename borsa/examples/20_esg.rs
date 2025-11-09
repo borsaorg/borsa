@@ -10,7 +10,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let borsa = Borsa::builder().with_connector(connector).build()?;
 
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
-    println!("Fetching ESG scores for {}...", inst.symbol());
+    let sym_str = match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching ESG scores for {sym_str}...");
 
     match borsa.sustainability(&inst).await {
         Ok(scores) => {

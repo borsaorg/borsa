@@ -150,14 +150,18 @@ impl QuoteProvider for MockConnector {
 
         if let Some(f) = &self.quote_fn {
             let mut q = (f)(i)?;
-            q.symbol = i.symbol().clone();
+            if let borsa_core::IdentifierScheme::Security(sec) = i.id() {
+                q.symbol = sec.symbol.clone();
+            }
             return Ok(q);
         }
 
         self.quote
             .clone()
             .map(|mut q| {
-                q.symbol = i.symbol().clone();
+                if let borsa_core::IdentifierScheme::Security(sec) = i.id() {
+                    q.symbol = sec.symbol.clone();
+                }
                 q
             })
             .ok_or_else(|| BorsaError::unsupported("quote"))
@@ -325,8 +329,15 @@ impl StreamProvider for MockConnector {
             }
         };
 
-        let allow: std::collections::HashSet<String> =
-            instruments.iter().map(|i| i.symbol().to_string()).collect();
+        let allow: std::collections::HashSet<String> = instruments
+            .iter()
+            .filter_map(|i| match i.id() {
+                borsa_core::IdentifierScheme::Security(sec) => {
+                    Some(sec.symbol.as_str().to_string())
+                }
+                borsa_core::IdentifierScheme::Prediction(_) => None,
+            })
+            .collect();
 
         let (tx, rx) = tokio::sync::mpsc::channel::<borsa_core::QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();

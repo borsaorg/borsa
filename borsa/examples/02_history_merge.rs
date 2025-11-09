@@ -33,7 +33,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let req =
         HistoryRequest::try_from_range(borsa_core::Range::D5, borsa_core::Interval::D1).unwrap();
 
-    println!("Fetching 5-day history for {}...", instrument.symbol());
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching 5-day history for {sym_str}...");
     println!(
         "Priority: [{}, {}]",
         mock_connector.name(),

@@ -127,6 +127,15 @@ impl Borsa {
     /// Returns an error only if task join fails unexpectedly.
     /// Otherwise, succeeds and includes per-source errors in the `errors` field.
     pub async fn info(&self, inst: &Instrument) -> Result<InfoReport, BorsaError> {
+        let sym = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => {
+                return Err(BorsaError::unsupported(
+                    "instrument scheme (info/security-only)",
+                ));
+            }
+        };
+
         let (profile, quote, explicit_isin, mut errors) = self.collect_base(inst).await;
         let (price_target, recommendation_summary, esg_scores, mut extra) =
             self.collect_enrichments(inst).await;
@@ -144,9 +153,9 @@ impl Borsa {
                 .map(|m| m.currency().clone())
         });
         Ok(InfoReport {
-            symbol: inst.symbol().clone(),
+            instrument: inst.clone(),
             info: Some(Info {
-                symbol: inst.symbol().clone(),
+                symbol: sym,
                 name: name_field,
                 isin: isin_val,
                 exchange: quote.as_ref().and_then(|q| q.exchange.clone()),
@@ -220,21 +229,26 @@ impl Borsa {
     /// # Errors
     /// Returns an error if the quote lacks both last and previous price.
     pub async fn fast_info(&self, inst: &Instrument) -> Result<FastInfo, BorsaError> {
+        let sym = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => {
+                return Err(BorsaError::unsupported(
+                    "instrument scheme (info/security-only)",
+                ));
+            }
+        };
         let q = self.quote(inst).await?;
         let last = q
             .price
             .clone()
             .or_else(|| q.previous_close.clone())
             .ok_or_else(|| {
-                BorsaError::Data(format!(
-                    "quote for {} missing last/previous price",
-                    inst.symbol()
-                ))
+                BorsaError::Data(format!("quote for {sym} missing last/previous price"))
             })?;
         let currency = last.currency().clone();
 
         Ok(FastInfo {
-            symbol: inst.symbol().clone(),
+            symbol: sym,
             name: q.shortname,
             exchange: q.exchange,
             market_state: q.market_state,

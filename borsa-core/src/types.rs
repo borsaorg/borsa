@@ -13,7 +13,10 @@ pub use borsa_types::{
 pub use borsa_types::{CacheConfig, QuotaConfig, QuotaConsumptionStrategy, QuotaState};
 pub use borsa_types::{Preference, RoutingContext, RoutingPolicy, RoutingPolicyBuilder, ScopeKey};
 
-pub use paft::domain::{AssetKind, Exchange, Figi, Instrument, Isin, MarketState, Period, Symbol};
+pub use paft::domain::{
+    AssetKind, EventID, Exchange, Figi, IdentifierScheme, Instrument, Isin, MarketState, OutcomeID,
+    Period, PredictionID, SecurityId, Symbol,
+};
 
 pub use paft::money::{
     Currency, ExchangeRate, IsoCurrency, Money, clear_currency_metadata, currency_metadata,

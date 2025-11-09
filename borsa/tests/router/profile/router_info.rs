@@ -245,9 +245,9 @@ struct MinimalInfoConnector;
 #[async_trait::async_trait]
 impl borsa_core::connector::QuoteProvider for MinimalInfoConnector {
     async fn quote(&self, _i: &Instrument) -> Result<Quote, BorsaError> {
-        let inst = crate::helpers::instrument(&X, AssetKind::Equity);
+        let _inst = crate::helpers::instrument(&X, AssetKind::Equity);
         Ok(Quote {
-            symbol: inst.symbol().clone(),
+            symbol: X.clone(),
             shortname: Some("Minimal Inc.".into()),
             price: Some(usd("42.0")),
             previous_close: None,

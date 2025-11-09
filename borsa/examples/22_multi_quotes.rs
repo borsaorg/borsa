@@ -25,7 +25,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !failures.is_empty() {
         eprintln!("Failures:");
         for (inst, err) in failures {
-            eprintln!("- {} -> {}", inst.symbol().as_str(), err);
+            let sym_str = match inst.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+                borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+            };
+            eprintln!("- {sym_str} -> {err}");
         }
     }
 

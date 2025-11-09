@@ -13,7 +13,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
-    println!("Fetching news for {}...", inst.symbol());
+    let sym_str = match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching news for {sym_str}...");
     let articles = borsa.news(&inst, req).await?;
     for a in articles.iter().take(5) {
         println!("{} — {}", a.title, a.publisher.as_deref().unwrap_or(""));

@@ -22,11 +22,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(resp) = report.response {
         for entry in resp.entries {
-            println!(
-                "{}: {} candles",
-                entry.instrument.symbol(),
-                entry.history.candles.len()
-            );
+            let sym_str = match entry.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+                borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+            };
+            println!("{}: {} candles", sym_str, entry.history.candles.len());
         }
     } else {
         eprintln!("no data returned");

@@ -12,7 +12,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Define the instrument.
     let instrument =
         Instrument::from_symbol("MSFT", AssetKind::Equity).expect("valid instrument symbol");
-    println!("Fetching analyst actions for {}...", instrument.symbol());
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching analyst actions for {sym_str}...");
 
     // 3. Fetch recommendations and upgrade/downgrade history concurrently.
     let (recs_res, history_res) = tokio::join!(

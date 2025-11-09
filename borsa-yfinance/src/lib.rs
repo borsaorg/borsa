@@ -163,9 +163,7 @@ impl YfConnector {
         Ok(Self::new_with_client(yf))
     }
 
-    /// For tests/injection (requires the `test-adapters` feature).
-    ///
-    /// Accepts a borrowed adapter to avoid unnecessary moves.
+    /// Build from an adapter (test or real) by cloning it into shared handles.
     #[cfg(feature = "test-adapters")]
     pub fn from_adapter<A: CloneArcAdapters + 'static>(adapter: &A) -> Self {
         Self {
@@ -183,8 +181,8 @@ impl YfConnector {
         }
     }
 
-    #[cfg(not(feature = "test-adapters"))]
     /// Build from a concrete `RealAdapter` by cloning it into shared handles.
+    #[cfg(not(feature = "test-adapters"))]
     pub fn from_adapter(adapter: &RealAdapter) -> Self {
         let shared = Arc::new(adapter.clone());
         Self {
@@ -203,6 +201,17 @@ impl YfConnector {
     }
 }
 
+fn require_security_symbol(
+    inst: &borsa_core::Instrument,
+) -> Result<&borsa_core::Symbol, BorsaError> {
+    match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => Ok(&sec.symbol),
+        borsa_core::IdentifierScheme::Prediction(_) => Err(BorsaError::unsupported(
+            "instrument scheme (yfinance only supports SecurityId)",
+        )),
+    }
+}
+
 #[async_trait]
 impl QuoteProvider for YfConnector {
     #[cfg_attr(
@@ -210,19 +219,20 @@ impl QuoteProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::quote",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn quote(&self, instrument: &Instrument) -> Result<Quote, BorsaError> {
+        let symbol = require_security_symbol(instrument)?;
         let raw = self
             .quotes
-            .fetch(std::slice::from_ref(&instrument.symbol().to_string()))
+            .fetch(std::slice::from_ref(&symbol.as_str().to_string()))
             .await
-            .map_err(|e| Self::normalize_error(e, &format!("quote for {}", instrument.symbol())))?;
+            .map_err(|e| Self::normalize_error(e, &format!("quote for {symbol}")))?;
         let first = raw
             .into_iter()
             .next()
-            .ok_or_else(|| BorsaError::not_found(format!("quote for {}", instrument.symbol())))?;
+            .ok_or_else(|| BorsaError::not_found(format!("quote for {symbol}")))?;
         Ok(first)
     }
 }
@@ -234,7 +244,7 @@ impl HistoryProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::history",
             skip(self, instrument, req),
-            fields(symbol = %instrument.symbol(), interval = ?req.interval(), range = ?req.range(), include_prepost = req.include_prepost(), include_actions = req.include_actions(), auto_adjust = req.auto_adjust(), keepna = req.keepna()),
+            fields(id = ?instrument.id(), interval = ?req.interval(), range = ?req.range(), include_prepost = req.include_prepost(), include_actions = req.include_actions(), auto_adjust = req.auto_adjust(), keepna = req.keepna()),
         )
     )]
     async fn history(
@@ -251,8 +261,8 @@ impl HistoryProvider for YfConnector {
             auto_adjust: req.auto_adjust(),
             keepna: req.keepna(),
         };
-        let symbol = instrument.symbol_str();
-        let raw = self.history.fetch_full(symbol, yf_req).await?;
+        let symbol = require_security_symbol(instrument)?;
+        let raw = self.history.fetch_full(symbol.as_str(), yf_req).await?;
         Ok(raw)
     }
 
@@ -286,12 +296,12 @@ impl ProfileProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::profile",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn profile(&self, instrument: &Instrument) -> Result<borsa_core::Profile, BorsaError> {
-        let symbol = instrument.symbol_str();
-        let raw = self.profile.load(symbol).await?;
+        let symbol = require_security_symbol(instrument)?;
+        let raw = self.profile.load(symbol.as_str()).await?;
         Ok(raw)
     }
 }
@@ -303,12 +313,12 @@ impl IsinProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::isin",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn isin(&self, instrument: &Instrument) -> Result<Option<borsa_core::Isin>, BorsaError> {
-        let symbol = instrument.symbol_str();
-        match self.profile.isin(symbol).await {
+        let symbol = require_security_symbol(instrument)?;
+        match self.profile.isin(symbol.as_str()).await {
             Ok(Some(isin_str)) => match borsa_core::Isin::new(&isin_str) {
                 Ok(isin) => Ok(Some(isin)),
                 Err(e) => Err(BorsaError::Data(format!(
@@ -343,12 +353,12 @@ impl EarningsProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::earnings",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn earnings(&self, instrument: &Instrument) -> Result<borsa_core::Earnings, BorsaError> {
-        let symbol = instrument.symbol_str();
-        let raw = self.fundamentals.earnings(symbol).await?;
+        let symbol = require_security_symbol(instrument)?;
+        let raw = self.fundamentals.earnings(symbol.as_str()).await?;
         Ok(raw)
     }
 }
@@ -360,7 +370,7 @@ impl IncomeStatementProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::income_statement",
             skip(self, instrument, quarterly),
-            fields(symbol = %instrument.symbol(), quarterly = quarterly),
+            fields(id = ?instrument.id(), quarterly = quarterly),
         )
     )]
     async fn income_statement(
@@ -370,7 +380,7 @@ impl IncomeStatementProvider for YfConnector {
     ) -> Result<Vec<borsa_core::IncomeStatementRow>, BorsaError> {
         let raw = self
             .fundamentals
-            .income_statement(instrument.symbol_str(), quarterly)
+            .income_statement(require_security_symbol(instrument)?.as_str(), quarterly)
             .await?;
         Ok(raw)
     }
@@ -383,7 +393,7 @@ impl BalanceSheetProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::balance_sheet",
             skip(self, instrument, quarterly),
-            fields(symbol = %instrument.symbol(), quarterly = quarterly),
+            fields(id = ?instrument.id(), quarterly = quarterly),
         )
     )]
     async fn balance_sheet(
@@ -393,7 +403,7 @@ impl BalanceSheetProvider for YfConnector {
     ) -> Result<Vec<borsa_core::BalanceSheetRow>, BorsaError> {
         let raw = self
             .fundamentals
-            .balance_sheet(instrument.symbol_str(), quarterly)
+            .balance_sheet(require_security_symbol(instrument)?.as_str(), quarterly)
             .await?;
         Ok(raw)
     }
@@ -406,7 +416,7 @@ impl CashflowProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::cashflow",
             skip(self, instrument, quarterly),
-            fields(symbol = %instrument.symbol(), quarterly = quarterly),
+            fields(id = ?instrument.id(), quarterly = quarterly),
         )
     )]
     async fn cashflow(
@@ -416,7 +426,7 @@ impl CashflowProvider for YfConnector {
     ) -> Result<Vec<borsa_core::CashflowRow>, BorsaError> {
         let raw = self
             .fundamentals
-            .cashflow(instrument.symbol_str(), quarterly)
+            .cashflow(require_security_symbol(instrument)?.as_str(), quarterly)
             .await?;
         Ok(raw)
     }
@@ -429,11 +439,14 @@ impl CalendarProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::calendar",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn calendar(&self, instrument: &Instrument) -> Result<borsa_core::Calendar, BorsaError> {
-        let raw = self.fundamentals.calendar(instrument.symbol_str()).await?;
+        let raw = self
+            .fundamentals
+            .calendar(require_security_symbol(instrument)?.as_str())
+            .await?;
         Ok(raw)
     }
 }
@@ -445,11 +458,13 @@ impl OptionsExpirationsProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::options_expirations",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn options_expirations(&self, instrument: &Instrument) -> Result<Vec<i64>, BorsaError> {
-        self.options.expirations(instrument.symbol_str()).await
+        self.options
+            .expirations(require_security_symbol(instrument)?.as_str())
+            .await
     }
 }
 
@@ -460,7 +475,7 @@ impl OptionChainProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::option_chain",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol(), date = ?date),
+            fields(id = ?instrument.id(), date = ?date),
         )
     )]
     async fn option_chain(
@@ -468,7 +483,10 @@ impl OptionChainProvider for YfConnector {
         instrument: &Instrument,
         date: Option<i64>,
     ) -> Result<borsa_core::OptionChain, BorsaError> {
-        let raw = self.options.chain(instrument.symbol_str(), date).await?;
+        let raw = self
+            .options
+            .chain(require_security_symbol(instrument)?.as_str(), date)
+            .await?;
         Ok(raw)
     }
 }
@@ -480,7 +498,7 @@ impl RecommendationsProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::recommendations",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn recommendations(
@@ -489,7 +507,7 @@ impl RecommendationsProvider for YfConnector {
     ) -> Result<Vec<borsa_core::RecommendationRow>, BorsaError> {
         let rows = self
             .analysis
-            .recommendations(instrument.symbol_str())
+            .recommendations(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(rows)
     }
@@ -502,7 +520,7 @@ impl RecommendationsSummaryProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::recommendations_summary",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn recommendations_summary(
@@ -511,7 +529,7 @@ impl RecommendationsSummaryProvider for YfConnector {
     ) -> Result<borsa_core::RecommendationSummary, BorsaError> {
         let s = self
             .analysis
-            .recommendations_summary(instrument.symbol_str())
+            .recommendations_summary(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(s)
     }
@@ -524,7 +542,7 @@ impl UpgradesDowngradesProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::upgrades_downgrades",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn upgrades_downgrades(
@@ -533,7 +551,7 @@ impl UpgradesDowngradesProvider for YfConnector {
     ) -> Result<Vec<borsa_core::UpgradeDowngradeRow>, BorsaError> {
         let v = self
             .analysis
-            .upgrades_downgrades(instrument.symbol_str())
+            .upgrades_downgrades(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(v)
     }
@@ -546,7 +564,7 @@ impl AnalystPriceTargetProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::analyst_price_target",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn analyst_price_target(
@@ -555,7 +573,7 @@ impl AnalystPriceTargetProvider for YfConnector {
     ) -> Result<borsa_core::PriceTarget, BorsaError> {
         let p = self
             .analysis
-            .analyst_price_target(instrument.symbol_str())
+            .analyst_price_target(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(p)
     }
@@ -568,14 +586,17 @@ impl MajorHoldersProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::major_holders",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn major_holders(
         &self,
         instrument: &Instrument,
     ) -> Result<Vec<borsa_core::MajorHolder>, BorsaError> {
-        let rows = self.holders.major_holders(instrument.symbol_str()).await?;
+        let rows = self
+            .holders
+            .major_holders(require_security_symbol(instrument)?.as_str())
+            .await?;
         let mapped = rows.into_iter().collect();
         Ok(mapped)
     }
@@ -588,7 +609,7 @@ impl InstitutionalHoldersProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::institutional_holders",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn institutional_holders(
@@ -597,7 +618,7 @@ impl InstitutionalHoldersProvider for YfConnector {
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
         let rows = self
             .holders
-            .institutional_holders(instrument.symbol_str())
+            .institutional_holders(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(rows)
     }
@@ -610,7 +631,7 @@ impl MutualFundHoldersProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::mutual_fund_holders",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn mutual_fund_holders(
@@ -619,7 +640,7 @@ impl MutualFundHoldersProvider for YfConnector {
     ) -> Result<Vec<borsa_core::InstitutionalHolder>, BorsaError> {
         let rows = self
             .holders
-            .mutual_fund_holders(instrument.symbol_str())
+            .mutual_fund_holders(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(rows)
     }
@@ -632,7 +653,7 @@ impl InsiderTransactionsProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::insider_transactions",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn insider_transactions(
@@ -641,7 +662,7 @@ impl InsiderTransactionsProvider for YfConnector {
     ) -> Result<Vec<borsa_core::InsiderTransaction>, BorsaError> {
         let rows = self
             .holders
-            .insider_transactions(instrument.symbol_str())
+            .insider_transactions(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(rows)
     }
@@ -654,7 +675,7 @@ impl InsiderRosterHoldersProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::insider_roster_holders",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn insider_roster_holders(
@@ -663,7 +684,7 @@ impl InsiderRosterHoldersProvider for YfConnector {
     ) -> Result<Vec<borsa_core::InsiderRosterHolder>, BorsaError> {
         let rows = self
             .holders
-            .insider_roster_holders(instrument.symbol_str())
+            .insider_roster_holders(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(rows)
     }
@@ -676,7 +697,7 @@ impl NetSharePurchaseActivityProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::net_share_purchase_activity",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn net_share_purchase_activity(
@@ -685,7 +706,7 @@ impl NetSharePurchaseActivityProvider for YfConnector {
     ) -> Result<Option<borsa_core::NetSharePurchaseActivity>, BorsaError> {
         let activity = self
             .holders
-            .net_share_purchase_activity(instrument.symbol_str())
+            .net_share_purchase_activity(require_security_symbol(instrument)?.as_str())
             .await?;
         Ok(activity)
     }
@@ -699,14 +720,17 @@ impl EsgProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::sustainability",
             skip(self, instrument),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn sustainability(
         &self,
         instrument: &Instrument,
     ) -> Result<borsa_core::EsgScores, BorsaError> {
-        let scores = self.esg.sustainability(instrument.symbol_str()).await?;
+        let scores = self
+            .esg
+            .sustainability(require_security_symbol(instrument)?.as_str())
+            .await?;
         Ok(scores)
     }
 }
@@ -718,7 +742,7 @@ impl NewsProvider for YfConnector {
         tracing::instrument(
             name = "borsa_yfinance::news",
             skip(self, instrument, req),
-            fields(symbol = %instrument.symbol()),
+            fields(id = ?instrument.id()),
         )
     )]
     async fn news(
@@ -726,7 +750,10 @@ impl NewsProvider for YfConnector {
         instrument: &Instrument,
         req: borsa_core::NewsRequest,
     ) -> Result<Vec<borsa_core::types::NewsArticle>, BorsaError> {
-        let articles = self.news.news(instrument.symbol_str(), req).await?;
+        let articles = self
+            .news
+            .news(require_security_symbol(instrument)?.as_str(), req)
+            .await?;
         Ok(articles)
     }
 }
@@ -751,7 +778,11 @@ impl borsa_core::connector::StreamProvider for YfConnector {
         ),
         BorsaError,
     > {
-        let symbols: Vec<String> = instruments.iter().map(|i| i.symbol().to_string()).collect();
+        let mut symbols: Vec<String> = Vec::with_capacity(instruments.len());
+        for i in instruments {
+            let sym = require_security_symbol(i)?;
+            symbols.push(sym.as_str().to_string());
+        }
         self.stream.start(&symbols).await
     }
 }

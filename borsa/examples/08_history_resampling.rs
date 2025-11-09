@@ -17,10 +17,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Instrument::from_symbol("TSLA", AssetKind::Equity).expect("valid instrument symbol");
     let req = HistoryRequest::try_from_range(Range::Y1, Interval::D1).unwrap();
 
-    println!(
-        "Fetching daily history for {} and resampling to weekly...",
-        instrument.symbol()
-    );
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching daily history for {sym_str} and resampling to weekly...");
 
     // 3. Fetch the history. Borsa will automatically process it.
     let history = borsa.history(&instrument, req).await?;

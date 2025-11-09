@@ -18,6 +18,58 @@ pub struct EligibleStreamProviders {
 type StreamProviderScore = (usize, usize, Arc<dyn BorsaConnector>, HashSet<Symbol>);
 
 impl Borsa {
+    fn check_no_scored_stream_providers(
+        &self,
+        kind: AssetKind,
+        exchange: Option<&Exchange>,
+        instruments: &[Instrument],
+    ) -> Result<EligibleStreamProviders, BorsaError> {
+        // If we have streaming-capable providers for this kind, check whether strict routing
+        // rules filtered out every requested symbol. Otherwise surface the original
+        // Unsupported error.
+        let candidates: Vec<&Arc<dyn BorsaConnector>> = self
+            .connectors
+            .iter()
+            .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
+            .collect();
+
+        if !candidates.is_empty() {
+            let mut strict_rejected: Vec<Symbol> = Vec::new();
+            for inst in instruments {
+                let sym_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ex_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ctx =
+                    RoutingContext::new(sym_opt, Some(kind), ex_opt.or_else(|| exchange.cloned()));
+                let any_allowed = candidates.iter().any(|c| {
+                    self.cfg
+                        .routing_policy
+                        .providers
+                        .provider_rank(&ctx, &c.key())
+                        .is_some()
+                });
+                if !any_allowed && let Some(sym) = sym_opt {
+                    strict_rejected.push(sym.clone());
+                }
+            }
+            if !strict_rejected.is_empty() {
+                strict_rejected.sort();
+                strict_rejected.dedup();
+                return Err(BorsaError::StrictSymbolsRejected {
+                    rejected: strict_rejected,
+                });
+            }
+        }
+
+        Err(BorsaError::unsupported(
+            Capability::StreamQuotes.to_string(),
+        ))
+    }
     pub(crate) fn eligible_stream_providers_for_context(
         &self,
         kind: AssetKind,
@@ -39,18 +91,25 @@ impl Borsa {
             let mut allowed_syms: HashSet<Symbol> = HashSet::new();
             let mut min_rank: usize = usize::MAX;
             for inst in instruments {
-                let ctx = RoutingContext::new(
-                    Some(inst.symbol()),
-                    Some(kind),
-                    inst.exchange().cloned().or_else(|| exchange.cloned()),
-                );
+                let sym_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ex_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ctx =
+                    RoutingContext::new(sym_opt, Some(kind), ex_opt.or_else(|| exchange.cloned()));
                 if let Some((rank, _strict)) = self
                     .cfg
                     .routing_policy
                     .providers
                     .provider_rank(&ctx, &connector.key())
                 {
-                    allowed_syms.insert(inst.symbol().clone());
+                    if let Some(sym) = sym_opt {
+                        allowed_syms.insert(sym.clone());
+                    }
                     if rank < min_rank {
                         min_rank = rank;
                     }
@@ -63,47 +122,7 @@ impl Borsa {
         }
 
         if scored.is_empty() {
-            // If we have streaming-capable providers for this kind, check whether strict routing
-            // rules filtered out every requested symbol. Otherwise surface the original
-            // Unsupported error.
-            let candidates: Vec<&Arc<dyn BorsaConnector>> = self
-                .connectors
-                .iter()
-                .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
-                .collect();
-
-            if !candidates.is_empty() {
-                let mut strict_rejected: Vec<Symbol> = Vec::new();
-                for inst in instruments {
-                    let sym = inst.symbol();
-                    let ctx = RoutingContext::new(
-                        Some(inst.symbol()),
-                        Some(kind),
-                        inst.exchange().cloned().or_else(|| exchange.cloned()),
-                    );
-                    let any_allowed = candidates.iter().any(|c| {
-                        self.cfg
-                            .routing_policy
-                            .providers
-                            .provider_rank(&ctx, &c.key())
-                            .is_some()
-                    });
-                    if !any_allowed {
-                        strict_rejected.push(sym.clone());
-                    }
-                }
-                if !strict_rejected.is_empty() {
-                    strict_rejected.sort();
-                    strict_rejected.dedup();
-                    return Err(BorsaError::StrictSymbolsRejected {
-                        rejected: strict_rejected,
-                    });
-                }
-            }
-
-            return Err(BorsaError::unsupported(
-                Capability::StreamQuotes.to_string(),
-            ));
+            return self.check_no_scored_stream_providers(kind, exchange, instruments);
         }
 
         scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));

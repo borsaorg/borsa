@@ -12,7 +12,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Define the instrument.
     let instrument =
         Instrument::from_symbol("AMD", AssetKind::Equity).expect("valid instrument symbol");
-    println!("Fetching option expirations for {}...", instrument.symbol());
+    let sym_str = match instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching option expirations for {sym_str}...");
 
     // 3. Get the list of available expiration dates (as Unix timestamps).
     let expirations = borsa.options_expirations(&instrument).await?;
@@ -27,11 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // 4. Fetch the full option chain for the nearest expiration date.
         let chain = borsa.option_chain(&instrument, Some(next_expiry)).await?;
 
-        println!(
-            "\n## Option Chain for {} (Expires {})",
-            instrument.symbol(),
-            next_expiry
-        );
+        println!("\n## Option Chain for {sym_str} (Expires {next_expiry})");
         println!("- Found {} call options.", chain.calls.len());
         println!("- Found {} put options.", chain.puts.len());
 
@@ -66,10 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     } else {
-        println!(
-            "No option expiration dates found for {}.",
-            instrument.symbol()
-        );
+        println!("No option expiration dates found for {sym_str}.");
     }
 
     Ok(())

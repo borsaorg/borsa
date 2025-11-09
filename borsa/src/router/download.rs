@@ -6,14 +6,19 @@ use borsa_core::{
 use chrono::DateTime;
 use std::collections::HashSet;
 
-// Validate that all instruments have unique symbols.
-fn validate_unique_symbols(insts: &[Instrument]) -> Result<(), BorsaError> {
-    let mut seen = HashSet::new();
+// Validate that all instruments have unique identity keys (scheme-agnostic).
+fn validate_unique_instruments(insts: &[Instrument]) -> Result<(), BorsaError> {
+    let mut seen: HashSet<String> = HashSet::new();
     for inst in insts {
-        let symbol = inst.symbol().to_string();
-        if !seen.insert(symbol.clone()) {
+        let key = inst.id().unique_key().into_owned();
+        if !seen.insert(key.clone()) {
+            // Preserve symbol-centric message for securities to avoid breaking callers/tests.
+            let label = match inst.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str().to_string(),
+                borsa_core::IdentifierScheme::Prediction(_) => key,
+            };
             return Err(BorsaError::InvalidArg(format!(
-                "duplicate symbol '{symbol}' in instruments list"
+                "duplicate symbol '{label}' in instruments list"
             )));
         }
     }
@@ -53,9 +58,9 @@ impl<'a> DownloadBuilder<'a> {
     /// if you need to append.
     ///
     /// # Errors
-    /// Returns an error if duplicate symbols are detected in the provided instruments.
+    /// Returns an error if duplicate instruments are detected in the provided list.
     pub fn instruments(mut self, insts: &[Instrument]) -> Result<Self, BorsaError> {
-        validate_unique_symbols(insts)?;
+        validate_unique_instruments(insts)?;
 
         self.instruments = insts.to_vec();
         Ok(self)
@@ -72,10 +77,14 @@ impl<'a> DownloadBuilder<'a> {
     pub fn add_instrument(mut self, inst: Instrument) -> Result<Self, BorsaError> {
         let mut combined = self.instruments.clone();
         combined.push(inst);
-        if validate_unique_symbols(&combined).is_err() {
+        if validate_unique_instruments(&combined).is_err() {
+            let last = combined.last().expect("pushed instrument exists");
+            let sym = match last.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str().to_string(),
+                borsa_core::IdentifierScheme::Prediction(_) => last.id().unique_key().into_owned(),
+            };
             return Err(BorsaError::InvalidArg(format!(
-                "duplicate symbol '{}' already exists in instruments list",
-                combined.last().expect("pushed instrument exists").symbol()
+                "duplicate symbol '{sym}' already exists in instruments list"
             )));
         }
 
@@ -133,7 +142,7 @@ impl<'a> DownloadBuilder<'a> {
         }
 
         // Defensive check for duplicates (should not happen if using the builder correctly)
-        validate_unique_symbols(&self.instruments)?;
+        validate_unique_instruments(&self.instruments)?;
 
         // Build a validated HistoryRequest now; convert timestamp seconds safely.
         let req: HistoryRequest = if let Some((start, end)) = self.period {

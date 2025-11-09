@@ -24,7 +24,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2) Choose an instrument
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
-    println!("Fetching fundamentals for {}...", inst.symbol());
+    let sym_str = match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("Fetching fundamentals for {sym_str}...");
 
     // 3) Fetch all fundamentals concurrently
     let (
@@ -48,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     println!("\n========================================");
-    println!("Fundamentals Deep Dive for {}", inst.symbol());
+    println!("Fundamentals Deep Dive for {sym_str}");
     println!("========================================\n");
 
     // Earnings

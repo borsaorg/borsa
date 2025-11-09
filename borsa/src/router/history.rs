@@ -42,10 +42,19 @@ fn choose_effective_interval(
     // Intraday request: prefer the largest supported divisor (coarsest <= requested)
     // to minimize fetched data volume. If no divisor exists, return unsupported so the
     // orchestrator can try another provider or surface the failure.
-    if let Some(req_min) = requested.minutes() {
+    let requested_minutes: Option<i64> = requested.minutes().or_else(|| {
+        requested
+            .seconds()
+            .and_then(|s| (s % 60 == 0).then_some(s / 60))
+    });
+    if let Some(req_min) = requested_minutes {
         let mut best_divisor: Option<(Interval, i64)> = None; // largest m dividing req_min
         for &s in supported {
-            if let Some(m) = s.minutes()
+            let s_min = s.minutes().or_else(|| {
+                s.seconds()
+                    .and_then(|sec| (sec % 60 == 0).then_some(sec / 60))
+            });
+            if let Some(m) = s_min
                 && m <= req_min
                 && req_min % m == 0
                 && best_divisor.as_ref().is_none_or(|&(_, bm)| m > bm)
@@ -319,7 +328,11 @@ impl Borsa {
         let eligible = self.eligible_history_connectors(inst)?;
         let req_copy = req;
         let joined = self.fetch_joined_history(&eligible, inst, req_copy).await?;
-        self.finalize_history_results(joined, inst.symbol_str())
+        let symbol_label = match inst.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "",
+        };
+        self.finalize_history_results(joined, symbol_label)
     }
 }
 

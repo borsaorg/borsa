@@ -67,7 +67,13 @@ async fn test_mock_stream_logs_requests() {
     let reqs = controller.get_stream_requests("P0").await;
     assert_eq!(reqs.len(), 1);
     assert_eq!(reqs[0].len(), 1);
-    assert_eq!(reqs[0][0].symbol(), &sym);
+    let got_sym = match reqs[0][0].id() {
+        borsa_core::IdentifierScheme::Security(sec) => &sec.symbol,
+        borsa_core::IdentifierScheme::Prediction(_) => {
+            panic!("unexpected non-security instrument in mock test")
+        }
+    };
+    assert_eq!(got_sym, &sym);
 }
 
 #[tokio::test]

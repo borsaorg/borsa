@@ -8,11 +8,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let borsa = Borsa::builder().with_connector(connector).build()?;
 
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
+    let sym_str = match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
 
-    println!(
-        "Fetching holders and insider activity for {}...",
-        inst.symbol()
-    );
+    println!("Fetching holders and insider activity for {sym_str}...");
 
     let major = borsa.major_holders(&inst).await?;
     println!("major holders rows: {}", major.len());

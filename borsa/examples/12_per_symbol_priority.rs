@@ -44,9 +44,17 @@ impl BorsaConnector for SlowConnector {
 #[async_trait]
 impl QuoteProvider for FastConnector {
     async fn quote(&self, i: &Instrument) -> Result<Quote, BorsaError> {
-        println!("-> FastConnector responding for {}", i.symbol());
+        let sym = match i.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => {
+                return Err(BorsaError::unsupported(
+                    "instrument scheme (example/security-only)",
+                ));
+            }
+        };
+        println!("-> FastConnector responding for {}", sym.as_str());
         Ok(Quote {
-            symbol: i.symbol().clone(),
+            symbol: sym,
             shortname: None,
             price: Some(
                 Money::from_canonical_str("100.0", Currency::Iso(borsa_core::IsoCurrency::USD))
@@ -64,9 +72,17 @@ impl QuoteProvider for FastConnector {
 impl QuoteProvider for SlowConnector {
     async fn quote(&self, i: &Instrument) -> Result<Quote, BorsaError> {
         sleep(Duration::from_millis(50)).await; // Simulate network latency
-        println!("-> SlowConnector responding for {}", i.symbol());
+        let sym = match i.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => {
+                return Err(BorsaError::unsupported(
+                    "instrument scheme (example/security-only)",
+                ));
+            }
+        };
+        println!("-> SlowConnector responding for {}", sym.as_str());
         Ok(Quote {
-            symbol: i.symbol().clone(),
+            symbol: sym,
             shortname: None,
             price: Some(
                 Money::from_canonical_str("999.99", Currency::Iso(borsa_core::IsoCurrency::USD))
