@@ -39,7 +39,18 @@ async fn router_quotes_multi_groups_by_provider() {
 
     assert_eq!(quotes.len(), 2);
 
-    let by_symbol: HashMap<_, _> = quotes.iter().map(|q| (q.symbol.clone(), q)).collect();
+    let by_symbol: HashMap<borsa_core::Symbol, &borsa_core::Quote> = quotes
+        .iter()
+        .map(|q| {
+            let sym = match q.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+                borsa_core::IdentifierScheme::Prediction(_) => {
+                    panic!("unexpected non-security")
+                }
+            };
+            (sym, q)
+        })
+        .collect();
 
     assert_eq!(
         by_symbol

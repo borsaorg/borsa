@@ -232,15 +232,6 @@ impl DynamicMockConnector {
     }
 }
 
-fn require_security_symbol(inst: &Instrument) -> Result<&Symbol, BorsaError> {
-    match inst.id() {
-        borsa_core::IdentifierScheme::Security(sec) => Ok(&sec.symbol),
-        borsa_core::IdentifierScheme::Prediction(_) => Err(BorsaError::unsupported(
-            "instrument scheme (mock/security-only)",
-        )),
-    }
-}
-
 #[async_trait]
 impl BorsaConnector for DynamicMockConnector {
     fn name(&self) -> &'static str {
@@ -345,14 +336,8 @@ impl DynamicMockConnector {
         ),
         BorsaError,
     > {
-        // Filter set
-        let allow: std::collections::HashSet<Symbol> = instruments
-            .iter()
-            .map(require_security_symbol)
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .cloned()
-            .collect();
+        // Filter set (by instrument identity)
+        let allow: std::collections::HashSet<Instrument> = instruments.iter().cloned().collect();
 
         let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
@@ -386,7 +371,7 @@ impl DynamicMockConnector {
                     _ = &mut kill_rx => { break; }
                     maybe_u = in_rx.recv() => {
                         if let Some(u) = maybe_u {
-                            if !allow.is_empty() && !allow.contains(&u.symbol) {
+                            if !allow.is_empty() && !allow.contains(&u.instrument) {
                                 continue;
                             }
                             // Forward; drop if downstream closed
@@ -425,14 +410,8 @@ impl DynamicMockConnector {
         ),
         BorsaError,
     > {
-        // Filter set
-        let allow: std::collections::HashSet<Symbol> = instruments
-            .iter()
-            .map(require_security_symbol)
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .cloned()
-            .collect();
+        // Filter set (by instrument identity)
+        let allow: std::collections::HashSet<Instrument> = instruments.iter().cloned().collect();
 
         let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
@@ -460,7 +439,7 @@ impl DynamicMockConnector {
         let join = tokio::spawn(async move {
             // Send scripted updates, respecting allow filter, until stopped/killed.
             for u in updates {
-                if !allow.is_empty() && !allow.contains(&u.symbol) {
+                if !allow.is_empty() && !allow.contains(&u.instrument) {
                     continue;
                 }
                 tokio::select! {

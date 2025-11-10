@@ -47,9 +47,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         for call in chain.calls.iter().take(5) {
+            let contract = match call.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+                borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+            };
             println!(
                 "{:<22} | ${:<7.2} | ${:<7.2} | ${:<7.2} | ${:<7.2}",
-                call.contract_symbol,
+                contract,
                 call.strike.amount(),
                 call.price
                     .as_ref()

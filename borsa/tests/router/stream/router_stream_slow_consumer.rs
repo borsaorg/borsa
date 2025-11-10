@@ -10,7 +10,7 @@ async fn slow_consumer_handles_backpressure() {
     // Provider sends many updates rapidly
     let updates: Vec<QuoteUpdate> = (1..=100)
         .map(|t| QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),
@@ -55,7 +55,7 @@ async fn slow_consumer_handles_backpressure() {
 async fn consumer_not_reading_still_allows_graceful_shutdown() {
     let updates: Vec<QuoteUpdate> = (1..=50)
         .map(|t| QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),
@@ -103,7 +103,7 @@ async fn channel_saturation_doesnt_block_supervisor() {
     // Test that if channel fills up, supervisor logic still works
     let updates: Vec<QuoteUpdate> = (1..=1000)
         .map(|t| QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),
@@ -149,7 +149,7 @@ async fn intermittent_slow_consumer() {
     // Consumer alternates between fast and slow reading
     let updates: Vec<QuoteUpdate> = (1..=50)
         .map(|t| QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd(&format!("{}.0", 100 + t))),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),

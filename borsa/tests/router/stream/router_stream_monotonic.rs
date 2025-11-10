@@ -12,21 +12,21 @@ async fn stream_monotonic_drops_older_and_allows_equal() {
 
     let updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("200.0")),
             previous_close: None,
             ts: t1,
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("200.1")),
             previous_close: None,
             ts: t2_eq,
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("199.9")),
             previous_close: None,
             ts: t0_old,
@@ -71,14 +71,14 @@ async fn stream_monotonic_can_be_disabled() {
 
     let updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("200.0")),
             previous_close: None,
             ts: t1,
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("199.9")),
             previous_close: None,
             ts: t0_old,

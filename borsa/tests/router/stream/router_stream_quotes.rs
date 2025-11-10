@@ -15,14 +15,14 @@ async fn stream_quotes_routes_to_streaming_connector() {
     // Connector B: supports STREAM and will emit two updates for AAPL
     let b_updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("200.0")),
             previous_close: Some(usd("198.0")),
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("201.5")),
             previous_close: Some(usd("198.0")),
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -52,7 +52,10 @@ async fn stream_quotes_routes_to_streaming_connector() {
         .expect("stream started");
 
     let first = rx.recv().await.expect("first update");
-    assert_eq!(first.symbol.clone().to_string(), AAPL.to_string());
+    assert_eq!(
+        first.instrument,
+        crate::helpers::instrument(&AAPL, AssetKind::Equity)
+    );
     assert_eq!(first.price.unwrap().amount().to_string(), "200.0");
 
     let second = rx.recv().await.expect("second update");

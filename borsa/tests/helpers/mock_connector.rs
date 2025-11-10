@@ -150,18 +150,14 @@ impl QuoteProvider for MockConnector {
 
         if let Some(f) = &self.quote_fn {
             let mut q = (f)(i)?;
-            if let borsa_core::IdentifierScheme::Security(sec) = i.id() {
-                q.symbol = sec.symbol.clone();
-            }
+            q.instrument = i.clone();
             return Ok(q);
         }
 
         self.quote
             .clone()
             .map(|mut q| {
-                if let borsa_core::IdentifierScheme::Security(sec) = i.id() {
-                    q.symbol = sec.symbol.clone();
-                }
+                q.instrument = i.clone();
                 q
             })
             .ok_or_else(|| BorsaError::unsupported("quote"))
@@ -329,22 +325,14 @@ impl StreamProvider for MockConnector {
             }
         };
 
-        let allow: std::collections::HashSet<String> = instruments
-            .iter()
-            .filter_map(|i| match i.id() {
-                borsa_core::IdentifierScheme::Security(sec) => {
-                    Some(sec.symbol.as_str().to_string())
-                }
-                borsa_core::IdentifierScheme::Prediction(_) => None,
-            })
-            .collect();
+        let allow: std::collections::HashSet<Instrument> = instruments.iter().cloned().collect();
 
         let (tx, rx) = tokio::sync::mpsc::channel::<borsa_core::QuoteUpdate>(1024);
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
         let delay_ms = self.delay_ms;
         let join = tokio::spawn(async move {
             for u in updates {
-                if !allow.is_empty() && !allow.contains(u.symbol.as_str()) {
+                if !allow.is_empty() && !allow.contains(&u.instrument) {
                     continue;
                 }
                 tokio::select! {
@@ -1048,7 +1036,7 @@ pub fn m_quote(name: &'static str, last: f64) -> Arc<MockConnector> {
     MockConnector::builder()
         .name(name)
         .returns_quote_ok(Quote {
-            symbol: borsa_core::Symbol::new("X").unwrap(),
+            instrument: crate::helpers::instrument(&crate::helpers::X, AssetKind::Equity),
             shortname: None,
             price: Some(crate::helpers::usd(&last.to_string())),
             previous_close: None,

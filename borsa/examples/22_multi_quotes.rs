@@ -15,10 +15,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (quotes, failures) = borsa.quotes(&instruments).await?;
     for q in quotes {
+        let sym = match q.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        };
         if let Some(price) = &q.price {
-            println!("{}: {}", q.symbol.as_str(), price.format());
+            println!("{}: {}", sym, price.format());
         } else {
-            println!("{}: <no price>", q.symbol.as_str());
+            println!("{sym}: <no price>");
         }
     }
 

@@ -54,7 +54,7 @@ impl QuoteProvider for FastConnector {
         };
         println!("-> FastConnector responding for {}", sym.as_str());
         Ok(Quote {
-            symbol: sym,
+            instrument: i.clone(),
             shortname: None,
             price: Some(
                 Money::from_canonical_str("100.0", Currency::Iso(borsa_core::IsoCurrency::USD))
@@ -82,7 +82,7 @@ impl QuoteProvider for SlowConnector {
         };
         println!("-> SlowConnector responding for {}", sym.as_str());
         Ok(Quote {
-            symbol: sym,
+            instrument: i.clone(),
             shortname: None,
             price: Some(
                 Money::from_canonical_str("999.99", Currency::Iso(borsa_core::IsoCurrency::USD))

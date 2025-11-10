@@ -1,4 +1,4 @@
-use borsa_core::{Currency, Exchange, IsoCurrency, Money, Quote, Symbol};
+use borsa_core::{AssetKind, Currency, Exchange, Instrument, IsoCurrency, Money, Quote};
 
 pub fn by_symbol(s: &str) -> Option<Quote> {
     match s {
@@ -33,7 +33,7 @@ pub fn by_symbol(s: &str) -> Option<Quote> {
         "KO" => Some(q("KO", "Coca-Cola", "60.00", "59.50", Exchange::NYSE)),
         "PEP" => Some(q("PEP", "PepsiCo", "170.00", "168.00", Exchange::NASDAQ)),
         "BTC-USD" => Some(Quote {
-            symbol: Symbol::new("BTC-USD").unwrap(),
+            instrument: Instrument::from_symbol("BTC-USD", AssetKind::Crypto).unwrap(),
             shortname: Some("Bitcoin USD".to_string()),
             price: Some(
                 Money::from_canonical_str("65000.00", Currency::Iso(IsoCurrency::USD)).unwrap(),
@@ -51,7 +51,7 @@ pub fn by_symbol(s: &str) -> Option<Quote> {
 
 fn q(sym: &str, name: &str, px: &str, prev: &str, exch: Exchange) -> Quote {
     Quote {
-        symbol: Symbol::new(sym).unwrap(),
+        instrument: Instrument::from_symbol(sym, AssetKind::Equity).unwrap(),
         shortname: Some(name.to_string()),
         price: Some(Money::from_canonical_str(px, Currency::Iso(IsoCurrency::USD)).unwrap()),
         previous_close: Some(

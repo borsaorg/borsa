@@ -2,10 +2,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use borsa_core::Symbol;
-use borsa_core::{QuoteUpdate, stream::StreamHandle};
+use borsa_core::stream::StreamHandle;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
+use super::StreamableUpdate;
 use super::filters::MonotonicGate;
 
 pub struct SpawnedSession {
@@ -17,15 +18,15 @@ pub struct SessionManager;
 
 impl SessionManager {
     #[allow(clippy::too_many_arguments)]
-    pub fn spawn(
+    pub fn spawn<T: StreamableUpdate>(
         session_index: usize,
         handle: StreamHandle,
-        mut prx: mpsc::Receiver<QuoteUpdate>,
+        mut prx: mpsc::Receiver<T>,
         allowed: Option<HashSet<Symbol>>,
         mut stop_watch: watch::Receiver<bool>,
         enforce_monotonic: bool,
         monotonic_gate: Option<Arc<MonotonicGate>>,
-        tx_out: mpsc::Sender<QuoteUpdate>,
+        tx_out: mpsc::Sender<T>,
         event_tx: tokio::sync::mpsc::UnboundedSender<(usize, Arc<[Symbol]>)>,
         session_symbols: Arc<[Symbol]>,
     ) -> SpawnedSession {
@@ -61,17 +62,17 @@ impl SessionManager {
                     maybe_u = prx.recv() => {
                         if let Some(u) = maybe_u {
                             if let Some(ref allowset) = allowed
-                                && !allowset.contains(&u.symbol) {
+                                && !allowset.contains(u.stream_symbol()) {
                                     #[cfg(feature = "tracing")]
-                                    tracing::warn!(symbol = %u.symbol, provider_index = session_index, "dropping update for unassigned symbol");
+                                    tracing::warn!(symbol = %u.stream_symbol(), provider_index = session_index, "dropping update for unassigned symbol");
                                     continue;
                                 }
 
                             if enforce_monotonic {
                                 let gate = monotonic_gate.as_ref().expect("monotonic gate must exist when enforcement enabled");
-                                if !gate.allow(&u).await {
+                                if !gate.allow(u.stream_symbol().as_str().to_string(), u.stream_ts()).await {
                                     #[cfg(feature = "tracing")]
-                                    tracing::warn!(symbol = %u.symbol, ts = %u.ts, provider_index = session_index, "dropping out-of-order stream update (monotonic)");
+                                    tracing::warn!(symbol = %u.stream_symbol(), ts = %u.stream_ts(), provider_index = session_index, "dropping out-of-order stream update (monotonic)");
                                     continue;
                                 }
                             }

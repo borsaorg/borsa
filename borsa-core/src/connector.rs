@@ -232,6 +232,22 @@ pub trait NewsProvider: Send + Sync {
     ) -> Result<Vec<NewsArticle>, BorsaError>;
 }
 
+/// Focused role trait for connectors that provide streaming option updates.
+#[async_trait]
+pub trait OptionStreamProvider: Send + Sync {
+    /// Start a streaming session for the given instruments.
+    async fn stream_options(
+        &self,
+        instruments: &[Instrument],
+    ) -> Result<
+        (
+            crate::stream::StreamHandle,
+            tokio::sync::mpsc::Receiver<crate::OptionUpdate>,
+        ),
+        BorsaError,
+    >;
+}
+
 /// Focused role trait for connectors that provide streaming quote updates.
 #[async_trait]
 pub trait StreamProvider: Send + Sync {
@@ -399,6 +415,10 @@ pub trait BorsaConnector: Send + Sync {
 
     /// If implemented, returns a trait object for quote streaming.
     fn as_stream_provider(&self) -> Option<&dyn StreamProvider> {
+        None
+    }
+    /// If implemented, returns a trait object for option streaming.
+    fn as_option_stream_provider(&self) -> Option<&dyn OptionStreamProvider> {
         None
     }
 }
@@ -609,6 +629,15 @@ macro_rules! borsa_connector_accessors {
         fn as_stream_provider(&self) -> Option<&dyn $crate::connector::StreamProvider> {
             if self.$inner.as_stream_provider().is_some() {
                 Some(self as &dyn $crate::connector::StreamProvider)
+            } else {
+                None
+            }
+        }
+        fn as_option_stream_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::OptionStreamProvider> {
+            if self.$inner.as_option_stream_provider().is_some() {
+                Some(self as &dyn $crate::connector::OptionStreamProvider)
             } else {
                 None
             }
@@ -1125,6 +1154,31 @@ macro_rules! borsa_delegate_provider_impls {
                 <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .stream_quotes(instruments)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::OptionStreamProvider for $self_ty {
+            async fn stream_options(
+                &self,
+                instruments: &[$crate::Instrument],
+            ) -> Result<
+                (
+                    $crate::stream::StreamHandle,
+                    tokio::sync::mpsc::Receiver<$crate::OptionUpdate>,
+                ),
+                $crate::BorsaError,
+            > {
+                let inner = self
+                    .$inner
+                    .as_option_stream_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("stream_options"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::StreamOptions);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
+                inner
+                    .stream_options(instruments)
                     .await
                     .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }

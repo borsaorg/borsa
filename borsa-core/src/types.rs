@@ -42,7 +42,7 @@ pub use paft::fundamentals::statements::{
 
 pub use paft::market::action::Action;
 pub use paft::market::news::NewsArticle;
-pub use paft::market::options::{OptionChain, OptionContract, OptionGreeks};
+pub use paft::market::options::{OptionChain, OptionContract, OptionGreeks, OptionUpdate};
 pub use paft::market::quote::{Quote, QuoteUpdate};
 pub use paft::market::requests::history::{HistoryRequest, HistoryRequestBuilder, Interval, Range};
 pub use paft::market::requests::news::{NewsRequest, NewsTab};

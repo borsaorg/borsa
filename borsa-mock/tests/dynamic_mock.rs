@@ -10,7 +10,7 @@ async fn test_mock_quote_return() {
     let (mock, controller) = DynamicMockConnector::new_with_controller("P0");
     let sym = Symbol::new("AAPL").unwrap();
     let q = Quote {
-        symbol: sym.clone(),
+        instrument: inst(&sym),
         shortname: None,
         price: None,
         previous_close: None,
@@ -24,7 +24,7 @@ async fn test_mock_quote_return() {
 
     let qp = mock.as_quote_provider().expect("quote provider");
     let got = qp.quote(&inst(&sym)).await.expect("quote ok");
-    assert_eq!(got.symbol, q.symbol);
+    assert_eq!(got.instrument, q.instrument);
 }
 
 #[tokio::test]
@@ -81,7 +81,7 @@ async fn test_mock_stream_remote_kill() {
     let (mock, controller) = DynamicMockConnector::new_with_controller("P0");
     let sym = Symbol::new("AAPL").unwrap();
     let updates = vec![QuoteUpdate {
-        symbol: sym.clone(),
+        instrument: inst(&sym),
         price: None,
         previous_close: None,
         ts: chrono::Utc::now(),

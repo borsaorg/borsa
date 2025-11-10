@@ -11,7 +11,7 @@ async fn rapid_provider_flapping_no_resource_leak() {
     let flapping_steps = vec![
         // First connection: emit one update, then end
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -19,7 +19,7 @@ async fn rapid_provider_flapping_no_resource_leak() {
         }]),
         // Second connection: emit one update, then end
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("101.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -27,7 +27,7 @@ async fn rapid_provider_flapping_no_resource_leak() {
         }]),
         // Third connection: emit one update, then end
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("102.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),
@@ -89,14 +89,14 @@ async fn rapid_flapping_with_multiple_providers() {
     // Two providers that flap at different rates
     let p1_steps = vec![
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
             volume: None,
         }]),
         StreamStep::Updates(vec![QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("104.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(4, 0).unwrap(),
@@ -105,7 +105,7 @@ async fn rapid_flapping_with_multiple_providers() {
     ];
 
     let p2_steps = vec![StreamStep::Updates(vec![QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("101.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),

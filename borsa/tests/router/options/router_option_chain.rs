@@ -1,6 +1,6 @@
 use crate::helpers::{MockConnector, X, dt, ts, usd};
 use borsa::Borsa;
-use borsa_core::{AssetKind, OptionChain, OptionContract, Symbol};
+use borsa_core::{AssetKind, OptionChain, OptionContract};
 
 #[tokio::test]
 async fn option_chain_falls_back_and_succeeds() {
@@ -14,7 +14,11 @@ async fn option_chain_falls_back_and_succeeds() {
             assert_eq!(date, Some(ts(2024, 6, 25, 0, 0, 0)));
             Ok(OptionChain {
                 calls: vec![OptionContract {
-                    contract_symbol: Symbol::new("X250620C00050000").unwrap(),
+                    instrument: borsa_core::Instrument::from_symbol(
+                        "X250620C00050000",
+                        AssetKind::Equity,
+                    )
+                    .unwrap(),
                     strike: usd("50.0"),
                     price: Some(usd("2.5")),
                     bid: Some(usd("2.4")),

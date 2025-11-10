@@ -13,7 +13,7 @@ struct InfoConnector;
 impl borsa_core::connector::QuoteProvider for InfoConnector {
     async fn quote(&self, _i: &Instrument) -> Result<Quote, BorsaError> {
         Ok(Quote {
-            symbol: borsa_core::Symbol::new("TEST").unwrap(),
+            instrument: Instrument::from_symbol("TEST", AssetKind::Equity).unwrap(),
             shortname: Some("Test Inc.".into()),
             price: Some(usd("150.0")),
             previous_close: None,
@@ -126,7 +126,13 @@ async fn router_info_aggregates_data() {
     // From profile
     assert_eq!(info.isin, Some(Isin::new("US0378331005").unwrap()));
     // sector not part of aggregates Info; ensure identity fields present
-    assert_eq!(info.symbol.as_str(), "TEST");
+    {
+        let sym = match info.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        };
+        assert_eq!(sym, "TEST");
+    }
     // From analysis
     // analysis fields optional in Info; presence depends on provider coverage
 }
@@ -142,7 +148,13 @@ async fn router_fast_info_works() {
 
     let fast_info = borsa.fast_info(&inst).await.unwrap();
     assert_eq!(fast_info.last.unwrap().amount(), Decimal::from(150u8));
-    assert_eq!(fast_info.symbol.as_str(), "TEST");
+    {
+        let sym = match fast_info.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        };
+        assert_eq!(sym, "TEST");
+    }
 }
 
 #[derive(Default)]
@@ -152,7 +164,7 @@ struct QuoteOnlyConnector;
 impl borsa_core::connector::QuoteProvider for QuoteOnlyConnector {
     async fn quote(&self, _i: &Instrument) -> Result<Quote, BorsaError> {
         Ok(Quote {
-            symbol: borsa_core::Symbol::new("TEST").unwrap(),
+            instrument: Instrument::from_symbol("TEST", AssetKind::Equity).unwrap(),
             shortname: Some("Only Quote Inc.".into()),
             price: Some(usd("150.0")),
             previous_close: None,
@@ -247,7 +259,7 @@ impl borsa_core::connector::QuoteProvider for MinimalInfoConnector {
     async fn quote(&self, _i: &Instrument) -> Result<Quote, BorsaError> {
         let _inst = crate::helpers::instrument(&X, AssetKind::Equity);
         Ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: Some("Minimal Inc.".into()),
             price: Some(usd("42.0")),
             previous_close: None,
@@ -353,7 +365,13 @@ async fn router_info_ignores_unused_capabilities() {
         report.warnings
     );
     let info = report.info.unwrap();
-    assert_eq!(info.symbol.as_str(), "X");
+    {
+        let sym = match info.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        };
+        assert_eq!(sym, "X");
+    }
     assert_eq!(info.name.as_deref(), Some("Minimal Inc."));
     assert_eq!(
         info.last.as_ref().map(borsa_core::Money::amount),

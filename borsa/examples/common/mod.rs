@@ -1,4 +1,4 @@
-use borsa_core::{BorsaConnector, QuoteUpdate, Symbol};
+use borsa_core::{AssetKind, BorsaConnector, Instrument, QuoteUpdate, Symbol};
 use borsa_mock::{DynamicMockConnector, StreamBehavior};
 use std::sync::Arc;
 
@@ -15,12 +15,16 @@ pub fn get_connector() -> Arc<dyn BorsaConnector> {
             let sym = Symbol::new("AAPL").unwrap();
             let start = chrono::Utc::now();
             let updates: Vec<QuoteUpdate> = (0..20)
-                .map(|i| QuoteUpdate {
-                    symbol: sym.clone(),
-                    price: None,
-                    previous_close: None,
-                    ts: start + chrono::TimeDelta::seconds(i),
-                    volume: None,
+                .map(|i| {
+                    let inst =
+                        Instrument::from_symbol(&sym, AssetKind::Equity).expect("valid symbol");
+                    QuoteUpdate {
+                        instrument: inst,
+                        price: None,
+                        previous_close: None,
+                        ts: start + chrono::TimeDelta::seconds(i),
+                        volume: None,
+                    }
                 })
                 .collect();
             let (connector, _ctrl) = DynamicMockConnector::new_with_controller_and_behavior(

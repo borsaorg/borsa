@@ -26,7 +26,7 @@ impl borsa_core::connector::QuoteProvider for MapConnector {
             && let Some(&p) = self.ok_prices.get(sym)
         {
             return Ok(Quote {
-                symbol: sym.clone(),
+                instrument: inst.clone(),
                 shortname: None,
                 price: Some(usd(&p.to_string())),
                 previous_close: None,
@@ -92,8 +92,18 @@ async fn quotes_per_symbol_fallback_succeeds() {
     // We should get all three quotes: AAPL/MSFT from top, GOOG from backup.
     assert_eq!(out.len(), 3);
 
-    let by_symbol: std::collections::HashMap<_, _> =
-        out.iter().map(|q| (q.symbol.clone(), q)).collect();
+    let by_symbol: std::collections::HashMap<Symbol, &Quote> = out
+        .iter()
+        .map(|q| {
+            let sym = match q.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+                borsa_core::IdentifierScheme::Prediction(_) => {
+                    panic!("unexpected non-security instrument in quotes")
+                }
+            };
+            (sym, q)
+        })
+        .collect();
     assert_eq!(
         by_symbol
             .get(&AAPL)

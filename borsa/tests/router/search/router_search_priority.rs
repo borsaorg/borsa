@@ -12,13 +12,13 @@ async fn search_respects_per_kind_priority_and_dedups() {
         "low",
         vec![
             SearchResult {
-                symbol: Symbol::new("AAPL").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap(),
                 name: Some("Apple Inc. LOW".into()),
                 exchange: Exchange::try_from_str("NasdaqGS").ok(),
                 kind: AssetKind::Equity,
             },
             SearchResult {
-                symbol: Symbol::new("AA").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("AA", AssetKind::Equity).unwrap(),
                 name: Some("Alcoa".into()),
                 exchange: Exchange::try_from_str("NYSE").ok(),
                 kind: AssetKind::Equity,
@@ -30,13 +30,13 @@ async fn search_respects_per_kind_priority_and_dedups() {
         "high",
         vec![
             SearchResult {
-                symbol: Symbol::new("AAPL").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap(),
                 name: Some("Apple Inc. HIGH".into()),
                 exchange: Exchange::try_from_str("NasdaqGS").ok(),
                 kind: AssetKind::Equity,
             },
             SearchResult {
-                symbol: Symbol::new("MSFT").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("MSFT", AssetKind::Equity).unwrap(),
                 name: Some("Microsoft".into()),
                 exchange: Exchange::try_from_str("NasdaqGS").ok(),
                 kind: AssetKind::Equity,
@@ -67,7 +67,10 @@ async fn search_respects_per_kind_priority_and_dedups() {
         .unwrap()
         .results
         .iter()
-        .map(|r| r.symbol.as_str())
+        .map(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        })
         .collect();
     assert_eq!(syms, vec!["AAPL", "MSFT", "AA"]);
     let aapl = &out.response.as_ref().unwrap().results[0];
@@ -81,13 +84,13 @@ async fn search_respects_exchange_priority_kind_and_symbol_override() {
         "low",
         vec![
             SearchResult {
-                symbol: Symbol::new("RIO").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("RIO", AssetKind::Equity).unwrap(),
                 name: Some("Rio plc (LOW)".into()),
                 exchange: Exchange::try_from_str("NYSE").ok(),
                 kind: AssetKind::Equity,
             },
             SearchResult {
-                symbol: Symbol::new("AAA").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("AAA", AssetKind::Equity).unwrap(),
                 name: Some("AAA LOW".into()),
                 exchange: Exchange::try_from_str("NYSE").ok(),
                 kind: AssetKind::Equity,
@@ -99,13 +102,13 @@ async fn search_respects_exchange_priority_kind_and_symbol_override() {
         "high",
         vec![
             SearchResult {
-                symbol: Symbol::new("RIO").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("RIO", AssetKind::Equity).unwrap(),
                 name: Some("Rio plc (HIGH)".into()),
                 exchange: Exchange::try_from_str("LSE").ok(),
                 kind: AssetKind::Equity,
             },
             SearchResult {
-                symbol: Symbol::new("BBB").unwrap(),
+                instrument: borsa_core::Instrument::from_symbol("BBB", AssetKind::Equity).unwrap(),
                 name: Some("BBB HIGH".into()),
                 exchange: Exchange::try_from_str("NYSE").ok(),
                 kind: AssetKind::Equity,
@@ -139,7 +142,13 @@ async fn search_respects_exchange_priority_kind_and_symbol_override() {
 
     let results = out.response.unwrap().results;
     // RIO should come from NYSE due to symbol override; other symbols preserved.
-    let rio = results.iter().find(|r| r.symbol.as_str() == "RIO").unwrap();
+    let rio = results
+        .iter()
+        .find(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str() == "RIO",
+            borsa_core::IdentifierScheme::Prediction(_) => false,
+        })
+        .unwrap();
     assert_eq!(rio.exchange, Exchange::try_from_str("NYSE").ok());
 }
 
@@ -148,7 +157,7 @@ async fn search_respects_exchange_priority_kind_only() {
     let c1 = m_search(
         "c1",
         vec![SearchResult {
-            symbol: Symbol::new("DUAL").unwrap(),
+            instrument: borsa_core::Instrument::from_symbol("DUAL", AssetKind::Equity).unwrap(),
             name: Some("Dual C1".into()),
             exchange: Exchange::try_from_str("NYSE").ok(),
             kind: AssetKind::Equity,
@@ -157,7 +166,7 @@ async fn search_respects_exchange_priority_kind_only() {
     let c2 = m_search(
         "c2",
         vec![SearchResult {
-            symbol: Symbol::new("DUAL").unwrap(),
+            instrument: borsa_core::Instrument::from_symbol("DUAL", AssetKind::Equity).unwrap(),
             name: Some("Dual C2".into()),
             exchange: Exchange::try_from_str("LSE").ok(),
             kind: AssetKind::Equity,
@@ -189,7 +198,10 @@ async fn search_respects_exchange_priority_kind_only() {
     let results_vec = out.response.unwrap().results;
     let dual = results_vec
         .iter()
-        .find(|r| r.symbol.as_str() == "DUAL")
+        .find(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str() == "DUAL",
+            borsa_core::IdentifierScheme::Prediction(_) => false,
+        })
         .unwrap();
     assert_eq!(dual.exchange, Exchange::try_from_str("LSE").ok());
 }
@@ -199,7 +211,7 @@ async fn search_infers_kind_from_results_when_request_omits_it() {
     let c1 = m_search(
         "c1",
         vec![SearchResult {
-            symbol: Symbol::new("DUAL").unwrap(),
+            instrument: borsa_core::Instrument::from_symbol("DUAL", AssetKind::Equity).unwrap(),
             name: Some("Dual NYSE".into()),
             exchange: Exchange::try_from_str("NYSE").ok(),
             kind: AssetKind::Equity,
@@ -208,7 +220,7 @@ async fn search_infers_kind_from_results_when_request_omits_it() {
     let c2 = m_search(
         "c2",
         vec![SearchResult {
-            symbol: Symbol::new("DUAL").unwrap(),
+            instrument: borsa_core::Instrument::from_symbol("DUAL", AssetKind::Equity).unwrap(),
             name: Some("Dual LSE".into()),
             exchange: Exchange::try_from_str("LSE").ok(),
             kind: AssetKind::Equity,
@@ -237,7 +249,10 @@ async fn search_infers_kind_from_results_when_request_omits_it() {
     let results_vec = out.response.unwrap().results;
     let dual = results_vec
         .iter()
-        .find(|r| r.symbol.as_str() == "DUAL")
+        .find(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str() == "DUAL",
+            borsa_core::IdentifierScheme::Prediction(_) => false,
+        })
         .unwrap();
     assert_eq!(dual.exchange, Exchange::try_from_str("LSE").ok());
 }
@@ -247,7 +262,7 @@ async fn search_unknown_exchange_ranks_last() {
     let c1 = m_search(
         "c1",
         vec![SearchResult {
-            symbol: Symbol::new("UNK").unwrap(),
+            instrument: borsa_core::Instrument::from_symbol("UNK", AssetKind::Equity).unwrap(),
             name: Some("Unknown EX".into()),
             exchange: None,
             kind: AssetKind::Equity,
@@ -256,7 +271,7 @@ async fn search_unknown_exchange_ranks_last() {
     let c2 = m_search(
         "c2",
         vec![SearchResult {
-            symbol: Symbol::new("UNK").unwrap(),
+            instrument: borsa_core::Instrument::from_symbol("UNK", AssetKind::Equity).unwrap(),
             name: Some("Known EX".into()),
             exchange: Exchange::try_from_str("NASDAQ").ok(),
             kind: AssetKind::Equity,
@@ -285,7 +300,10 @@ async fn search_unknown_exchange_ranks_last() {
     let results_vec = out.response.unwrap().results;
     let unk = results_vec
         .iter()
-        .find(|r| r.symbol.as_str() == "UNK")
+        .find(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str() == "UNK",
+            borsa_core::IdentifierScheme::Prediction(_) => false,
+        })
         .unwrap();
     assert_eq!(unk.exchange, Exchange::try_from_str("NASDAQ").ok());
 }

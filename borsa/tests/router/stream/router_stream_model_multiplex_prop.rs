@@ -121,6 +121,13 @@ fn sym_idx_from_symbol(symbol: &Symbol) -> Option<u8> {
     None
 }
 
+fn sym_idx_from_instrument(inst: &Instrument) -> Option<u8> {
+    match inst.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sym_idx_from_symbol(&sec.symbol),
+        borsa_core::IdentifierScheme::Prediction(_) => None,
+    }
+}
+
 async fn sync_assignments(
     providers: &[(&'static str, borsa_mock::DynamicMockController); 3],
     seen: &mut HashMap<u8, usize>,
@@ -210,7 +217,7 @@ proptest! {
                         let sid = sym;
                         let sym_val = match sid { 0 => SymId::Aapl, 1 => SymId::Msft, _ => SymId::BtcUsd };
                         let ts_ch = chrono::Utc.timestamp_opt(ts, 0).unwrap();
-                        let update = QuoteUpdate { symbol: sym_val.symbol(), price: None, previous_close: None, ts: ts_ch, volume: None };
+                        let update = QuoteUpdate { instrument: Instrument::from_symbol(sym_val.symbol(), sym_val.kind()).unwrap(), price: None, previous_close: None, ts: ts_ch, volume: None };
                         let (name, ctrl) = &providers[provider as usize];
                         let push_ok = ctrl.push_update(name, update).await;
 
@@ -229,7 +236,7 @@ proptest! {
                                 }
                             } else {
                                 assert_eq!(drained.len(), 1, "expected exactly one forwarded update for sym {sid} from provider {provider}");
-                                assert_eq!(drained[0].symbol, sym_val.symbol());
+                                assert_eq!(drained[0].instrument, Instrument::from_symbol(sym_val.symbol(), sym_val.kind()).unwrap());
                                 assert_eq!(drained[0].ts, ts_ch);
                                 last_ts_by_provider.insert((provider, sid), ts);
                             }
@@ -274,7 +281,7 @@ proptest! {
                         for i in 0..count {
                             let ts = start_ts + i64::from(i);
                             let ts_ch = chrono::Utc.timestamp_opt(ts, 0).unwrap();
-                            let update = QuoteUpdate { symbol: sym_val.symbol(), price: None, previous_close: None, ts: ts_ch, volume: None };
+                            let update = QuoteUpdate { instrument: Instrument::from_symbol(sym_val.symbol(), sym_val.kind()).unwrap(), price: None, previous_close: None, ts: ts_ch, volume: None };
                             ctrl.push_update(name, update).await;
                         }
 
@@ -282,7 +289,7 @@ proptest! {
 
                         // Update last_ts for all received updates
                         for update in drained {
-                            if let Some(update_sid) = sym_idx_from_symbol(&update.symbol) {
+                            if let Some(update_sid) = sym_idx_from_instrument(&update.instrument) {
                                 let ts = update.ts.timestamp();
                                 // Since this burst originated from `provider` for `sid`, update that key only
                                 if update_sid == sid {

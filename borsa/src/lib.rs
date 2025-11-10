@@ -89,6 +89,7 @@ pub use borsa_core::{
     NewsRequest,
     OptionChain,
     OptionContract,
+    OptionUpdate,
     PriceTarget,
     Profile,
     QuotaConfig,

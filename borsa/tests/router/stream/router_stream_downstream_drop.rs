@@ -9,7 +9,7 @@ async fn stream_quotes_exits_when_downstream_drops() {
     // Provider that would emit many updates
     let updates = (0..50)
         .map(|i| QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd(&(100 + i).to_string())),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(i64::from(i), 0).unwrap(),

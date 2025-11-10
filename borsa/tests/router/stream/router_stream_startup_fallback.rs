@@ -17,7 +17,7 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
     // Second provider starts successfully and emits data
     let ok_updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("150.0")),
             previous_close: None,
             ts: chrono::Utc
@@ -26,7 +26,7 @@ async fn stream_quotes_falls_back_when_first_cannot_start() {
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("151.0")),
             previous_close: None,
             ts: chrono::Utc

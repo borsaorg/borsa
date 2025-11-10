@@ -27,7 +27,8 @@ impl adapter::YfOptions for StubOptions {
         assert_eq!(date, Some(1_725_813_600));
         Ok(yf::ticker::OptionChain {
             calls: vec![yf::ticker::OptionContract {
-                contract_symbol: borsa_core::Symbol::new("AAPL250620C00100000").unwrap(),
+                instrument: Instrument::from_symbol("AAPL250620C00100000", AssetKind::Equity)
+                    .unwrap(),
                 strike: Money::from_canonical_str(
                     "100",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -55,7 +56,8 @@ impl adapter::YfOptions for StubOptions {
                 last_trade_at: None,
             }],
             puts: vec![yf::ticker::OptionContract {
-                contract_symbol: borsa_core::Symbol::new("AAPL250620P00100000").unwrap(),
+                instrument: Instrument::from_symbol("AAPL250620P00100000", AssetKind::Equity)
+                    .unwrap(),
                 strike: Money::from_canonical_str(
                     "100",
                     Currency::Iso(borsa_core::IsoCurrency::USD),
@@ -121,6 +123,10 @@ async fn options_injection_expirations_and_chain_map_correctly() {
 
     assert_eq!(ch.calls.len(), 1);
     assert_eq!(ch.puts.len(), 1);
-    assert_eq!(ch.calls[0].contract_symbol.as_str(), "AAPL250620C00100000");
+    let call_symbol = match ch.calls[0].instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    assert_eq!(call_symbol, "AAPL250620C00100000");
     assert!(ch.puts[0].in_the_money);
 }

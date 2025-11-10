@@ -12,7 +12,7 @@ async fn search_respects_connector_kind_support() {
         .name("eq")
         .supports_kind(AssetKind::Equity)
         .returns_search_ok(vec![SearchResult {
-            symbol: spy.clone(),
+            instrument: borsa_core::Instrument::from_symbol(&spy, AssetKind::Fund).unwrap(),
             name: Some("SPDR S&P 500 ETF".into()),
             exchange: Exchange::try_from_str("NYSEArca").ok(),
             kind: AssetKind::Fund,
@@ -24,7 +24,7 @@ async fn search_respects_connector_kind_support() {
         .name("fund")
         .supports_kind(AssetKind::Fund)
         .returns_search_ok(vec![SearchResult {
-            symbol: spy.clone(),
+            instrument: borsa_core::Instrument::from_symbol(&spy, AssetKind::Fund).unwrap(),
             name: Some("SPDR S&P 500 ETF".into()),
             exchange: Exchange::try_from_str("NYSEArca").ok(),
             kind: AssetKind::Fund,
@@ -44,7 +44,14 @@ async fn search_respects_connector_kind_support() {
     let out = borsa.search(req).await.unwrap();
 
     let resp = out.response.unwrap();
-    let syms: Vec<_> = resp.results.iter().map(|r| r.symbol.as_str()).collect();
+    let syms: Vec<_> = resp
+        .results
+        .iter()
+        .map(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        })
+        .collect();
     assert_eq!(
         syms,
         vec!["SPY"],

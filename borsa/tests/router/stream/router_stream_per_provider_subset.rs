@@ -10,14 +10,14 @@ async fn stream_quotes_assigns_symbols_per_provider() {
 
     let x_updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("10.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: MSFT.clone(),
+            instrument: instrument(&MSFT, AssetKind::Equity),
             price: Some(usd("11.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -32,7 +32,7 @@ async fn stream_quotes_assigns_symbols_per_provider() {
 
     // Provider Y emits MSFT; policy assigns MSFT to Y.
     let y_updates = vec![QuoteUpdate {
-        symbol: MSFT.clone(),
+        instrument: instrument(&MSFT, AssetKind::Equity),
         price: Some(usd("20.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),
@@ -69,7 +69,10 @@ async fn stream_quotes_assigns_symbols_per_provider() {
     let mut got = Vec::new();
     while let Some(u) = rx.recv().await {
         got.push((
-            u.symbol.as_str().to_string(),
+            match u.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str().to_string(),
+                borsa_core::IdentifierScheme::Prediction(_) => "<non-security>".to_string(),
+            },
             u.price.as_ref().map(|m| m.amount().to_string()),
         ));
         if got.len() >= 2 {

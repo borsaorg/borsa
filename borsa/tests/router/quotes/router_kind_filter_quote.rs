@@ -14,7 +14,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
         .name("A")
         .supports_kind(AssetKind::Equity)
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("1.0")),
             previous_close: None,
@@ -29,7 +29,7 @@ async fn router_skips_connectors_that_do_not_support_kind_for_quote() {
         .name("B")
         .supports_kind(AssetKind::Fund)
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("99.0")),
             previous_close: None,

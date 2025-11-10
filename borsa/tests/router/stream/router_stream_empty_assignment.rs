@@ -12,7 +12,7 @@ async fn provider_with_no_assigned_symbols_not_started() {
         .name("EquityOnly")
         .supports_kind(AssetKind::Equity) // Only supports equity
         .with_stream_updates(vec![QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -39,7 +39,7 @@ async fn provider_with_no_assigned_symbols_not_started() {
 async fn routing_policy_filters_symbols_per_provider() {
     // Two providers with different symbol assignments
     let p1_updates = vec![QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("100.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -47,7 +47,7 @@ async fn routing_policy_filters_symbols_per_provider() {
     }];
 
     let p2_updates = vec![QuoteUpdate {
-        symbol: MSFT.clone(),
+        instrument: instrument(&MSFT, AssetKind::Equity),
         price: Some(usd("200.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -92,7 +92,11 @@ async fn routing_policy_filters_symbols_per_provider() {
     let mut received_symbols = vec![];
     for _ in 0..2 {
         if let Some(update) = rx.recv().await {
-            received_symbols.push(update.symbol.to_string());
+            let sym = match update.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str().to_string(),
+                borsa_core::IdentifierScheme::Prediction(_) => "<non-security>".to_string(),
+            };
+            received_symbols.push(sym);
         }
     }
 
@@ -104,7 +108,7 @@ async fn routing_policy_filters_symbols_per_provider() {
 async fn one_provider_empty_assignment_other_succeeds() {
     // Two providers, but only one can handle the requested symbol
     let p1_updates = vec![QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("100.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -143,7 +147,13 @@ async fn one_provider_empty_assignment_other_succeeds() {
         .expect("stream started");
 
     let update = rx.recv().await.expect("should receive update from P1");
-    assert_eq!(update.symbol, *AAPL);
+    {
+        let sym = match update.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => panic!("unexpected instrument type"),
+        };
+        assert_eq!(sym, *AAPL);
+    }
     assert_eq!(update.ts.timestamp(), 1);
 
     handle.stop().await;
@@ -154,14 +164,14 @@ async fn symbol_filtering_results_in_empty_assignment() {
     // Provider sends updates for multiple symbols, but we only request one
     let updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: MSFT.clone(), // We won't request this
+            instrument: instrument(&MSFT, AssetKind::Equity), // We won't request this
             price: Some(usd("200.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -188,7 +198,13 @@ async fn symbol_filtering_results_in_empty_assignment() {
 
     // Should receive AAPL
     let first = rx.recv().await.expect("should receive AAPL");
-    assert_eq!(first.symbol, *AAPL);
+    {
+        let sym = match first.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => panic!("unexpected instrument type"),
+        };
+        assert_eq!(sym, *AAPL);
+    }
 
     // MSFT should be filtered out
     let timeout_result =
@@ -203,7 +219,7 @@ async fn symbol_filtering_results_in_empty_assignment() {
 async fn provider_with_empty_assignment_after_filtering_not_started() {
     // Provider supports multiple symbols but routing restricts it
     let aapl_update = QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("100.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -211,7 +227,7 @@ async fn provider_with_empty_assignment_after_filtering_not_started() {
     };
 
     let msft_update = QuoteUpdate {
-        symbol: MSFT.clone(),
+        instrument: instrument(&MSFT, AssetKind::Equity),
         price: Some(usd("200.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -253,7 +269,13 @@ async fn provider_with_empty_assignment_after_filtering_not_started() {
 
     // Should only receive AAPL from P1
     let update = rx.recv().await.expect("should receive AAPL from P1");
-    assert_eq!(update.symbol, *AAPL);
+    {
+        let sym = match update.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+            borsa_core::IdentifierScheme::Prediction(_) => panic!("unexpected instrument type"),
+        };
+        assert_eq!(sym, *AAPL);
+    }
 
     // No more updates since we only requested AAPL
     let timeout_result =

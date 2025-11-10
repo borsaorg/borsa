@@ -12,7 +12,7 @@ proptest! {
         tokio_test::block_on(async move {
             let updates: Vec<QuoteUpdate> = (1..=i64::from(num_updates))
                 .map(|t| QuoteUpdate {
-                    symbol: AAPL.clone(),
+                    instrument: instrument(&AAPL, AssetKind::Equity),
                     price: Some(usd("123.0")),
                     previous_close: None,
                     ts: chrono::Utc.timestamp_opt(t, 0).unwrap(),

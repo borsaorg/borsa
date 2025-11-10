@@ -11,7 +11,7 @@ async fn faster_lower_priority_does_not_beat_higher_priority_success() {
         .name("high")
         .delay(Duration::from_millis(80))
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("99.0")),
             previous_close: None,

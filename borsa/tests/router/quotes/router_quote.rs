@@ -61,7 +61,7 @@ fn connector_with_quote(
     MockConnector::builder()
         .name(name)
         .returns_quote_ok(Quote {
-            symbol: Symbol::new("X").unwrap(),
+            instrument: Instrument::from_symbol("X", AssetKind::Equity).unwrap(),
             shortname: None,
             price: Some(usd(price)),
             previous_close: None,

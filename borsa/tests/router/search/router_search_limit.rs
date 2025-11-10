@@ -13,13 +13,13 @@ async fn search_applies_limit_after_merge() {
         "a",
         vec![
             SearchResult {
-                symbol: aaa.clone(),
+                instrument: borsa_core::Instrument::from_symbol(&aaa, AssetKind::Equity).unwrap(),
                 name: None,
                 exchange: None,
                 kind: AssetKind::Equity,
             },
             SearchResult {
-                symbol: aab.clone(),
+                instrument: borsa_core::Instrument::from_symbol(&aab, AssetKind::Equity).unwrap(),
                 name: None,
                 exchange: None,
                 kind: AssetKind::Equity,
@@ -29,7 +29,7 @@ async fn search_applies_limit_after_merge() {
     let b = m_search(
         "b",
         vec![SearchResult {
-            symbol: aac.clone(),
+            instrument: borsa_core::Instrument::from_symbol(&aac, AssetKind::Equity).unwrap(),
             name: None,
             exchange: None,
             kind: AssetKind::Equity,
@@ -50,6 +50,13 @@ async fn search_applies_limit_after_merge() {
     let out = borsa.search(req).await.unwrap();
 
     let resp = out.response.unwrap();
-    let syms: Vec<_> = resp.results.iter().map(|r| r.symbol.as_str()).collect();
+    let syms: Vec<_> = resp
+        .results
+        .iter()
+        .map(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        })
+        .collect();
     assert_eq!(syms, vec!["AAA", "AAB"]);
 }

@@ -32,6 +32,13 @@ async fn search_uses_injected_adapter_symbol_only() {
     let req = SearchRequest::new("apple").unwrap();
     let resp = yf.search(req).await.unwrap();
 
-    let syms: Vec<_> = resp.results.iter().map(|r| r.symbol.as_str()).collect();
+    let syms: Vec<_> = resp
+        .results
+        .iter()
+        .map(|r| match r.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+        })
+        .collect();
     assert_eq!(syms, vec!["AAPL", "AAP", "APLE"]);
 }

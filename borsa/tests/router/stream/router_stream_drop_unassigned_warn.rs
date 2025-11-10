@@ -9,14 +9,14 @@ async fn stream_quotes_merges_and_delivers_wildcard_and_explicit_updates() {
     // Provider X is assigned only AAPL but will try to send MSFT as well.
     let x_updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("10.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: MSFT.clone(),
+            instrument: instrument(&MSFT, AssetKind::Equity),
             price: Some(usd("11.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
@@ -51,7 +51,11 @@ async fn stream_quotes_merges_and_delivers_wildcard_and_explicit_updates() {
     // Expect to receive both AAPL and MSFT from the merged session.
     let mut got = Vec::new();
     while let Some(u) = rx.recv().await {
-        got.push(u.symbol.clone().to_string());
+        let sym = match u.instrument.id() {
+            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str().to_string(),
+            borsa_core::IdentifierScheme::Prediction(_) => "<non-security>".to_string(),
+        };
+        got.push(sym);
         if got.len() >= 2 {
             // Wait for both expected updates
             break;

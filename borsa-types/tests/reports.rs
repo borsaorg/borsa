@@ -1,7 +1,7 @@
 use borsa_types::{BorsaError, DownloadReport, InfoReport, SearchReport};
 use chrono::{TimeZone, Utc};
 use paft::aggregates::Info;
-use paft::domain::{AssetKind, Exchange, Instrument, Symbol};
+use paft::domain::{AssetKind, Exchange, Instrument};
 use paft::market::responses::download::{DownloadEntry, DownloadResponse};
 use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
 use paft::market::responses::search::{SearchResponse, SearchResult};
@@ -9,10 +9,11 @@ use paft::money::{Currency, IsoCurrency, Money};
 
 #[test]
 fn info_report_roundtrip() {
+    let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap();
     let report = InfoReport {
-        instrument: Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap(),
+        instrument: inst.clone(),
         info: Some(Info {
-            symbol: Symbol::new("AAPL").unwrap(),
+            instrument: inst,
             name: Some("Apple Inc.".into()),
             isin: None,
             exchange: Some(Exchange::NASDAQ),
@@ -53,7 +54,7 @@ fn search_report_roundtrip() {
     let report = SearchReport {
         response: Some(SearchResponse {
             results: vec![SearchResult {
-                symbol: Symbol::new("AAPL").unwrap(),
+                instrument: Instrument::from_symbol("AAPL", AssetKind::Equity).unwrap(),
                 name: Some("Apple Inc.".into()),
                 exchange: Some(Exchange::NASDAQ),
                 kind: AssetKind::Equity,

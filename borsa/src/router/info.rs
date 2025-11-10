@@ -127,15 +127,6 @@ impl Borsa {
     /// Returns an error only if task join fails unexpectedly.
     /// Otherwise, succeeds and includes per-source errors in the `errors` field.
     pub async fn info(&self, inst: &Instrument) -> Result<InfoReport, BorsaError> {
-        let sym = match inst.id() {
-            borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
-            borsa_core::IdentifierScheme::Prediction(_) => {
-                return Err(BorsaError::unsupported(
-                    "instrument scheme (info/security-only)",
-                ));
-            }
-        };
-
         let (profile, quote, explicit_isin, mut errors) = self.collect_base(inst).await;
         let (price_target, recommendation_summary, esg_scores, mut extra) =
             self.collect_enrichments(inst).await;
@@ -155,7 +146,7 @@ impl Borsa {
         Ok(InfoReport {
             instrument: inst.clone(),
             info: Some(Info {
-                symbol: sym,
+                instrument: inst.clone(),
                 name: name_field,
                 isin: isin_val,
                 exchange: quote.as_ref().and_then(|q| q.exchange.clone()),
@@ -248,7 +239,7 @@ impl Borsa {
         let currency = last.currency().clone();
 
         Ok(FastInfo {
-            symbol: sym,
+            instrument: inst.clone(),
             name: q.shortname,
             exchange: q.exchange,
             market_state: q.market_state,

@@ -13,7 +13,7 @@ async fn strategy_latency_returns_fastest_success() {
         .name("fast")
         .delay(std::time::Duration::from_millis(10))
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("11.0")),
             previous_close: None,
@@ -26,7 +26,7 @@ async fn strategy_latency_returns_fastest_success() {
         .name("slow")
         .delay(std::time::Duration::from_millis(100))
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("99.0")),
             previous_close: None,
@@ -63,7 +63,7 @@ async fn strategy_latency_ignores_faster_failure_and_returns_first_success() {
         .name("slow_ok")
         .delay(std::time::Duration::from_millis(20))
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("77.0")),
             previous_close: None,
@@ -95,7 +95,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .name("first")
         .delay(std::time::Duration::from_millis(200))
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("1000.0")),
             previous_close: None,
@@ -108,7 +108,7 @@ async fn strategy_priority_with_fallback_obeys_order_and_timeout() {
         .name("second")
         .delay(std::time::Duration::from_millis(10))
         .returns_quote_ok(Quote {
-            symbol: X.clone(),
+            instrument: crate::helpers::instrument(&X, AssetKind::Equity),
             shortname: None,
             price: Some(usd("42.0")),
             previous_close: None,

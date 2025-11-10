@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use borsa_core::{BorsaConnector, BorsaError, Instrument, QuoteUpdate, Symbol};
+use borsa_core::{BorsaConnector, BorsaError, Instrument, Symbol};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
+use super::StreamUpdateKind;
 use super::backoff::jitter_wait;
 use super::error::collapse_stream_errors;
 use super::filters::MonotonicGate;
@@ -27,10 +28,10 @@ pub struct KindSupervisorParams {
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn spawn_kind_supervisor(
+pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
     params: KindSupervisorParams,
     mut stop_watch: watch::Receiver<bool>,
-    tx_clone: mpsc::Sender<QuoteUpdate>,
+    tx_clone: mpsc::Sender<T>,
 ) -> JoinHandle<()> {
     struct ActiveSession {
         join: JoinHandle<()>,
@@ -73,7 +74,7 @@ pub fn spawn_kind_supervisor(
 
         let providers_can_stream: Vec<bool> = providers
             .iter()
-            .map(|p| p.as_stream_provider().is_some())
+            .map(|p| T::can_stream(p.as_ref()))
             .collect();
 
         let mut supervisor = sm::Supervisor {
@@ -103,7 +104,7 @@ pub fn spawn_kind_supervisor(
             Result<
                 (
                     borsa_core::stream::StreamHandle,
-                    tokio::sync::mpsc::Receiver<QuoteUpdate>,
+                    tokio::sync::mpsc::Receiver<T>,
                     Arc<[Symbol]>,
                 ),
                 BorsaError,
@@ -137,12 +138,9 @@ pub fn spawn_kind_supervisor(
                     let start_tx_clone = start_tx.clone();
                     tokio::spawn(async move {
                         let provider_name = provider.name();
-                        let res = match provider.as_stream_provider() {
-                            Some(sp) => match sp.stream_quotes(&instruments).await {
-                                Ok((handle, prx)) => Ok((handle, prx, syms)),
-                                Err(err) => Err(crate::core::tag_err(provider_name, err)),
-                            },
-                            None => Err(BorsaError::unsupported("stream_quotes")),
+                        let res = match T::start_stream(provider.as_ref(), &instruments).await {
+                            Ok((handle, prx)) => Ok((handle, prx, syms)),
+                            Err(err) => Err(crate::core::tag_err(provider_name, err)),
                         };
                         let _ = start_tx_clone.send((id, res));
                     });
@@ -203,12 +201,9 @@ pub fn spawn_kind_supervisor(
                         let start_tx_clone = start_tx.clone();
                         tokio::spawn(async move {
                             let provider_name = provider.name();
-                            let res = match provider.as_stream_provider() {
-                                Some(sp) => match sp.stream_quotes(&instruments).await {
-                                    Ok((handle, prx)) => Ok((handle, prx, syms)),
-                                    Err(err) => Err(crate::core::tag_err(provider_name, err)),
-                                },
-                                None => Err(BorsaError::unsupported("stream_quotes")),
+                            let res = match T::start_stream(provider.as_ref(), &instruments).await {
+                                Ok((handle, prx)) => Ok((handle, prx, syms)),
+                                Err(err) => Err(crate::core::tag_err(provider_name, err)),
                             };
                             let _ = start_tx_clone.send((id, res));
                         });

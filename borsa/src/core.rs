@@ -303,7 +303,14 @@ impl Borsa {
         use std::collections::HashMap;
         let mut grouped: HashMap<Symbol, Vec<(usize, borsa_core::SearchResult)>> = HashMap::new();
         for (i, r) in merged.into_iter().enumerate() {
-            grouped.entry(r.symbol.clone()).or_default().push((i, r));
+            let sym = match r.instrument.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+                borsa_core::IdentifierScheme::Prediction(_) => {
+                    // Skip non-security search results for exchange-based de-duplication
+                    continue;
+                }
+            };
+            grouped.entry(sym).or_default().push((i, r));
         }
         // Preserve overall provider order by selecting the best per symbol, then sorting by first-seen index.
         let mut selected: Vec<(usize, borsa_core::SearchResult)> =

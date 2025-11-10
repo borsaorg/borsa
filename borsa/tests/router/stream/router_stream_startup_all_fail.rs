@@ -44,7 +44,7 @@ async fn stream_quotes_errors_when_all_providers_fail_to_start() {
 #[tokio::test]
 async fn stream_quotes_errors_when_one_kind_fails_to_start() {
     let equity_updates = vec![QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("120.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(10, 0).unwrap(),

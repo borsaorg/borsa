@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-use borsa_core::{QuoteUpdate, Symbol};
+use borsa_core::Symbol;
 
 type GateEntry = (chrono::DateTime<chrono::Utc>, Instant);
 type GateMap = HashMap<String, GateEntry>;
@@ -38,25 +38,25 @@ impl MonotonicGate {
         Self { state }
     }
 
-    pub async fn allow(&self, update: &QuoteUpdate) -> bool {
+    pub async fn allow(&self, key: String, ts: chrono::DateTime<chrono::Utc>) -> bool {
         use std::collections::hash_map::Entry;
         let mut guard = self.state.lock().await;
         let now = Instant::now();
-        match guard.entry(update.symbol.as_str().to_string()) {
+        match guard.entry(key) {
             Entry::Occupied(mut e) => {
                 let (prev_ts, last_seen) = e.get_mut();
-                if update.ts < *prev_ts {
+                if ts < *prev_ts {
                     *last_seen = now;
                     return false;
                 }
-                if update.ts > *prev_ts {
-                    *prev_ts = update.ts;
+                if ts > *prev_ts {
+                    *prev_ts = ts;
                 }
                 *last_seen = now;
                 true
             }
             Entry::Vacant(e) => {
-                e.insert((update.ts, now));
+                e.insert((ts, now));
                 true
             }
         }

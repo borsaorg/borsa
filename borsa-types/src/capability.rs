@@ -69,6 +69,8 @@ pub enum Capability {
 
     /// Streaming: quotes stream.
     StreamQuotes,
+    /// Streaming: options stream.
+    StreamOptions,
 }
 
 impl Capability {
@@ -102,6 +104,7 @@ impl Capability {
             Self::OptionsExpirations => "options-expirations",
             Self::OptionChain => "option-chain",
             Self::StreamQuotes => "stream-quotes",
+            Self::StreamOptions => "stream-options",
         }
     }
 }

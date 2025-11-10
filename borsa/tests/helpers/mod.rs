@@ -67,7 +67,7 @@ pub fn instrument(symbol: &Symbol, kind: AssetKind) -> Instrument {
 /// Create a minimal Quote with only `symbol` and `price` populated.
 pub fn quote_fixture(symbol: &Symbol, price: &str) -> borsa_core::Quote {
     borsa_core::Quote {
-        symbol: symbol.clone(),
+        instrument: Instrument::from_symbol(symbol, AssetKind::Equity).unwrap(),
         shortname: None,
         price: Some(usd(price)),
         previous_close: None,

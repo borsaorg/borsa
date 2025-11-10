@@ -47,7 +47,11 @@ async fn forwards_methods_calls() {
 
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid symbol");
     let quote = q.quote(&inst).await.expect("quote ok");
-    assert_eq!(quote.symbol.as_str(), "AAPL");
+    let sym = match quote.instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    assert_eq!(sym, "AAPL");
 
     let hist_req =
         borsa_core::HistoryRequest::try_from_range(borsa_core::Range::D1, Interval::D1).unwrap();

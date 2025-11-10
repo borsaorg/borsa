@@ -8,7 +8,7 @@ use crate::helpers::MockConnector;
 async fn stream_quotes_fails_over_when_first_provider_ends() {
     // First provider emits a single update then ends
     let p1_updates = vec![QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("100.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(1, 0).unwrap(),
@@ -23,14 +23,14 @@ async fn stream_quotes_fails_over_when_first_provider_ends() {
     // Second provider keeps emitting more updates
     let p2_updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("101.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(2, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("102.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(3, 0).unwrap(),

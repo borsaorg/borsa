@@ -22,6 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let aapl = Instrument::from_symbol("AAPL", AssetKind::Equity)?;
     let q = borsa.quote(&aapl).await?;
-    println!("fetched: {:?}", q.symbol);
+    let sym = match q.instrument.id() {
+        borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
+        borsa_core::IdentifierScheme::Prediction(_) => "<non-security>",
+    };
+    println!("fetched: {sym:?}");
     Ok(())
 }

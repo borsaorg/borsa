@@ -10,21 +10,21 @@ async fn clock_skew_monotonic_filter_drops_older_timestamps() {
     // Single provider sends updates with clock skew (out of order timestamps)
     let updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1100, 0).unwrap(), // Future timestamp
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("101.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1000, 0).unwrap(), // Older timestamp
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("102.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1200, 0).unwrap(), // Newer timestamp
@@ -68,14 +68,14 @@ async fn clock_skew_without_monotonic_filter() {
     // Single provider with out-of-order timestamps, monotonic filter disabled
     let updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1100, 0).unwrap(),
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("101.0")),
             previous_close: None,
             ts: chrono::Utc.timestamp_opt(1000, 0).unwrap(), // Older - should NOT be dropped
@@ -115,21 +115,21 @@ async fn equal_timestamps_allowed_with_monotonic_filter() {
 
     let updates = vec![
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.0")),
             previous_close: None,
             ts: common_ts,
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("100.5")),
             previous_close: None,
             ts: common_ts, // Same timestamp
             volume: None,
         },
         QuoteUpdate {
-            symbol: AAPL.clone(),
+            instrument: instrument(&AAPL, AssetKind::Equity),
             price: Some(usd("101.0")),
             previous_close: None,
             ts: common_ts, // Same timestamp again

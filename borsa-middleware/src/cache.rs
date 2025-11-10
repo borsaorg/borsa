@@ -9,15 +9,16 @@ use borsa_core::connector::{
     EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
     InsiderRosterHoldersProvider, InsiderTransactionsProvider, InstitutionalHoldersProvider,
     IsinProvider, MajorHoldersProvider, MutualFundHoldersProvider,
-    NetSharePurchaseActivityProvider, NewsProvider, OptionChainProvider,
+    NetSharePurchaseActivityProvider, NewsProvider, OptionChainProvider, OptionStreamProvider,
     OptionsExpirationsProvider, ProfileProvider, QuoteProvider, RecommendationsProvider,
     RecommendationsSummaryProvider, SearchProvider, StreamProvider, UpgradesDowngradesProvider,
 };
 use borsa_core::{
     AssetKind, BalanceSheetRow, BorsaConnector, BorsaError, Calendar, CashflowRow, Earnings,
     EsgScores, HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument, Interval, Isin,
-    NewsArticle, NewsRequest, NewsTab, OptionChain, PriceTarget, Profile, Quote, Range,
-    RecommendationRow, RecommendationSummary, SearchRequest, SearchResponse, UpgradeDowngradeRow,
+    NewsArticle, NewsRequest, NewsTab, OptionChain, OptionUpdate, PriceTarget, Profile, Quote,
+    Range, RecommendationRow, RecommendationSummary, SearchRequest, SearchResponse,
+    UpgradeDowngradeRow,
 };
 use borsa_types::{CacheConfig, Capability};
 use moka::future::Cache;
@@ -1306,6 +1307,26 @@ impl StreamProvider for CachingConnector {
             .as_stream_provider()
             .ok_or_else(|| BorsaError::unsupported("stream_quotes"))?;
         inner.stream_quotes(instruments).await
+    }
+}
+
+#[async_trait]
+impl OptionStreamProvider for CachingConnector {
+    async fn stream_options(
+        &self,
+        instruments: &[Instrument],
+    ) -> Result<
+        (
+            borsa_core::stream::StreamHandle,
+            tokio::sync::mpsc::Receiver<OptionUpdate>,
+        ),
+        BorsaError,
+    > {
+        let inner = self
+            .inner
+            .as_option_stream_provider()
+            .ok_or_else(|| BorsaError::unsupported("stream_options"))?;
+        inner.stream_options(instruments).await
     }
 }
 

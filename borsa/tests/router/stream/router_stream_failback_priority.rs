@@ -8,7 +8,7 @@ use crate::helpers::{MockConnector, StreamStep};
 #[tokio::test(start_paused = true)]
 async fn stream_quotes_fails_back_to_higher_priority_when_available() {
     let make_update = |ts| QuoteUpdate {
-        symbol: AAPL.clone(),
+        instrument: crate::helpers::instrument(&AAPL, AssetKind::Equity),
         price: Some(usd("100.0")),
         previous_close: None,
         ts: chrono::Utc.timestamp_opt(ts, 0).unwrap(),

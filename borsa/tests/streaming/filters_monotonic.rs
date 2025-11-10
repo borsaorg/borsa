@@ -17,22 +17,22 @@ async fn monotonic_gate_allows_first_and_equal_and_blocks_older() {
     let gate = MonotonicGate::new();
     let s = "AAPL";
 
-    assert!(gate.allow(&mk_u(s, 1000)).await);
+    assert!(gate.allow(s.to_string(), mk_u(s, 1000).ts).await);
     // equal timestamp allowed
-    assert!(gate.allow(&mk_u(s, 1000)).await);
+    assert!(gate.allow(s.to_string(), mk_u(s, 1000).ts).await);
     // older than last rejects
-    assert!(!gate.allow(&mk_u(s, 999)).await);
+    assert!(!gate.allow(s.to_string(), mk_u(s, 999).ts).await);
     // newer allowed, and advances
-    assert!(gate.allow(&mk_u(s, 1001)).await);
+    assert!(gate.allow(s.to_string(), mk_u(s, 1001).ts).await);
 }
 
 #[tokio::test]
 async fn monotonic_gate_is_per_symbol() {
     let gate = MonotonicGate::new();
 
-    assert!(gate.allow(&mk_u("AAPL", 1000)).await);
+    assert!(gate.allow("AAPL".to_string(), mk_u("AAPL", 1000).ts).await);
     // Different symbol does not inherit timestamp
-    assert!(gate.allow(&mk_u("MSFT", 900)).await);
+    assert!(gate.allow("MSFT".to_string(), mk_u("MSFT", 900).ts).await);
 }
 
 

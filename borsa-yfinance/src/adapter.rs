@@ -722,7 +722,11 @@ impl dyn YfSearch {
                     let sym = borsa_core::Symbol::new(&symbol)
                         .map_err(|e| BorsaError::InvalidArg(e.to_string()))?;
                     results.push(borsa_core::SearchResult {
-                        symbol: sym,
+                        instrument: borsa_core::Instrument::from_symbol(
+                            sym.as_str(),
+                            borsa_core::AssetKind::Equity,
+                        )
+                        .unwrap(),
                         name: None,
                         exchange: None,
                         kind: borsa_core::AssetKind::Equity,
