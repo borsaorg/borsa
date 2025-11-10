@@ -248,7 +248,10 @@ pub trait OptionStreamProvider: Send + Sync {
     >;
 }
 
-/// Focused role trait for connectors that provide streaming quote updates.
+/// Focused role trait for connectors that provide streaming quote updates (tick-level).
+///
+/// Use [`CandleStreamProvider`] for OHLCV bar streams with `CandleUpdate::is_final`
+/// marking when the provider finalizes a bar.
 #[async_trait]
 pub trait StreamProvider: Send + Sync {
     /// Start a streaming session for the given instruments.
@@ -259,6 +262,26 @@ pub trait StreamProvider: Send + Sync {
         (
             crate::stream::StreamHandle,
             tokio::sync::mpsc::Receiver<QuoteUpdate>,
+        ),
+        BorsaError,
+    >;
+}
+
+/// Focused role trait for connectors that provide streaming candle (OHLCV) updates.
+///
+/// Each [`crate::CandleUpdate`] conveys bar state for the requested [`Interval`]; the
+/// `is_final` flag reflects when the upstream provider has closed the interval.
+#[async_trait]
+pub trait CandleStreamProvider: Send + Sync {
+    /// Start a streaming session for candle updates at the specified interval.
+    async fn stream_candles(
+        &self,
+        instruments: &[Instrument],
+        interval: Interval,
+    ) -> Result<
+        (
+            crate::stream::StreamHandle,
+            tokio::sync::mpsc::Receiver<crate::CandleUpdate>,
         ),
         BorsaError,
     >;
@@ -415,6 +438,10 @@ pub trait BorsaConnector: Send + Sync {
 
     /// If implemented, returns a trait object for quote streaming.
     fn as_stream_provider(&self) -> Option<&dyn StreamProvider> {
+        None
+    }
+    /// If implemented, returns a trait object for candle streaming.
+    fn as_candle_stream_provider(&self) -> Option<&dyn CandleStreamProvider> {
         None
     }
     /// If implemented, returns a trait object for option streaming.
@@ -629,6 +656,15 @@ macro_rules! borsa_connector_accessors {
         fn as_stream_provider(&self) -> Option<&dyn $crate::connector::StreamProvider> {
             if self.$inner.as_stream_provider().is_some() {
                 Some(self as &dyn $crate::connector::StreamProvider)
+            } else {
+                None
+            }
+        }
+        fn as_candle_stream_provider(
+            &self,
+        ) -> Option<&dyn $crate::connector::CandleStreamProvider> {
+            if self.$inner.as_candle_stream_provider().is_some() {
+                Some(self as &dyn $crate::connector::CandleStreamProvider)
             } else {
                 None
             }
@@ -1154,6 +1190,32 @@ macro_rules! borsa_delegate_provider_impls {
                 <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
                 inner
                     .stream_quotes(instruments)
+                    .await
+                    .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::connector::CandleStreamProvider for $self_ty {
+            async fn stream_candles(
+                &self,
+                instruments: &[$crate::Instrument],
+                interval: $crate::Interval,
+            ) -> Result<
+                (
+                    $crate::stream::StreamHandle,
+                    tokio::sync::mpsc::Receiver<$crate::CandleUpdate>,
+                ),
+                $crate::BorsaError,
+            > {
+                let inner = self
+                    .$inner
+                    .as_candle_stream_provider()
+                    .ok_or_else(|| $crate::BorsaError::unsupported("stream_candles"))?;
+                let ctx = $crate::middleware::CallContext::new($crate::Capability::StreamCandles);
+                <Self as $crate::Middleware>::pre_call(self, &ctx).await?;
+                inner
+                    .stream_candles(instruments, interval)
                     .await
                     .map_err(|e| <Self as $crate::Middleware>::map_error(self, e, &ctx))
             }

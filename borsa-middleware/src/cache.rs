@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use borsa_core::connector::{
-    AnalystPriceTargetProvider, BalanceSheetProvider, CalendarProvider, CashflowProvider,
-    EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
+    AnalystPriceTargetProvider, BalanceSheetProvider, CalendarProvider, CandleStreamProvider,
+    CashflowProvider, EarningsProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
     InsiderRosterHoldersProvider, InsiderTransactionsProvider, InstitutionalHoldersProvider,
     IsinProvider, MajorHoldersProvider, MutualFundHoldersProvider,
     NetSharePurchaseActivityProvider, NewsProvider, OptionChainProvider, OptionStreamProvider,
@@ -14,10 +14,10 @@ use borsa_core::connector::{
     RecommendationsSummaryProvider, SearchProvider, StreamProvider, UpgradesDowngradesProvider,
 };
 use borsa_core::{
-    AssetKind, BalanceSheetRow, BorsaConnector, BorsaError, Calendar, CashflowRow, Earnings,
-    EsgScores, HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument, Interval, Isin,
-    NewsArticle, NewsRequest, NewsTab, OptionChain, OptionUpdate, PriceTarget, Profile, Quote,
-    Range, RecommendationRow, RecommendationSummary, SearchRequest, SearchResponse,
+    AssetKind, BalanceSheetRow, BorsaConnector, BorsaError, Calendar, CandleUpdate, CashflowRow,
+    Earnings, EsgScores, HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument, Interval,
+    Isin, NewsArticle, NewsRequest, NewsTab, OptionChain, OptionUpdate, PriceTarget, Profile,
+    Quote, Range, RecommendationRow, RecommendationSummary, SearchRequest, SearchResponse,
     UpgradeDowngradeRow,
 };
 use borsa_types::{CacheConfig, Capability};
@@ -1287,6 +1287,27 @@ impl NewsProvider for CachingConnector {
         )
         .await?;
         Ok(value)
+    }
+}
+
+#[async_trait]
+impl CandleStreamProvider for CachingConnector {
+    async fn stream_candles(
+        &self,
+        instruments: &[Instrument],
+        interval: Interval,
+    ) -> Result<
+        (
+            borsa_core::stream::StreamHandle,
+            tokio::sync::mpsc::Receiver<CandleUpdate>,
+        ),
+        BorsaError,
+    > {
+        let inner = self
+            .inner
+            .as_candle_stream_provider()
+            .ok_or_else(|| BorsaError::unsupported("stream_candles"))?;
+        inner.stream_candles(instruments, interval).await
     }
 }
 

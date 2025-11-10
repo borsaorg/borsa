@@ -224,6 +224,10 @@ fn default_per_capability_ttl_ms() -> HashMap<String, u64> {
     map.insert(crate::Capability::Quote.as_str().to_string(), 2_000); // 2s quotes
     map.insert(crate::Capability::OptionChain.as_str().to_string(), 30_000); // 30s options chain
     map.insert(crate::Capability::StreamQuotes.as_str().to_string(), 0); // disable caching for streaming
+    map.insert(
+        crate::Capability::StreamCandles.as_str().to_string(),
+        30_000,
+    ); // 30s candle stream timeout
 
     // News flows relatively quickly but not per-second
     map.insert(crate::Capability::News.as_str().to_string(), 120_000); // 2m

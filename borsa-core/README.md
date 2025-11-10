@@ -16,7 +16,8 @@ Core types, traits, and utilities shared across the borsa financial data ecosyst
 `borsa-core` assumes the Tokio ecosystem as the async runtime. Several public APIs are coupled to Tokio types:
 
 - **`stream::StreamHandle`** wraps `tokio::task::JoinHandle<()>` and uses `tokio::sync::oneshot` for cooperative shutdown
-- **`connector::StreamProvider`** returns `(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>)`
+- **`connector::StreamProvider`** returns `(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>)` for tick-level quote updates
+- **`connector::CandleStreamProvider`** returns `(StreamHandle, tokio::sync::mpsc::Receiver<CandleUpdate>)` for provider-native OHLCV streams where `CandleUpdate::is_final` marks bar closure
 - **`middleware::CallOrigin`** is implemented using `tokio::task_local!`
 
 You must run code that uses streaming or middleware under a Tokio 1.x runtime. We recommend enabling Tokio's `macros` and a runtime in your application:
@@ -38,7 +39,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 ### Supported Data Types
 
-- **Quotes**: Real-time and delayed price data
+- **Quotes**: Real-time/delayed price and streaming ticks
+- **Candles**: Streaming and historical OHLCV bars with `CandleUpdate::is_final` when providers close a bar
 - **Historical data**: OHLCV candles with corporate actions (dividends, splits)
 - **Fundamentals**: Income statements, balance sheets, cash flow statements
 - **Profiles**: Company and fund information
@@ -106,6 +108,9 @@ fn check_support(connector: &impl BorsaConnector) {
     }
     if connector.as_history_provider().is_some() {
         println!("This connector supports historical data");
+    }
+    if connector.as_candle_stream_provider().is_some() {
+        println!("This connector streams native OHLCV candles");
     }
     if connector.as_earnings_provider().is_some() {
         println!("This connector supports earnings");

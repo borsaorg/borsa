@@ -7,6 +7,7 @@ This crate centralizes:
 - Report envelopes: `InfoReport`, `SearchReport`, `DownloadReport`
 - Attribution helpers: `Attribution`, `Span`
 - Orchestrator configuration: `BorsaConfig`, `FetchStrategy`, `MergeStrategy`, `Resampling`, `BackoffConfig`
+- Capability catalog: `Capability::{StreamQuotes, StreamCandles, StreamOptions, ...}` for routing and middleware policy decisions
 
 Most users only depend on `borsa` or `borsa-core`, which re-export these types for convenience. Depend on `borsa-types` directly if you:
 - Serialize/deserialize reports or errors directly

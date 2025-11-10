@@ -14,6 +14,7 @@
 //! - `stream::StreamHandle` wraps `tokio::task::JoinHandle<()>` and uses
 //!   `tokio::sync::oneshot::Sender<()>` for cooperative shutdown.
 //! - `connector::StreamProvider` returns `(StreamHandle, tokio::sync::mpsc::Receiver<QuoteUpdate>)`.
+//! - `connector::CandleStreamProvider` returns `(StreamHandle, tokio::sync::mpsc::Receiver<CandleUpdate>)`.
 //! - `middleware::CallOrigin` uses `tokio::task_local!` to track call origin
 //!   across async boundaries.
 //!

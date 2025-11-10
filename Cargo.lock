@@ -1835,7 +1835,7 @@ dependencies = [
 [[package]]
 name = "paft"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "iso_currency",
  "paft-aggregates",
@@ -1852,7 +1852,7 @@ dependencies = [
 [[package]]
 name = "paft-aggregates"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1868,7 +1868,7 @@ dependencies = [
 [[package]]
 name = "paft-core"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "chrono",
  "serde",
@@ -1878,7 +1878,7 @@ dependencies = [
 [[package]]
 name = "paft-domain"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1894,7 +1894,7 @@ dependencies = [
 [[package]]
 name = "paft-fundamentals"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1911,7 +1911,7 @@ dependencies = [
 [[package]]
 name = "paft-market"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "bitflags",
  "chrono",
@@ -1930,7 +1930,7 @@ dependencies = [
 [[package]]
 name = "paft-money"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "df-derive",
  "iso_currency",
@@ -1944,7 +1944,7 @@ dependencies = [
 [[package]]
 name = "paft-prediction"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "chrono",
  "df-derive",
@@ -1959,7 +1959,7 @@ dependencies = [
 [[package]]
 name = "paft-utils"
 version = "0.8.0"
-source = "git+https://github.com/paft-rs/paft?rev=dc02e8c0512d662953b94a6b095b9801eb9897e0#dc02e8c0512d662953b94a6b095b9801eb9897e0"
+source = "git+https://github.com/paft-rs/paft?rev=a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f#a471ba8f7cd57fab0a5279ad3b142ca38cb61a0f"
 dependencies = [
  "polars",
  "thiserror",
@@ -4678,7 +4678,7 @@ checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 [[package]]
 name = "yfinance-rs"
 version = "0.7.2"
-source = "git+https://github.com/gramistella/yfinance-rs?rev=e63aae5f6285eb136bcf9d35c4f7b312f57ef9bf#e63aae5f6285eb136bcf9d35c4f7b312f57ef9bf"
+source = "git+https://github.com/gramistella/yfinance-rs?rev=81d42005d28a352b72bed9d5f2be265176a28846#81d42005d28a352b72bed9d5f2be265176a28846"
 dependencies = [
  "base64",
  "chrono",

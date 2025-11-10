@@ -48,6 +48,7 @@ pub use paft::market::requests::history::{HistoryRequest, HistoryRequestBuilder,
 pub use paft::market::requests::news::{NewsRequest, NewsTab};
 pub use paft::market::requests::search::SearchRequest;
 pub use paft::market::responses::download::{DownloadEntry, DownloadResponse};
+pub use paft::market::responses::history::CandleUpdate;
 pub use paft::market::responses::history::{Candle, HistoryMeta, HistoryResponse};
 pub use paft::market::responses::search::{SearchResponse, SearchResult};
 
