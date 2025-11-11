@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use borsa_core::{BorsaError, Instrument, Symbol};
+use borsa_core::{BorsaError, Capability, Instrument, Symbol};
 use tokio::sync::oneshot;
 
 use super::error::collapse_stream_errors;
@@ -77,6 +77,7 @@ pub struct Supervisor {
     pub required_symbols: HashSet<Symbol>,
     /// Whether each provider supports streaming (driver provides this)
     pub providers_can_stream: Vec<bool>,
+    pub capability: Capability,
 
     pub start_index: usize,
     /// Next provider to consider during this round
@@ -389,7 +390,7 @@ impl Supervisor {
                 },
                 vec![Action::NotifyInitial {
                     tx,
-                    result: Err(collapse_stream_errors(accumulated_errors)),
+                    result: Err(collapse_stream_errors(self.capability, accumulated_errors)),
                 }],
             );
         }
@@ -430,7 +431,10 @@ impl Supervisor {
                         },
                         vec![Action::NotifyInitial {
                             tx,
-                            result: Err(collapse_stream_errors(accumulated_errors)),
+                            result: Err(collapse_stream_errors(
+                                self.capability,
+                                accumulated_errors,
+                            )),
                         }],
                     );
                 }

@@ -70,6 +70,55 @@ impl Borsa {
             Capability::StreamQuotes.to_string(),
         ))
     }
+    fn check_no_scored_candle_stream_providers(
+        &self,
+        kind: AssetKind,
+        exchange: Option<&Exchange>,
+        instruments: &[Instrument],
+    ) -> Result<EligibleStreamProviders, BorsaError> {
+        let candidates: Vec<&Arc<dyn BorsaConnector>> = self
+            .connectors
+            .iter()
+            .filter(|c| c.as_candle_stream_provider().is_some() && c.supports_kind(kind))
+            .collect();
+
+        if !candidates.is_empty() {
+            let mut strict_rejected: Vec<Symbol> = Vec::new();
+            for inst in instruments {
+                let sym_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ex_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ctx =
+                    RoutingContext::new(sym_opt, Some(kind), ex_opt.or_else(|| exchange.cloned()));
+                let any_allowed = candidates.iter().any(|c| {
+                    self.cfg
+                        .routing_policy
+                        .providers
+                        .provider_rank(&ctx, &c.key())
+                        .is_some()
+                });
+                if !any_allowed && let Some(sym) = sym_opt {
+                    strict_rejected.push(sym.clone());
+                }
+            }
+            if !strict_rejected.is_empty() {
+                strict_rejected.sort();
+                strict_rejected.dedup();
+                return Err(BorsaError::StrictSymbolsRejected {
+                    rejected: strict_rejected,
+                });
+            }
+        }
+
+        Err(BorsaError::unsupported(
+            Capability::StreamCandles.to_string(),
+        ))
+    }
     fn check_no_scored_option_stream_providers(
         &self,
         kind: AssetKind,
@@ -120,6 +169,77 @@ impl Borsa {
         Err(BorsaError::unsupported(
             Capability::StreamOptions.to_string(),
         ))
+    }
+    pub(crate) fn eligible_candle_stream_providers_for_context(
+        &self,
+        kind: AssetKind,
+        exchange: Option<&Exchange>,
+        instruments: &[Instrument],
+    ) -> Result<EligibleStreamProviders, BorsaError> {
+        let mut scored: Vec<StreamProviderScore> = Vec::new();
+
+        for (orig_idx, connector) in self.connectors.iter().cloned().enumerate() {
+            if connector.as_candle_stream_provider().is_none() {
+                continue;
+            }
+            if !connector.supports_kind(kind) {
+                continue;
+            }
+
+            let mut allowed_syms: HashSet<Symbol> = HashSet::new();
+            let mut min_rank: usize = usize::MAX;
+            for inst in instruments {
+                let sym_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => Some(&sec.symbol),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ex_opt = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+                    borsa_core::IdentifierScheme::Prediction(_) => None,
+                };
+                let ctx =
+                    RoutingContext::new(sym_opt, Some(kind), ex_opt.or_else(|| exchange.cloned()));
+                if let Some((rank, _strict)) = self
+                    .cfg
+                    .routing_policy
+                    .providers
+                    .provider_rank(&ctx, &connector.key())
+                {
+                    if let Some(sym) = sym_opt {
+                        allowed_syms.insert(sym.clone());
+                    }
+                    if rank < min_rank {
+                        min_rank = rank;
+                    }
+                }
+            }
+
+            if !allowed_syms.is_empty() {
+                scored.push((min_rank, orig_idx, connector, allowed_syms));
+            }
+        }
+
+        if scored.is_empty() {
+            return self.check_no_scored_candle_stream_providers(kind, exchange, instruments);
+        }
+
+        scored.sort_by_key(|(min_rank, orig_idx, _, _)| (*min_rank, *orig_idx));
+
+        let mut providers: Vec<Arc<dyn BorsaConnector>> = Vec::new();
+        let mut provider_symbols: Vec<HashSet<Symbol>> = Vec::new();
+        let mut union_symbols: HashSet<Symbol> = HashSet::new();
+
+        for (_, _, c, syms) in scored {
+            union_symbols.extend(syms.iter().cloned());
+            providers.push(c);
+            provider_symbols.push(syms);
+        }
+
+        Ok(EligibleStreamProviders {
+            providers,
+            provider_symbols,
+            union_symbols,
+        })
     }
     pub(crate) fn eligible_stream_providers_for_context(
         &self,

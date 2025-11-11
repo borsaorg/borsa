@@ -109,6 +109,8 @@ mod router_search_unsupported;
 mod downstream_drop_prop;
 #[path = "router/stream/router_stream_backoff.rs"]
 mod router_stream_backoff;
+#[path = "router/stream/router_stream_candles.rs"]
+mod router_stream_candles;
 #[path = "router/stream/router_stream_clock_skew.rs"]
 mod router_stream_clock_skew;
 #[path = "router/stream/router_stream_cooldown.rs"]

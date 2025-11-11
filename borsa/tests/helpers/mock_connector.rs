@@ -7,15 +7,16 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use borsa_core::{
-    AssetKind, BalanceSheetRow, BorsaConnector, BorsaError, Calendar, Candle, CashflowRow,
-    EsgScores, HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument, MajorHolder,
-    NewsArticle, OptionChain, PriceTarget, Quote, RecommendationRow, RecommendationSummary,
-    UpgradeDowngradeRow,
+    AssetKind, BalanceSheetRow, BorsaConnector, BorsaError, Calendar, Candle, CandleUpdate,
+    CashflowRow, EsgScores, HistoryRequest, HistoryResponse, IncomeStatementRow, Instrument,
+    MajorHolder, NewsArticle, OptionChain, PriceTarget, Quote, RecommendationRow,
+    RecommendationSummary, UpgradeDowngradeRow,
     connector::{
-        AnalystPriceTargetProvider, BalanceSheetProvider, CalendarProvider, CashflowProvider,
-        EsgProvider, HistoryProvider, IncomeStatementProvider, MajorHoldersProvider, NewsProvider,
-        OptionChainProvider, OptionsExpirationsProvider, QuoteProvider, RecommendationsProvider,
-        RecommendationsSummaryProvider, SearchProvider, StreamProvider, UpgradesDowngradesProvider,
+        AnalystPriceTargetProvider, BalanceSheetProvider, CalendarProvider, CandleStreamProvider,
+        CashflowProvider, EsgProvider, HistoryProvider, IncomeStatementProvider,
+        MajorHoldersProvider, NewsProvider, OptionChainProvider, OptionsExpirationsProvider,
+        QuoteProvider, RecommendationsProvider, RecommendationsSummaryProvider, SearchProvider,
+        StreamProvider, UpgradesDowngradesProvider,
     },
 };
 use borsa_core::{NewsRequest, SearchRequest, SearchResponse, SearchResult};
@@ -47,6 +48,8 @@ pub struct MockConnector {
     pub history_intervals: &'static [borsa_core::Interval],
     // Optional scripted steps applied per stream_quotes call (in order).
     pub stream_steps: Option<Arc<Mutex<Vec<StreamStep>>>>,
+    pub candle_stream_updates: Option<Vec<CandleUpdate>>,
+    pub candle_stream_start_error: Option<&'static str>,
 
     // Optional closures to customize behavior per test
     pub quote_fn: Option<Arc<dyn Fn(&Instrument) -> Result<Quote, BorsaError> + Send + Sync>>,
@@ -116,6 +119,8 @@ impl Default for MockConnector {
             stream_start_error: None,
             history_intervals: DEFAULT_HISTORY_INTERVALS,
             stream_steps: None,
+            candle_stream_updates: None,
+            candle_stream_start_error: None,
 
             quote_fn: None,
             history_fn: None,
@@ -359,6 +364,64 @@ impl StreamProvider for MockConnector {
 }
 
 #[async_trait]
+impl CandleStreamProvider for MockConnector {
+    async fn stream_candles(
+        &self,
+        instruments: &[Instrument],
+        interval: borsa_core::Interval,
+    ) -> Result<
+        (
+            borsa_core::stream::StreamHandle,
+            tokio::sync::mpsc::Receiver<CandleUpdate>,
+        ),
+        BorsaError,
+    > {
+        if let Some(msg) = self.candle_stream_start_error {
+            return Err(BorsaError::Other(msg.to_string()));
+        }
+        let updates = self
+            .candle_stream_updates
+            .clone()
+            .ok_or_else(|| BorsaError::unsupported("stream_candles"))?;
+
+        let allow: std::collections::HashSet<Instrument> = instruments.iter().cloned().collect();
+
+        let (tx, rx) = tokio::sync::mpsc::channel::<CandleUpdate>(1024);
+        let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let delay_ms = self.delay_ms;
+        let join = tokio::spawn(async move {
+            for u in updates {
+                if u.interval != interval {
+                    continue;
+                }
+                if !allow.is_empty() && !allow.contains(&u.instrument) {
+                    continue;
+                }
+                let update = u.clone();
+                tokio::select! {
+                    biased;
+                    _ = &mut stop_rx => {
+                        return;
+                    }
+                    () = async {
+                        if delay_ms > 0 {
+                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        }
+                    } => {
+                        if tx.send(update).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            }
+            let _ = tokio::time::timeout(Duration::from_millis(50), &mut stop_rx).await;
+        });
+
+        Ok((borsa_core::stream::StreamHandle::new(join, stop_tx), rx))
+    }
+}
+
+#[async_trait]
 impl RecommendationsProvider for MockConnector {
     async fn recommendations(&self, i: &Instrument) -> Result<Vec<RecommendationRow>, BorsaError> {
         if self.delay_ms > 0 {
@@ -563,6 +626,16 @@ impl BorsaConnector for MockConnector {
         }
     }
 
+    fn as_candle_stream_provider(
+        &self,
+    ) -> Option<&dyn borsa_core::connector::CandleStreamProvider> {
+        if self.candle_stream_updates.is_some() || self.candle_stream_start_error.is_some() {
+            Some(self as &dyn CandleStreamProvider)
+        } else {
+            None
+        }
+    }
+
     fn as_recommendations_provider(
         &self,
     ) -> Option<&dyn borsa_core::connector::RecommendationsProvider> {
@@ -677,6 +750,8 @@ pub struct MockConnectorBuilder {
     stream_updates: Option<Vec<borsa_core::QuoteUpdate>>,
     stream_start_error: Option<&'static str>,
     stream_steps: Option<Arc<Mutex<Vec<StreamStep>>>>,
+    candle_stream_updates: Option<Vec<CandleUpdate>>,
+    candle_stream_start_error: Option<&'static str>,
 
     // Analysis
     recommendations_fn: Option<
@@ -724,6 +799,8 @@ impl MockConnectorBuilder {
             stream_updates: None,
             stream_start_error: None,
             stream_steps: None,
+            candle_stream_updates: None,
+            candle_stream_start_error: None,
 
             recommendations_fn: None,
             recommendations_summary_fn: None,
@@ -765,6 +842,14 @@ impl MockConnectorBuilder {
     }
     pub fn will_fail_stream_start(mut self, msg: &'static str) -> Self {
         self.stream_start_error = Some(msg);
+        self
+    }
+    pub fn with_candle_stream_updates(mut self, updates: Vec<CandleUpdate>) -> Self {
+        self.candle_stream_updates = Some(updates);
+        self
+    }
+    pub fn will_fail_candle_stream_start(mut self, msg: &'static str) -> Self {
+        self.candle_stream_start_error = Some(msg);
         self
     }
 
@@ -1006,6 +1091,8 @@ impl MockConnectorBuilder {
             stream_start_error: self.stream_start_error,
             history_intervals: self.history_intervals,
             stream_steps: self.stream_steps,
+            candle_stream_updates: self.candle_stream_updates,
+            candle_stream_start_error: self.candle_stream_start_error,
             quote_fn: self.quote_fn,
             history_fn: self.history_fn,
             search_fn: self.search_fn,

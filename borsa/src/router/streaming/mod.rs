@@ -11,8 +11,8 @@ pub use error::collapse_stream_errors;
 pub use planner::EligibleStreamProviders;
 
 use borsa_core::{
-    BorsaConnector, BorsaError, IdentifierScheme, Instrument, OptionUpdate, QuoteUpdate, Symbol,
-    stream::StreamHandle,
+    BorsaConnector, BorsaError, CandleUpdate, IdentifierScheme, Instrument, Interval, OptionUpdate,
+    QuoteUpdate, Symbol, stream::StreamHandle,
 };
 use chrono::{DateTime, Utc};
 use tokio::sync::mpsc;
@@ -55,15 +55,31 @@ impl StreamableUpdate for OptionUpdate {
     }
 }
 
+impl StreamableUpdate for CandleUpdate {
+    fn stream_symbol(&self) -> &Symbol {
+        match self.instrument.id() {
+            IdentifierScheme::Security(sec) => &sec.symbol,
+            IdentifierScheme::Prediction(_) => {
+                unreachable!("CandleUpdate.instrument is not a security")
+            }
+        }
+    }
+    fn stream_ts(&self) -> DateTime<Utc> {
+        self.candle.ts
+    }
+}
+
 /// Adapter trait to start a stream for a given update type.
 #[async_trait::async_trait]
 pub trait StreamUpdateKind: StreamableUpdate {
+    type Context: Send + Sync + Clone + 'static;
     /// Whether the provider can stream this update kind.
-    fn can_stream(provider: &dyn BorsaConnector) -> bool;
+    fn can_stream(provider: &dyn BorsaConnector, ctx: &Self::Context) -> bool;
     /// Start a streaming session for this update type.
     async fn start_stream(
         provider: &dyn BorsaConnector,
         instruments: &[Instrument],
+        ctx: &Self::Context,
     ) -> Result<(StreamHandle, mpsc::Receiver<Self>), BorsaError>
     where
         Self: Sized;
@@ -71,12 +87,15 @@ pub trait StreamUpdateKind: StreamableUpdate {
 
 #[async_trait::async_trait]
 impl StreamUpdateKind for QuoteUpdate {
-    fn can_stream(provider: &dyn BorsaConnector) -> bool {
+    type Context = ();
+
+    fn can_stream(provider: &dyn BorsaConnector, _ctx: &Self::Context) -> bool {
         provider.as_stream_provider().is_some()
     }
     async fn start_stream(
         provider: &dyn BorsaConnector,
         instruments: &[Instrument],
+        _ctx: &Self::Context,
     ) -> Result<(StreamHandle, mpsc::Receiver<Self>), BorsaError> {
         match provider.as_stream_provider() {
             Some(sp) => sp.stream_quotes(instruments).await,
@@ -87,16 +106,38 @@ impl StreamUpdateKind for QuoteUpdate {
 
 #[async_trait::async_trait]
 impl StreamUpdateKind for OptionUpdate {
-    fn can_stream(provider: &dyn BorsaConnector) -> bool {
+    type Context = ();
+
+    fn can_stream(provider: &dyn BorsaConnector, _ctx: &Self::Context) -> bool {
         provider.as_option_stream_provider().is_some()
     }
     async fn start_stream(
         provider: &dyn BorsaConnector,
         instruments: &[Instrument],
+        _ctx: &Self::Context,
     ) -> Result<(StreamHandle, mpsc::Receiver<Self>), BorsaError> {
         match provider.as_option_stream_provider() {
             Some(sp) => sp.stream_options(instruments).await,
             None => Err(borsa_core::BorsaError::unsupported("stream_options")),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl StreamUpdateKind for CandleUpdate {
+    type Context = Interval;
+
+    fn can_stream(provider: &dyn BorsaConnector, _ctx: &Self::Context) -> bool {
+        provider.as_candle_stream_provider().is_some()
+    }
+    async fn start_stream(
+        provider: &dyn BorsaConnector,
+        instruments: &[Instrument],
+        ctx: &Self::Context,
+    ) -> Result<(StreamHandle, mpsc::Receiver<Self>), BorsaError> {
+        match provider.as_candle_stream_provider() {
+            Some(sp) => sp.stream_candles(instruments, *ctx).await,
+            None => Err(borsa_core::BorsaError::unsupported("stream_candles")),
         }
     }
 }

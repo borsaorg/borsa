@@ -54,6 +54,7 @@ pub use borsa_core::{
     CacheConfig,
     Calendar,
     Candle,
+    CandleUpdate,
     Capability,
     CashflowRow,
     CompanyProfile,

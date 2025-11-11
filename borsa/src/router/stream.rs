@@ -1,16 +1,330 @@
 use crate::router::streaming::{
-    EligibleStreamProviders, KindSupervisorParams, collapse_stream_errors, spawn_kind_supervisor,
+    EligibleStreamProviders, KindSupervisorParams, StreamUpdateKind, collapse_stream_errors,
+    spawn_kind_supervisor,
 };
 use crate::{BackoffConfig, Borsa};
 use borsa_core::{
-    AssetKind, BorsaConnector, BorsaError, Exchange, Instrument, OptionUpdate, QuoteUpdate,
-    RoutingContext, Symbol, stream::StreamHandle,
+    AssetKind, BorsaConnector, BorsaError, CandleUpdate, Capability, Exchange, Instrument,
+    Interval, OptionUpdate, QuoteUpdate, RoutingContext, Symbol, stream::StreamHandle,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, watch};
 
 impl Borsa {
+    #[allow(clippy::too_many_lines)]
+    async fn stream_updates_with_backoff<T, F>(
+        &self,
+        instruments: &[Instrument],
+        context: T::Context,
+        backoff_override: Option<BackoffConfig>,
+        capability: Capability,
+        eligible_fn: F,
+    ) -> Result<(StreamHandle, mpsc::Receiver<T>), BorsaError>
+    where
+        T: StreamUpdateKind,
+        T::Context: Clone,
+        F: Fn(
+            &Self,
+            AssetKind,
+            Option<&Exchange>,
+            &[Instrument],
+        ) -> Result<EligibleStreamProviders, BorsaError>,
+    {
+        tokio::task::yield_now().await;
+        if instruments.is_empty() {
+            return Err(borsa_core::BorsaError::InvalidArg(
+                "instruments list cannot be empty".into(),
+            ));
+        }
+
+        let mut by_group: HashMap<(AssetKind, Option<Exchange>), Vec<Instrument>> = HashMap::new();
+        for inst in instruments.iter().cloned() {
+            let exch_opt = match inst.id() {
+                borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
+                borsa_core::IdentifierScheme::Prediction(_) => None,
+            };
+            by_group
+                .entry((*inst.kind(), exch_opt))
+                .or_default()
+                .push(inst);
+        }
+
+        let resolved_backoff: BackoffConfig =
+            backoff_override.or(self.cfg.backoff).unwrap_or_default();
+
+        let (tx, rx) = mpsc::channel::<T>(1024);
+        let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        let (stop_broadcast_tx, stop_broadcast_rx) = watch::channel(false);
+
+        let mut joins = Vec::new();
+        let mut init_receivers: Vec<oneshot::Receiver<Result<(), BorsaError>>> = Vec::new();
+        for ((kind, ex), list) in by_group {
+            let EligibleStreamProviders {
+                providers,
+                provider_symbols,
+                union_symbols,
+            } = eligible_fn(self, kind, ex.as_ref(), &list)?;
+            if union_symbols.is_empty() {
+                continue;
+            }
+
+            let mut list_pairs: Vec<(Instrument, Symbol)> = Vec::with_capacity(list.len());
+            for inst in list {
+                let sym = match inst.id() {
+                    borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
+                    borsa_core::IdentifierScheme::Prediction(_) => {
+                        return Err(BorsaError::unsupported(
+                            "instrument scheme (stream/security-only)",
+                        ));
+                    }
+                };
+                list_pairs.push((inst, sym));
+            }
+
+            let requested: HashSet<Symbol> = list_pairs.iter().map(|(_, s)| s.clone()).collect();
+            let rejected: Vec<Symbol> = requested.difference(&union_symbols).cloned().collect();
+            if !rejected.is_empty() {
+                let mut strict_filtered: Vec<Symbol> = Vec::new();
+                let candidates: Vec<&Arc<dyn BorsaConnector>> = self
+                    .connectors
+                    .iter()
+                    .filter(|c| match capability {
+                        Capability::StreamQuotes => c.as_stream_provider().is_some(),
+                        Capability::StreamOptions => c.as_option_stream_provider().is_some(),
+                        Capability::StreamCandles => c.as_candle_stream_provider().is_some(),
+                        _ => false,
+                    } && c.supports_kind(kind))
+                    .collect();
+                for sym in &rejected {
+                    if !candidates.is_empty() {
+                        let mut any_allowed = false;
+                        for c in &candidates {
+                            let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
+                            if self
+                                .cfg
+                                .routing_policy
+                                .providers
+                                .provider_rank(&ctx, &c.key())
+                                .is_some()
+                            {
+                                any_allowed = true;
+                                break;
+                            }
+                        }
+                        if !any_allowed {
+                            strict_filtered.push(sym.clone());
+                        }
+                    }
+                }
+                if !strict_filtered.is_empty() {
+                    return Err(BorsaError::StrictSymbolsRejected {
+                        rejected: strict_filtered,
+                    });
+                }
+            }
+
+            let mut group_has_explicit: bool = false;
+            'outer: for (_, sym) in &list_pairs {
+                for p in &providers {
+                    let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
+                    if let Some((rank, _)) = self
+                        .cfg
+                        .routing_policy
+                        .providers
+                        .provider_rank(&ctx, &p.key())
+                        && rank != usize::MAX
+                    {
+                        group_has_explicit = true;
+                        break 'outer;
+                    }
+                }
+            }
+
+            if group_has_explicit {
+                let mut primary_groups: HashMap<usize, Vec<Symbol>> = HashMap::new();
+                for sym in &requested {
+                    if !union_symbols.contains(sym) {
+                        continue;
+                    }
+                    let mut ranked: Vec<(usize, usize)> = Vec::new();
+                    for (idx, p) in providers.iter().enumerate() {
+                        if !provider_symbols
+                            .get(idx)
+                            .is_some_and(|set| set.contains(sym))
+                        {
+                            continue;
+                        }
+                        let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
+                        if let Some((rank, _strict)) = self
+                            .cfg
+                            .routing_policy
+                            .providers
+                            .provider_rank(&ctx, &p.key())
+                        {
+                            ranked.push((rank, idx));
+                        }
+                    }
+                    if ranked.is_empty() {
+                        continue;
+                    }
+                    ranked.sort_by_key(|(rank, providers_idx)| (*rank, *providers_idx));
+                    let (_best_rank, best_idx) = ranked[0];
+                    primary_groups
+                        .entry(best_idx)
+                        .or_default()
+                        .push(sym.clone());
+                }
+
+                for (primary_idx, group_syms) in primary_groups {
+                    let group_syms_set: HashSet<Symbol> = group_syms.iter().cloned().collect();
+
+                    let mut chain_indices: Vec<usize> = Vec::with_capacity(providers.len());
+                    chain_indices.push(primary_idx);
+                    for j in 0..providers.len() {
+                        if j != primary_idx {
+                            chain_indices.push(j);
+                        }
+                    }
+
+                    let mut chain_providers: Vec<Arc<dyn BorsaConnector>> =
+                        Vec::with_capacity(chain_indices.len());
+                    let mut provider_instruments: Vec<Vec<Instrument>> =
+                        Vec::with_capacity(chain_indices.len());
+                    let mut provider_allow: Vec<HashSet<Symbol>> =
+                        Vec::with_capacity(chain_indices.len());
+
+                    for &orig_idx in &chain_indices {
+                        chain_providers.push(providers[orig_idx].clone());
+                        let allow_full =
+                            provider_symbols.get(orig_idx).cloned().unwrap_or_default();
+                        let filtered_allow: HashSet<Symbol> = allow_full
+                            .into_iter()
+                            .filter(|s| group_syms_set.contains(s))
+                            .collect();
+                        let assigned = list_pairs
+                            .iter()
+                            .filter(|(_, sym)| filtered_allow.contains(sym))
+                            .map(|(inst, _)| inst.clone())
+                            .collect::<Vec<_>>();
+                        provider_instruments.push(assigned);
+                        provider_allow.push(filtered_allow);
+                    }
+
+                    let min_backoff_ms = resolved_backoff.min_backoff_ms;
+                    let max_backoff_ms = resolved_backoff.max_backoff_ms;
+                    let factor = resolved_backoff.factor.max(1);
+                    let jitter_percent = resolved_backoff.jitter_percent.min(100);
+
+                    let required_symbols: HashSet<Symbol> = group_syms_set.clone();
+                    let (init_tx, init_rx) = oneshot::channel();
+                    let context_arc = Arc::new(context.clone());
+                    let params = KindSupervisorParams {
+                        providers: chain_providers,
+                        provider_instruments,
+                        provider_allow,
+                        required_symbols,
+                        min_backoff_ms,
+                        max_backoff_ms,
+                        factor,
+                        jitter_percent: u32::from(jitter_percent),
+                        initial_notify: Some(init_tx),
+                        enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
+                        capability,
+                        context: context_arc,
+                    };
+                    let join =
+                        spawn_kind_supervisor::<T>(params, stop_broadcast_rx.clone(), tx.clone());
+                    joins.push(join);
+                    init_receivers.push(init_rx);
+                }
+            } else {
+                let mut provider_instruments: Vec<Vec<Instrument>> =
+                    Vec::with_capacity(providers.len());
+                let mut provider_allow: Vec<HashSet<Symbol>> = Vec::with_capacity(providers.len());
+                for allow in &provider_symbols {
+                    let assigned = list_pairs
+                        .iter()
+                        .filter(|(_, sym)| allow.contains(sym))
+                        .map(|(inst, _)| inst.clone())
+                        .collect::<Vec<_>>();
+                    provider_instruments.push(assigned);
+                    provider_allow.push(allow.clone());
+                }
+
+                let min_backoff_ms = resolved_backoff.min_backoff_ms;
+                let max_backoff_ms = resolved_backoff.max_backoff_ms;
+                let factor = resolved_backoff.factor.max(1);
+                let jitter_percent = resolved_backoff.jitter_percent.min(100);
+
+                let (init_tx, init_rx) = oneshot::channel();
+
+                let required_symbols: HashSet<Symbol> = list_pairs
+                    .iter()
+                    .filter(|(_, sym)| union_symbols.contains(sym))
+                    .map(|(_, sym)| sym.clone())
+                    .collect();
+
+                let context_arc = Arc::new(context.clone());
+                let params = KindSupervisorParams {
+                    providers,
+                    provider_instruments,
+                    provider_allow,
+                    required_symbols,
+                    min_backoff_ms,
+                    max_backoff_ms,
+                    factor,
+                    jitter_percent: u32::from(jitter_percent),
+                    initial_notify: Some(init_tx),
+                    enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
+                    capability,
+                    context: context_arc,
+                };
+                let join =
+                    spawn_kind_supervisor::<T>(params, stop_broadcast_rx.clone(), tx.clone());
+                joins.push(join);
+                init_receivers.push(init_rx);
+            }
+        }
+
+        let mut init_errors: Vec<BorsaError> = Vec::new();
+        let mut success_kinds: usize = 0;
+        for rx in init_receivers {
+            match rx.await {
+                Ok(Ok(())) => {
+                    success_kinds += 1;
+                }
+                Ok(Err(e)) => init_errors.push(e),
+                Err(_) => init_errors.push(BorsaError::Other(
+                    "stream supervisor dropped before initialization".into(),
+                )),
+            }
+        }
+
+        if success_kinds == 0 || !init_errors.is_empty() {
+            let err = collapse_stream_errors(capability, init_errors);
+            for join in joins {
+                join.abort();
+            }
+            let _ = stop_broadcast_tx.send(true);
+            return Err(err);
+        }
+
+        let supervisor = tokio::spawn(async move {
+            let mut stop_rx_inner = stop_rx;
+            tokio::select! {
+                _ = &mut stop_rx_inner => {}
+                () = tx.closed() => {}
+            }
+            let _ = stop_broadcast_tx.send(true);
+            for j in joins {
+                let _ = j.await;
+            }
+        });
+
+        Ok((StreamHandle::new(supervisor, stop_tx), rx))
+    }
+
     /// Start streaming quotes with automatic backoff, provider failover, and policy-aware routing.
     ///
     /// Parameters:
@@ -65,314 +379,16 @@ impl Borsa {
         instruments: &[Instrument],
         backoff_override: Option<BackoffConfig>,
     ) -> Result<(StreamHandle, mpsc::Receiver<QuoteUpdate>), BorsaError> {
-        // Ensure this async function awaits at least once to avoid unused_async lint.
-        tokio::task::yield_now().await;
-        if instruments.is_empty() {
-            return Err(borsa_core::BorsaError::InvalidArg(
-                "instruments list cannot be empty".into(),
-            ));
-        }
-
-        // Group instruments by (kind, exchange) to respect provider rules that depend on exchange.
-        let mut by_group: HashMap<(AssetKind, Option<Exchange>), Vec<Instrument>> = HashMap::new();
-        for inst in instruments.iter().cloned() {
-            let exch_opt = match inst.id() {
-                borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
-                borsa_core::IdentifierScheme::Prediction(_) => None,
-            };
-            by_group
-                .entry((*inst.kind(), exch_opt))
-                .or_default()
-                .push(inst);
-        }
-
-        let resolved_backoff: BackoffConfig =
-            backoff_override.or(self.cfg.backoff).unwrap_or_default();
-
-        // For each kind, spin up a supervisor loop identical to previous logic, then fan-in.
-        let (tx, rx) = mpsc::channel::<QuoteUpdate>(1024);
-        let (stop_tx, stop_rx) = oneshot::channel::<()>();
-        let (stop_broadcast_tx, stop_broadcast_rx) = watch::channel(false);
-
-        let mut joins = Vec::new();
-        let mut init_receivers: Vec<oneshot::Receiver<Result<(), BorsaError>>> = Vec::new();
-        for ((kind, ex), list) in by_group {
-            let EligibleStreamProviders {
-                providers,
-                provider_symbols,
-                union_symbols,
-            } = self.eligible_stream_providers_for_context(kind, ex.as_ref(), &list)?;
-            if union_symbols.is_empty() {
-                continue;
-            }
-
-            // Extract symbols from Security ids and reject non-Security instruments
-            let mut list_pairs: Vec<(Instrument, Symbol)> = Vec::with_capacity(list.len());
-            for inst in list {
-                let sym = match inst.id() {
-                    borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
-                    borsa_core::IdentifierScheme::Prediction(_) => {
-                        return Err(BorsaError::unsupported(
-                            "instrument scheme (stream/security-only)",
-                        ));
-                    }
-                };
-                list_pairs.push((inst, sym));
-            }
-
-            // Strict policy failure precheck: find symbols requested but rejected by a strict rule.
-            let requested: HashSet<Symbol> = list_pairs.iter().map(|(_, s)| s.clone()).collect();
-            let rejected: Vec<Symbol> = requested.difference(&union_symbols).cloned().collect();
-            if !rejected.is_empty() {
-                // Determine if strict rules excluded these symbols (vs capability absence).
-                let mut strict_filtered: Vec<Symbol> = Vec::new();
-                // Consider only streaming-capable providers that support this kind
-                let candidates: Vec<&Arc<dyn BorsaConnector>> = self
-                    .connectors
-                    .iter()
-                    .filter(|c| c.as_stream_provider().is_some() && c.supports_kind(kind))
-                    .collect();
-                for sym in &rejected {
-                    if !candidates.is_empty() {
-                        let mut any_allowed = false;
-                        for c in &candidates {
-                            let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
-                            if self
-                                .cfg
-                                .routing_policy
-                                .providers
-                                .provider_rank(&ctx, &c.key())
-                                .is_some()
-                            {
-                                any_allowed = true;
-                                break;
-                            }
-                        }
-                        if !any_allowed {
-                            strict_filtered.push(sym.clone());
-                        }
-                    }
-                }
-                if !strict_filtered.is_empty() {
-                    return Err(BorsaError::StrictSymbolsRejected {
-                        rejected: strict_filtered,
-                    });
-                }
-            }
-
-            // Decide mode: if any symbol in this group has an explicit provider preference
-            // (rank != usize::MAX), route per-symbol; otherwise, use group-level fallback.
-            let mut group_has_explicit: bool = false;
-            'outer: for (_, sym) in &list_pairs {
-                for p in &providers {
-                    let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
-                    if let Some((rank, _)) = self
-                        .cfg
-                        .routing_policy
-                        .providers
-                        .provider_rank(&ctx, &p.key())
-                        && rank != usize::MAX
-                    {
-                        group_has_explicit = true;
-                        break 'outer;
-                    }
-                }
-            }
-
-            if group_has_explicit {
-                // When any explicit preference exists in this group, resolve a primary provider
-                // for every eligible symbol (explicit or wildcard) and group by that provider.
-                let mut primary_groups: HashMap<usize, Vec<Symbol>> = HashMap::new();
-                for sym in &requested {
-                    if !union_symbols.contains(sym) {
-                        continue;
-                    }
-                    // Gather candidate providers that allow this symbol
-                    let mut candidates: Vec<(usize, usize)> = Vec::new(); // (rank, providers_idx)
-                    for (idx, p) in providers.iter().enumerate() {
-                        if !provider_symbols
-                            .get(idx)
-                            .is_some_and(|set| set.contains(sym))
-                        {
-                            continue;
-                        }
-                        let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
-                        if let Some((rank, _strict)) = self
-                            .cfg
-                            .routing_policy
-                            .providers
-                            .provider_rank(&ctx, &p.key())
-                        {
-                            candidates.push((rank, idx));
-                        }
-                    }
-                    if candidates.is_empty() {
-                        continue;
-                    }
-                    candidates.sort_by_key(|(rank, providers_idx)| (*rank, *providers_idx));
-                    let (_best_rank, best_idx) = candidates[0];
-                    primary_groups
-                        .entry(best_idx)
-                        .or_default()
-                        .push(sym.clone());
-                }
-
-                // For each primary provider group, spawn a single supervisor that multiplexes all its symbols
-                for (primary_idx, group_syms) in primary_groups {
-                    let group_syms_set: HashSet<Symbol> = group_syms.iter().cloned().collect();
-
-                    // Build provider chain starting with the primary, followed by the rest in stable order
-                    let mut chain_indices: Vec<usize> = Vec::with_capacity(providers.len());
-                    chain_indices.push(primary_idx);
-                    for j in 0..providers.len() {
-                        if j != primary_idx {
-                            chain_indices.push(j);
-                        }
-                    }
-
-                    let mut chain_providers: Vec<Arc<dyn BorsaConnector>> =
-                        Vec::with_capacity(chain_indices.len());
-                    let mut provider_instruments: Vec<Vec<Instrument>> =
-                        Vec::with_capacity(chain_indices.len());
-                    let mut provider_allow: Vec<HashSet<Symbol>> =
-                        Vec::with_capacity(chain_indices.len());
-
-                    for &orig_idx in &chain_indices {
-                        chain_providers.push(providers[orig_idx].clone());
-                        let allow_full =
-                            provider_symbols.get(orig_idx).cloned().unwrap_or_default();
-                        let filtered_allow: HashSet<Symbol> = allow_full
-                            .into_iter()
-                            .filter(|s| group_syms_set.contains(s))
-                            .collect();
-                        let assigned = list_pairs
-                            .iter()
-                            .filter(|(_, sym)| filtered_allow.contains(sym))
-                            .map(|(inst, _)| inst.clone())
-                            .collect::<Vec<_>>();
-                        provider_instruments.push(assigned);
-                        provider_allow.push(filtered_allow);
-                    }
-
-                    let min_backoff_ms = resolved_backoff.min_backoff_ms;
-                    let max_backoff_ms = resolved_backoff.max_backoff_ms;
-                    let factor = resolved_backoff.factor.max(1);
-                    let jitter_percent = resolved_backoff.jitter_percent.min(100);
-
-                    let required_symbols: HashSet<Symbol> = group_syms_set.clone();
-                    let (init_tx, init_rx) = oneshot::channel();
-                    let params = KindSupervisorParams {
-                        providers: chain_providers,
-                        provider_instruments,
-                        provider_allow,
-                        required_symbols,
-                        min_backoff_ms,
-                        max_backoff_ms,
-                        factor,
-                        jitter_percent: u32::from(jitter_percent),
-                        initial_notify: Some(init_tx),
-                        enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
-                    };
-                    let join = spawn_kind_supervisor::<QuoteUpdate>(
-                        params,
-                        stop_broadcast_rx.clone(),
-                        tx.clone(),
-                    );
-                    joins.push(join);
-                    init_receivers.push(init_rx);
-                }
-
-                // No separate wildcard-only supervisor; wildcard symbols were merged into
-                // their resolved primary provider groups above.
-            } else {
-                // No explicit preferences for this group: use group-level supervisor (fallback allowed)
-                let mut provider_instruments: Vec<Vec<Instrument>> =
-                    Vec::with_capacity(providers.len());
-                let mut provider_allow: Vec<HashSet<Symbol>> = Vec::with_capacity(providers.len());
-                for allow in &provider_symbols {
-                    let assigned = list_pairs
-                        .iter()
-                        .filter(|(_, sym)| allow.contains(sym))
-                        .map(|(inst, _)| inst.clone())
-                        .collect::<Vec<_>>();
-                    provider_instruments.push(assigned);
-                    provider_allow.push(allow.clone());
-                }
-
-                let min_backoff_ms = resolved_backoff.min_backoff_ms;
-                let max_backoff_ms = resolved_backoff.max_backoff_ms;
-                let factor = resolved_backoff.factor.max(1);
-                let jitter_percent = resolved_backoff.jitter_percent.min(100);
-
-                let (init_tx, init_rx) = oneshot::channel();
-
-                let required_symbols: HashSet<Symbol> = list_pairs
-                    .iter()
-                    .filter(|(_, sym)| union_symbols.contains(sym))
-                    .map(|(_, sym)| sym.clone())
-                    .collect();
-
-                let params = KindSupervisorParams {
-                    providers,
-                    provider_instruments,
-                    provider_allow,
-                    required_symbols,
-                    min_backoff_ms,
-                    max_backoff_ms,
-                    factor,
-                    jitter_percent: u32::from(jitter_percent),
-                    initial_notify: Some(init_tx),
-                    enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
-                };
-                let join = spawn_kind_supervisor::<QuoteUpdate>(
-                    params,
-                    stop_broadcast_rx.clone(),
-                    tx.clone(),
-                );
-                joins.push(join);
-                init_receivers.push(init_rx);
-            }
-        }
-
-        // Ensure at least one kind connected successfully before returning a handle.
-        let mut init_errors: Vec<BorsaError> = Vec::new();
-        let mut success_kinds: usize = 0;
-        for rx in init_receivers {
-            match rx.await {
-                Ok(Ok(())) => {
-                    success_kinds += 1;
-                }
-                Ok(Err(e)) => init_errors.push(e),
-                Err(_) => init_errors.push(BorsaError::Other(
-                    "stream supervisor dropped before initialization".into(),
-                )),
-            }
-        }
-
-        if success_kinds == 0 || !init_errors.is_empty() {
-            let err = collapse_stream_errors(init_errors);
-            for join in joins {
-                join.abort();
-            }
-            let _ = stop_broadcast_tx.send(true);
-            return Err(err);
-        }
-
-        // Supervisor to await stop signal OR downstream closure and then stop all children
-        let supervisor = tokio::spawn(async move {
-            let mut stop_rx_inner = stop_rx;
-            tokio::select! {
-                _ = &mut stop_rx_inner => {}
-                // Downstream receiver dropped for the fan-in channel
-                () = tx.closed() => {}
-            }
-            let _ = stop_broadcast_tx.send(true);
-            for j in joins {
-                let _ = j.await;
-            }
-        });
-
-        Ok((StreamHandle::new(supervisor, stop_tx), rx))
+        self.stream_updates_with_backoff::<QuoteUpdate, _>(
+            instruments,
+            (),
+            backoff_override,
+            Capability::StreamQuotes,
+            |this, kind, exchange, list| {
+                this.eligible_stream_providers_for_context(kind, exchange, list)
+            },
+        )
+        .await
     }
 
     /// Start streaming quotes using the configured backoff settings.
@@ -387,6 +403,58 @@ impl Borsa {
         instruments: &[Instrument],
     ) -> Result<(StreamHandle, mpsc::Receiver<QuoteUpdate>), BorsaError> {
         self.stream_quotes_with_backoff(instruments, None).await
+    }
+
+    /// Start streaming candle updates with automatic backoff, provider failover, and policy-aware routing.
+    ///
+    /// Parameters mirror [`Self::stream_quotes_with_backoff`] with an additional `interval`
+    /// argument that selects the provider-native candle cadence.
+    ///
+    /// The routing, strict policy handling, and supervisor behavior match the quote-streaming
+    /// implementation; the only difference is that providers must advertise
+    /// [`CandleStreamProvider`](borsa_core::connector::CandleStreamProvider) and will produce
+    /// [`CandleUpdate`] frames with `is_final` flagged when upstream closes the interval.
+    ///
+    /// # Errors
+    /// Returns an error if candle-capable providers cannot be started for any requested group or
+    /// when strict routing rules reject every symbol.
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(
+            name = "borsa::router::stream_candles_with_backoff",
+            skip(self, instruments, interval, backoff_override)
+        )
+    )]
+    #[allow(clippy::too_many_lines)]
+    pub async fn stream_candles_with_backoff(
+        &self,
+        instruments: &[Instrument],
+        interval: Interval,
+        backoff_override: Option<BackoffConfig>,
+    ) -> Result<(StreamHandle, mpsc::Receiver<CandleUpdate>), BorsaError> {
+        self.stream_updates_with_backoff::<CandleUpdate, _>(
+            instruments,
+            interval,
+            backoff_override,
+            Capability::StreamCandles,
+            |this, kind, exchange, list| {
+                this.eligible_candle_stream_providers_for_context(kind, exchange, list)
+            },
+        )
+        .await
+    }
+
+    /// Start streaming candles using configured backoff settings.
+    ///
+    /// # Errors
+    /// Propagates the same conditions as [`Self::stream_candles_with_backoff`].
+    pub async fn stream_candles(
+        &self,
+        instruments: &[Instrument],
+        interval: Interval,
+    ) -> Result<(StreamHandle, mpsc::Receiver<CandleUpdate>), BorsaError> {
+        self.stream_candles_with_backoff(instruments, interval, None)
+            .await
     }
 
     /// Start streaming option updates with automatic backoff, provider failover, and policy-aware routing.
@@ -419,296 +487,16 @@ impl Borsa {
         instruments: &[Instrument],
         backoff_override: Option<BackoffConfig>,
     ) -> Result<(StreamHandle, mpsc::Receiver<OptionUpdate>), BorsaError> {
-        tokio::task::yield_now().await;
-        if instruments.is_empty() {
-            return Err(borsa_core::BorsaError::InvalidArg(
-                "instruments list cannot be empty".into(),
-            ));
-        }
-
-        let mut by_group: HashMap<(AssetKind, Option<Exchange>), Vec<Instrument>> = HashMap::new();
-        for inst in instruments.iter().cloned() {
-            let exch_opt = match inst.id() {
-                borsa_core::IdentifierScheme::Security(sec) => sec.exchange.clone(),
-                borsa_core::IdentifierScheme::Prediction(_) => None,
-            };
-            by_group
-                .entry((*inst.kind(), exch_opt))
-                .or_default()
-                .push(inst);
-        }
-
-        let resolved_backoff: BackoffConfig =
-            backoff_override.or(self.cfg.backoff).unwrap_or_default();
-
-        let (tx, rx) = mpsc::channel::<OptionUpdate>(1024);
-        let (stop_tx, stop_rx) = oneshot::channel::<()>();
-        let (stop_broadcast_tx, stop_broadcast_rx) = watch::channel(false);
-
-        let mut joins = Vec::new();
-        let mut init_receivers: Vec<oneshot::Receiver<Result<(), BorsaError>>> = Vec::new();
-        for ((kind, ex), list) in by_group {
-            let EligibleStreamProviders {
-                providers,
-                provider_symbols,
-                union_symbols,
-            } = self.eligible_option_stream_providers_for_context(kind, ex.as_ref(), &list)?;
-            if union_symbols.is_empty() {
-                continue;
-            }
-
-            // Extract symbols from Security ids and reject non-Security instruments
-            let mut list_pairs: Vec<(Instrument, Symbol)> = Vec::with_capacity(list.len());
-            for inst in list {
-                let sym = match inst.id() {
-                    borsa_core::IdentifierScheme::Security(sec) => sec.symbol.clone(),
-                    borsa_core::IdentifierScheme::Prediction(_) => {
-                        return Err(BorsaError::unsupported(
-                            "instrument scheme (stream/security-only)",
-                        ));
-                    }
-                };
-                list_pairs.push((inst, sym));
-            }
-
-            // Strict policy failure precheck: find symbols requested but rejected by a strict rule.
-            let requested: HashSet<Symbol> = list_pairs.iter().map(|(_, s)| s.clone()).collect();
-            let rejected: Vec<Symbol> = requested.difference(&union_symbols).cloned().collect();
-            if !rejected.is_empty() {
-                let mut strict_filtered: Vec<Symbol> = Vec::new();
-                let candidates: Vec<&Arc<dyn BorsaConnector>> = self
-                    .connectors
-                    .iter()
-                    .filter(|c| c.as_option_stream_provider().is_some() && c.supports_kind(kind))
-                    .collect();
-                for sym in &rejected {
-                    if !candidates.is_empty() {
-                        let mut any_allowed = false;
-                        for c in &candidates {
-                            let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
-                            if self
-                                .cfg
-                                .routing_policy
-                                .providers
-                                .provider_rank(&ctx, &c.key())
-                                .is_some()
-                            {
-                                any_allowed = true;
-                                break;
-                            }
-                        }
-                        if !any_allowed {
-                            strict_filtered.push(sym.clone());
-                        }
-                    }
-                }
-                if !strict_filtered.is_empty() {
-                    return Err(BorsaError::StrictSymbolsRejected {
-                        rejected: strict_filtered,
-                    });
-                }
-            }
-
-            // Same routing logic as quotes, but fan-out uses OptionUpdate.
-            let mut group_has_explicit: bool = false;
-            'outer: for (_, sym) in &list_pairs {
-                for p in &providers {
-                    let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
-                    if let Some((rank, _)) = self
-                        .cfg
-                        .routing_policy
-                        .providers
-                        .provider_rank(&ctx, &p.key())
-                        && rank != usize::MAX
-                    {
-                        group_has_explicit = true;
-                        break 'outer;
-                    }
-                }
-            }
-
-            if group_has_explicit {
-                let mut primary_groups: HashMap<usize, Vec<Symbol>> = HashMap::new();
-                for sym in &requested {
-                    if !union_symbols.contains(sym) {
-                        continue;
-                    }
-                    let mut candidates: Vec<(usize, usize)> = Vec::new();
-                    for (idx, p) in providers.iter().enumerate() {
-                        if !provider_symbols
-                            .get(idx)
-                            .is_some_and(|set| set.contains(sym))
-                        {
-                            continue;
-                        }
-                        let ctx = RoutingContext::new(Some(sym), Some(kind), ex.clone());
-                        if let Some((rank, _strict)) = self
-                            .cfg
-                            .routing_policy
-                            .providers
-                            .provider_rank(&ctx, &p.key())
-                        {
-                            candidates.push((rank, idx));
-                        }
-                    }
-                    if candidates.is_empty() {
-                        continue;
-                    }
-                    candidates.sort_by_key(|(rank, providers_idx)| (*rank, *providers_idx));
-                    let (_best_rank, best_idx) = candidates[0];
-                    primary_groups
-                        .entry(best_idx)
-                        .or_default()
-                        .push(sym.clone());
-                }
-
-                for (primary_idx, group_syms) in primary_groups {
-                    let group_syms_set: HashSet<Symbol> = group_syms.iter().cloned().collect();
-
-                    let mut chain_indices: Vec<usize> = Vec::with_capacity(providers.len());
-                    chain_indices.push(primary_idx);
-                    for j in 0..providers.len() {
-                        if j != primary_idx {
-                            chain_indices.push(j);
-                        }
-                    }
-
-                    let mut chain_providers: Vec<Arc<dyn BorsaConnector>> =
-                        Vec::with_capacity(chain_indices.len());
-                    let mut provider_instruments: Vec<Vec<Instrument>> =
-                        Vec::with_capacity(chain_indices.len());
-                    let mut provider_allow: Vec<HashSet<Symbol>> =
-                        Vec::with_capacity(chain_indices.len());
-
-                    for &orig_idx in &chain_indices {
-                        chain_providers.push(providers[orig_idx].clone());
-                        let allow_full =
-                            provider_symbols.get(orig_idx).cloned().unwrap_or_default();
-                        let filtered_allow: HashSet<Symbol> = allow_full
-                            .into_iter()
-                            .filter(|s| group_syms_set.contains(s))
-                            .collect();
-                        let assigned = list_pairs
-                            .iter()
-                            .filter(|(_, sym)| filtered_allow.contains(sym))
-                            .map(|(inst, _)| inst.clone())
-                            .collect::<Vec<_>>();
-                        provider_instruments.push(assigned);
-                        provider_allow.push(filtered_allow);
-                    }
-
-                    let min_backoff_ms = resolved_backoff.min_backoff_ms;
-                    let max_backoff_ms = resolved_backoff.max_backoff_ms;
-                    let factor = resolved_backoff.factor.max(1);
-                    let jitter_percent = resolved_backoff.jitter_percent.min(100);
-
-                    let required_symbols: HashSet<Symbol> = group_syms_set.clone();
-                    let (init_tx, init_rx) = oneshot::channel();
-                    let params = KindSupervisorParams {
-                        providers: chain_providers,
-                        provider_instruments,
-                        provider_allow,
-                        required_symbols,
-                        min_backoff_ms,
-                        max_backoff_ms,
-                        factor,
-                        jitter_percent: u32::from(jitter_percent),
-                        initial_notify: Some(init_tx),
-                        enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
-                    };
-                    let join = spawn_kind_supervisor::<OptionUpdate>(
-                        params,
-                        stop_broadcast_rx.clone(),
-                        tx.clone(),
-                    );
-                    joins.push(join);
-                    init_receivers.push(init_rx);
-                }
-            } else {
-                let mut provider_instruments: Vec<Vec<Instrument>> =
-                    Vec::with_capacity(providers.len());
-                let mut provider_allow: Vec<HashSet<Symbol>> = Vec::with_capacity(providers.len());
-                for allow in &provider_symbols {
-                    let assigned = list_pairs
-                        .iter()
-                        .filter(|(_, sym)| allow.contains(sym))
-                        .map(|(inst, _)| inst.clone())
-                        .collect::<Vec<_>>();
-                    provider_instruments.push(assigned);
-                    provider_allow.push(allow.clone());
-                }
-
-                let min_backoff_ms = resolved_backoff.min_backoff_ms;
-                let max_backoff_ms = resolved_backoff.max_backoff_ms;
-                let factor = resolved_backoff.factor.max(1);
-                let jitter_percent = resolved_backoff.jitter_percent.min(100);
-
-                let (init_tx, init_rx) = oneshot::channel();
-
-                let required_symbols: HashSet<Symbol> = list_pairs
-                    .iter()
-                    .filter(|(_, sym)| union_symbols.contains(sym))
-                    .map(|(_, sym)| sym.clone())
-                    .collect();
-
-                let params = KindSupervisorParams {
-                    providers,
-                    provider_instruments,
-                    provider_allow,
-                    required_symbols,
-                    min_backoff_ms,
-                    max_backoff_ms,
-                    factor,
-                    jitter_percent: u32::from(jitter_percent),
-                    initial_notify: Some(init_tx),
-                    enforce_monotonic: self.cfg.stream_enforce_monotonic_timestamps,
-                };
-                let join = spawn_kind_supervisor::<OptionUpdate>(
-                    params,
-                    stop_broadcast_rx.clone(),
-                    tx.clone(),
-                );
-                joins.push(join);
-                init_receivers.push(init_rx);
-            }
-        }
-
-        let mut init_errors: Vec<BorsaError> = Vec::new();
-        let mut success_kinds: usize = 0;
-        for rx in init_receivers {
-            match rx.await {
-                Ok(Ok(())) => {
-                    success_kinds += 1;
-                }
-                Ok(Err(e)) => init_errors.push(e),
-                Err(_) => init_errors.push(BorsaError::Other(
-                    "stream supervisor dropped before initialization".into(),
-                )),
-            }
-        }
-
-        if success_kinds == 0 || !init_errors.is_empty() {
-            let err = collapse_stream_errors(init_errors);
-            for join in joins {
-                join.abort();
-            }
-            let _ = stop_broadcast_tx.send(true);
-            return Err(err);
-        }
-
-        let supervisor = tokio::spawn(async move {
-            let mut stop_rx_inner = stop_rx;
-            tokio::select! {
-                _ = &mut stop_rx_inner => {}
-                () = tx.closed() => {}
-            }
-            let _ = stop_broadcast_tx.send(true);
-            for j in joins {
-                let _ = j.await;
-            }
-        });
-
-        Ok((StreamHandle::new(supervisor, stop_tx), rx))
+        self.stream_updates_with_backoff::<OptionUpdate, _>(
+            instruments,
+            (),
+            backoff_override,
+            Capability::StreamOptions,
+            |this, kind, exchange, list| {
+                this.eligible_option_stream_providers_for_context(kind, exchange, list)
+            },
+        )
+        .await
     }
 
     /// Start streaming options using the configured backoff settings.

@@ -110,7 +110,7 @@ Enable the `dataframe` feature to use `.to_dataframe()` on returned types. See `
 - Resampling: `./examples/08_history_resampling.rs`
 - Merge strategies: `./examples/14_merge_strategies.rs`
 - Multi-quote: `./examples/22_multi_quotes.rs`
-- Streaming: `./examples/17_streaming.rs`
+- Streaming quotes/options/candles: `./examples/17_streaming.rs`
 
 ## Architecture
 

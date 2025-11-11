@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use borsa_core::{BorsaConnector, BorsaError, Instrument, Symbol};
+use borsa_core::{BorsaConnector, BorsaError, Capability, Instrument, Symbol};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
@@ -11,7 +11,7 @@ use super::error::collapse_stream_errors;
 use super::filters::MonotonicGate;
 use super::session::SessionManager;
 
-pub struct KindSupervisorParams {
+pub struct KindSupervisorParams<C> {
     pub providers: Vec<Arc<dyn BorsaConnector>>,
     /// Assigned instruments per provider, aligned by index with `providers`.
     pub provider_instruments: Vec<Vec<Instrument>>,
@@ -25,11 +25,13 @@ pub struct KindSupervisorParams {
     pub jitter_percent: u32,
     pub initial_notify: Option<oneshot::Sender<Result<(), BorsaError>>>,
     pub enforce_monotonic: bool,
+    pub capability: Capability,
+    pub context: Arc<C>,
 }
 
 #[allow(clippy::too_many_lines)]
 pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
-    params: KindSupervisorParams,
+    params: KindSupervisorParams<T::Context>,
     mut stop_watch: watch::Receiver<bool>,
     tx_clone: mpsc::Sender<T>,
 ) -> JoinHandle<()> {
@@ -54,11 +56,13 @@ pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
             jitter_percent,
             mut initial_notify,
             enforce_monotonic,
+            capability,
+            context,
         } = params;
 
         if providers.is_empty() {
             if let Some(tx) = initial_notify.take() {
-                let err = collapse_stream_errors(Vec::new());
+                let err = collapse_stream_errors(capability, Vec::new());
                 let _ = tx.send(Err(err));
             }
             return;
@@ -74,7 +78,7 @@ pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
 
         let providers_can_stream: Vec<bool> = providers
             .iter()
-            .map(|p| T::can_stream(p.as_ref()))
+            .map(|p| T::can_stream(p.as_ref(), context.as_ref()))
             .collect();
 
         let mut supervisor = sm::Supervisor {
@@ -95,6 +99,7 @@ pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
                 initial_tx: initial_notify.take(),
                 accumulated_errors: Vec::new(),
             },
+            capability,
         };
 
         let (event_tx, mut event_rx) =
@@ -136,12 +141,16 @@ pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
                             .into_boxed_slice(),
                     );
                     let start_tx_clone = start_tx.clone();
+                    let ctx = Arc::clone(&context);
                     tokio::spawn(async move {
                         let provider_name = provider.name();
-                        let res = match T::start_stream(provider.as_ref(), &instruments).await {
-                            Ok((handle, prx)) => Ok((handle, prx, syms)),
-                            Err(err) => Err(crate::core::tag_err(provider_name, err)),
-                        };
+                        let res =
+                            match T::start_stream(provider.as_ref(), &instruments, ctx.as_ref())
+                                .await
+                            {
+                                Ok((handle, prx)) => Ok((handle, prx, syms)),
+                                Err(err) => Err(crate::core::tag_err(provider_name, err)),
+                            };
                         let _ = start_tx_clone.send((id, res));
                     });
                 }
@@ -199,9 +208,16 @@ pub fn spawn_kind_supervisor<T: StreamUpdateKind>(
                                 .into_boxed_slice(),
                         );
                         let start_tx_clone = start_tx.clone();
+                        let ctx = Arc::clone(&context);
                         tokio::spawn(async move {
                             let provider_name = provider.name();
-                            let res = match T::start_stream(provider.as_ref(), &instruments).await {
+                            let res = match T::start_stream(
+                                provider.as_ref(),
+                                &instruments,
+                                ctx.as_ref(),
+                            )
+                            .await
+                            {
                                 Ok((handle, prx)) => Ok((handle, prx, syms)),
                                 Err(err) => Err(crate::core::tag_err(provider_name, err)),
                             };
