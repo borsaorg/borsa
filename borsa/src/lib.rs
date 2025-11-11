@@ -79,6 +79,7 @@ pub use borsa_core::{
     InsiderTransaction,
     InstitutionalHolder,
     Instrument,
+    Interval,
     Isin,
     IsoCurrency,
     MajorHolder,
@@ -99,6 +100,7 @@ pub use borsa_core::{
 
     Quote,
     QuoteUpdate,
+    Range,
     RecommendationRow,
     RecommendationSummary,
     SearchReport,
