@@ -10,7 +10,12 @@ use futures::future::join_all;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::mem;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context, Poll};
+
+type HistoryCallInnerFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<HistoryResponse, BorsaError>> + Send + 'a>>;
 
 type IndexedConnector = (usize, Arc<dyn BorsaConnector>);
 // Resampling plan applied to provider outputs to satisfy the requested cadence.
@@ -123,21 +128,19 @@ impl Borsa {
         eligible: &[(usize, Arc<dyn BorsaConnector>)],
         inst: &Instrument,
         req_copy: HistoryRequest,
+        provider_timeout: std::time::Duration,
+        request_timeout: Option<std::time::Duration>,
     ) -> Result<Vec<HistoryTaskResult>, BorsaError> {
         let make_future = || async {
             match self.cfg.merge_history_strategy {
-                MergeStrategy::Deep => Ok(Self::parallel_history(
-                    eligible,
-                    inst,
-                    &req_copy,
-                    self.cfg.provider_timeout,
-                )
-                .await),
+                MergeStrategy::Deep => {
+                    Ok(Self::parallel_history(eligible, inst, &req_copy, provider_timeout).await)
+                }
                 MergeStrategy::Fallback => Ok(Self::sequential_history(
                     eligible.to_vec(),
                     inst,
                     req_copy,
-                    self.cfg.provider_timeout,
+                    provider_timeout,
                 )
                 .await),
                 _ => Err(BorsaError::InvalidArg(
@@ -145,7 +148,7 @@ impl Borsa {
                 )),
             }
         };
-        (crate::core::with_request_deadline(self.cfg.request_timeout, make_future()).await)
+        (crate::core::with_request_deadline(request_timeout, make_future()).await)
             .unwrap_or_else(|_| Err(BorsaError::request_timeout(Capability::History.to_string())))
     }
 
@@ -324,15 +327,60 @@ impl Borsa {
         inst: &Instrument,
         req: HistoryRequest,
     ) -> Result<(HistoryResponse, Attribution), BorsaError> {
+        self.history_with_attribution_effective(
+            inst,
+            req,
+            self.cfg.provider_timeout,
+            self.cfg.request_timeout,
+        )
+        .await
+    }
+
+    async fn history_with_attribution_effective(
+        &self,
+        inst: &Instrument,
+        req: HistoryRequest,
+        provider_timeout: std::time::Duration,
+        request_timeout: Option<std::time::Duration>,
+    ) -> Result<(HistoryResponse, Attribution), BorsaError> {
         // Request types validate on construction
         let eligible = self.eligible_history_connectors(inst)?;
         let req_copy = req;
-        let joined = self.fetch_joined_history(&eligible, inst, req_copy).await?;
+        let joined = self
+            .fetch_joined_history(&eligible, inst, req_copy, provider_timeout, request_timeout)
+            .await?;
         let symbol_label = match inst.id() {
             borsa_core::IdentifierScheme::Security(sec) => sec.symbol.as_str(),
             borsa_core::IdentifierScheme::Prediction(_) => "",
         };
         self.finalize_history_results(joined, symbol_label)
+    }
+
+    /// Build a future-like call to fetch history with per-call configuration.
+    ///
+    /// This returns a small builder that implements `Future<Output = Result<HistoryResponse, BorsaError>>`.
+    /// You can fluently override timeouts before awaiting:
+    ///
+    /// ```rust,ignore
+    /// let resp = borsa
+    ///     .history_call(&inst, req)
+    ///     .with_provider_timeout(std::time::Duration::from_secs(120))
+    ///     .await?;
+    /// ```
+    #[must_use]
+    pub fn history_call<'a>(
+        &'a self,
+        inst: &'a Instrument,
+        req: HistoryRequest,
+    ) -> HistoryCall<'a> {
+        HistoryCall {
+            borsa: self,
+            inst,
+            req: Some(req),
+            provider_timeout: None,
+            request_timeout: None,
+            fut: None,
+        }
     }
 }
 
@@ -613,5 +661,79 @@ impl Borsa {
             timeseries::util::strip_unadjusted(&mut merged.candles);
         }
         Ok(())
+    }
+}
+
+// TODO: This is an interesting pattern, should we extend it to the other router calls? If so, which one?
+// This is necessary because a downstream connector might take a long time to build the full history.
+// For example, suppose you want to build a 1s history with a 1M range, and suppose that the provider has a batch limit of 1000 candles per request.
+// One day is 86400 seconds, so 86400 / 1000 = 86.4 requests.
+// With a mean latency of 200ms, this would take 87 * 200ms = 17.4 seconds.
+// It seems reasonable to me to allow a per call request timeout to allow this without having to set the global request timeout to a very large value.
+
+/// Future-like builder for fetching history with per-call configuration.
+///
+/// Constructed via [`Borsa::history_call`]. You can override timeouts and then `.await` it
+/// to resolve into a `HistoryResponse`.
+pub struct HistoryCall<'a> {
+    borsa: &'a Borsa,
+    inst: &'a Instrument,
+    req: Option<HistoryRequest>,
+    provider_timeout: Option<std::time::Duration>,
+    request_timeout: Option<std::time::Duration>,
+    // Lazily initialized inner future on first poll
+    fut: Option<HistoryCallInnerFuture<'a>>,
+}
+
+impl HistoryCall<'_> {
+    /// Override the per-provider timeout for this call.
+    #[must_use]
+    pub const fn with_provider_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.provider_timeout = Some(timeout);
+        self
+    }
+
+    /// Override the overall request timeout for this call.
+    #[must_use]
+    pub const fn with_request_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+
+    /// Convenience alias for `with_provider_timeout`.
+    #[must_use]
+    pub const fn with_timeout(self, timeout: std::time::Duration) -> Self {
+        self.with_provider_timeout(timeout)
+    }
+}
+
+impl Future for HistoryCall<'_> {
+    type Output = Result<HistoryResponse, BorsaError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.fut.is_none() {
+            let b = self.borsa;
+            let inst = self.inst;
+            let req = self
+                .req
+                .take()
+                .expect("HistoryCall polled after completion");
+            let provider_timeout = self.provider_timeout.unwrap_or(b.cfg.provider_timeout);
+            let request_timeout = self.request_timeout.or(b.cfg.request_timeout);
+            let fut = Box::pin(async move {
+                let (resp, _attr) = b
+                    .history_with_attribution_effective(
+                        inst,
+                        req,
+                        provider_timeout,
+                        request_timeout,
+                    )
+                    .await?;
+                Ok(resp)
+            });
+            self.fut = Some(fut);
+        }
+        let fut = self.fut.as_mut().unwrap();
+        Pin::new(fut).poll(cx)
     }
 }
