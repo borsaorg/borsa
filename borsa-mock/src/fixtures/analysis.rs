@@ -1,5 +1,5 @@
 use borsa_core::{
-    Currency, IsoCurrency, Money, PriceTarget, RecommendationRow, RecommendationSummary,
+    Currency, Decimal, IsoCurrency, Money, PriceTarget, RecommendationRow, RecommendationSummary,
     UpgradeDowngradeRow,
 };
 
@@ -15,7 +15,7 @@ pub fn recommendations_summary_by_symbol(_s: &str) -> RecommendationSummary {
         hold: Some(8),
         sell: Some(2),
         strong_sell: Some(1),
-        mean: Some(2.0),
+        mean: Some(Decimal::from(2)),
         mean_rating_text: Some("Buy".to_string()),
     }
 }

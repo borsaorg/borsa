@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use borsa_core::{AssetKind, Instrument, connector::EsgProvider};
+use borsa_core::{AssetKind, Decimal, Instrument, connector::EsgProvider};
 use borsa_yfinance::{YfConnector, adapter};
 
 struct Combo {
@@ -19,9 +19,9 @@ async fn esg_injection_maps_correctly() {
     let esg_adapter = <dyn adapter::YfEsg>::from_fn(|sym| {
         assert_eq!(sym, "AAPL");
         Ok(yfinance_rs::esg::EsgScores {
-            environmental: Some(1.0),
-            social: Some(2.0),
-            governance: Some(3.0),
+            environmental: Some(dec("1.0")),
+            social: Some(dec("2.0")),
+            governance: Some(dec("3.0")),
         })
     });
 
@@ -29,5 +29,9 @@ async fn esg_injection_maps_correctly() {
     let inst = Instrument::from_symbol("AAPL", AssetKind::Equity).expect("valid test instrument");
 
     let sc = yf.sustainability(&inst).await.unwrap();
-    assert_eq!(sc.environmental, Some(1.0));
+    assert_eq!(sc.environmental, Some(dec("1.0")));
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }

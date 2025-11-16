@@ -1,7 +1,7 @@
 #![cfg(feature = "test-adapters")]
 
 use borsa_core::{
-    AssetKind, Currency, Instrument, Money,
+    AssetKind, Currency, Decimal, Instrument, Money,
     connector::{InstitutionalHoldersProvider, MajorHoldersProvider},
 };
 use borsa_yfinance::{YfConnector, adapter};
@@ -27,7 +27,7 @@ async fn holders_uses_injected_adapter_and_maps() {
             assert_eq!(sym, "MSFT");
             Ok(vec![MajorHolder {
                 category: "Test".into(),
-                value: 0.10,
+                value: dec("0.10"),
             }])
         },
         |sym| {
@@ -36,7 +36,7 @@ async fn holders_uses_injected_adapter_and_maps() {
                 holder: "Vanguard".into(),
                 shares: Some(100),
                 date_reported: chrono::Utc.timestamp_opt(1, 0).unwrap(),
-                pct_held: Some(0.1),
+                pct_held: Some(dec("0.1")),
                 value: Some(
                     Money::from_canonical_str("1000", Currency::Iso(borsa_core::IsoCurrency::USD))
                         .unwrap(),
@@ -55,9 +55,13 @@ async fn holders_uses_injected_adapter_and_maps() {
     assert_eq!(major.len(), 1);
     assert_eq!(major[0].category, "Test");
     // value is numeric fraction now (10% -> 0.10)
-    assert!((major[0].value - 0.10).abs() < 1e-12);
+    assert_eq!(major[0].value, dec("0.10"));
 
     let institutional = yf.institutional_holders(&inst).await.unwrap();
     assert_eq!(institutional.len(), 1);
     assert_eq!(institutional[0].holder, "Vanguard");
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }

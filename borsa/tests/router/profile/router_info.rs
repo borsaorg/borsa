@@ -5,6 +5,9 @@ use borsa_core::{CompanyProfile, PriceTarget, Quote, RecommendationSummary};
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
+}
 // A more comprehensive mock connector for this test
 #[derive(Default)]
 struct InfoConnector;
@@ -61,7 +64,7 @@ impl borsa_core::connector::RecommendationsSummaryProvider for InfoConnector {
             hold: None,
             sell: None,
             strong_sell: None,
-            mean: Some(1.8),
+            mean: Some(dec("1.8")),
             mean_rating_text: None,
         })
     }

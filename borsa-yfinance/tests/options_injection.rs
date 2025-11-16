@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use borsa_core::{
-    AssetKind, Currency, Instrument, Money,
+    AssetKind, Currency, Decimal, Instrument, Money,
     connector::{OptionChainProvider, OptionsExpirationsProvider},
 };
 use borsa_yfinance::{YfConnector, adapter};
@@ -48,7 +48,7 @@ impl adapter::YfOptions for StubOptions {
                 ),
                 volume: Some(123),
                 open_interest: Some(456),
-                implied_volatility: Some(0.35),
+                implied_volatility: Some(dec("0.35")),
                 in_the_money: false,
                 expiration_at: Some(chrono::Utc.timestamp_opt(1_725_813_600, 0).unwrap()),
                 expiration_date: chrono::NaiveDate::from_ymd_opt(2024, 6, 25).unwrap(),
@@ -77,7 +77,7 @@ impl adapter::YfOptions for StubOptions {
                 ),
                 volume: Some(99),
                 open_interest: Some(321),
-                implied_volatility: Some(0.37),
+                implied_volatility: Some(dec("0.37")),
                 in_the_money: true,
                 expiration_at: Some(chrono::Utc.timestamp_opt(1_725_813_600, 0).unwrap()),
                 expiration_date: chrono::NaiveDate::from_ymd_opt(2024, 6, 25).unwrap(),
@@ -86,6 +86,10 @@ impl adapter::YfOptions for StubOptions {
             }],
         })
     }
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }
 
 struct Combo {

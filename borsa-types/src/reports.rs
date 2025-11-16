@@ -12,7 +12,7 @@ use crate::error::BorsaError;
 ///
 /// Carries the requested `instrument`, the resolved [`Info`] snapshot if
 /// available, and any non-fatal warnings encountered during processing.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InfoReport {
     /// Requested instrument (scheme-agnostic).
     pub instrument: Instrument,

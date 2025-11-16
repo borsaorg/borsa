@@ -1,6 +1,6 @@
 use crate::helpers::{AAPL, MockConnector};
 use borsa::Borsa;
-use borsa_core::{AssetKind, BorsaConnector, RecommendationSummary, RoutingPolicyBuilder};
+use borsa_core::{AssetKind, BorsaConnector, Decimal, RecommendationSummary, RoutingPolicyBuilder};
 use tokio::time::Duration;
 
 #[tokio::test]
@@ -14,7 +14,7 @@ async fn recommendations_summary_respects_per_kind_priority() {
             hold: Some(1),
             sell: Some(1),
             strong_sell: Some(1),
-            mean: Some(2.5),
+            mean: Some(dec("2.5")),
             mean_rating_text: None,
         })
         .build();
@@ -28,7 +28,7 @@ async fn recommendations_summary_respects_per_kind_priority() {
             hold: Some(7),
             sell: Some(1),
             strong_sell: Some(0),
-            mean: Some(1.9),
+            mean: Some(dec("1.9")),
             mean_rating_text: None,
         })
         .build();
@@ -48,5 +48,9 @@ async fn recommendations_summary_respects_per_kind_priority() {
     let out = borsa.recommendations_summary(&inst).await.unwrap();
 
     assert_eq!(out.latest_period, Some("2024-08".parse().unwrap()));
-    assert_eq!(out.mean, Some(1.9));
+    assert_eq!(out.mean, Some(dec("1.9")));
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }

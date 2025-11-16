@@ -46,7 +46,7 @@ tracing = "0.1"
 # ---- Types layer ----
 # paft = { version = "0.7.1", features = ["market", "fundamentals", "aggregates"] }
 #paft = { path = "../paft-workspace/paft", features = ["market", "fundamentals", "aggregates", "prediction"] }
-paft = { git = "https://github.com/paft-rs/paft", rev = "226fb6cff4e7eff2f411702120fd0940f99383ad", features = ["market", "fundamentals", "aggregates", "prediction"] }
+paft = { git = "https://github.com/paft-rs/paft", rev = "87b7e5a509db3c546ff83c2da46a62d35c0c3865", features = ["market", "fundamentals", "aggregates", "prediction"] }
 
 # ---- Macros ----
 proc-macro-crate = "3.4.0"
@@ -60,7 +60,7 @@ moka = { version = "0.12", default-features = false }
 # ---- Connector: yfinance and networking ----
 # yfinance-rs = { version = "0.7.2" }
 #yfinance-rs = { path = "../yfinance-rs" }
-yfinance-rs = { git = "https://github.com/gramistella/yfinance-rs", rev = "03ddd9aa037f2ad042b53f217abdf6e64c5fc33f" }
+yfinance-rs = { git = "https://github.com/gramistella/yfinance-rs", rev = "13f2de5e6d87ddaac747f15275e165dccbd3b926" }
 reqwest = "0.12.24"
 base64 = "0.22"
 futures-util = "0.3"

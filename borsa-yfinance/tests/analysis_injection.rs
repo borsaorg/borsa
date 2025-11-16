@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use borsa_core::{
-    AssetKind, BorsaConnector, Currency, Instrument, Money, Period, RecommendationAction,
+    AssetKind, BorsaConnector, Currency, Decimal, Instrument, Money, Period, RecommendationAction,
     connector::{
         AnalystPriceTargetProvider, RecommendationsProvider, RecommendationsSummaryProvider,
         UpgradesDowngradesProvider,
@@ -45,7 +45,7 @@ async fn analysis_uses_injected_adapter_and_maps() {
                 hold: Some(7),
                 sell: Some(1),
                 strong_sell: Some(0),
-                mean: Some(1.9),
+                mean: Some(dec("1.9")),
                 mean_rating_text: None,
             })
         },
@@ -92,7 +92,7 @@ async fn analysis_uses_injected_adapter_and_maps() {
         sum.latest_period,
         Some("2024-08".parse::<Period>().unwrap())
     );
-    assert_eq!(sum.mean, Some(1.9));
+    assert_eq!(sum.mean, Some(dec("1.9")));
 
     let uds = yf.upgrades_downgrades(&inst).await.unwrap();
     assert_eq!(uds.len(), 1);
@@ -124,4 +124,8 @@ fn analysis_injection_periods_and_actions() {
     let _ = p; // ensure parsing works across paft versions without asserting specific variant
     let a: RecommendationAction = "up".parse().unwrap();
     assert_eq!(a.code(), "UPGRADE");
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }

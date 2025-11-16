@@ -23,6 +23,8 @@ pub use paft::money::{
     set_currency_metadata, try_normalize_currency_code,
 };
 
+pub use paft::{Decimal, RoundingStrategy};
+
 pub use paft::fundamentals::analysis::{
     AnalysisSummary, Earnings, EarningsQuarter, EarningsQuarterEps, EarningsTrendRow, EarningsYear,
     PriceTarget, RecommendationAction, RecommendationGrade, RecommendationRow,

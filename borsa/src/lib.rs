@@ -59,6 +59,7 @@ pub use borsa_core::{
     CashflowRow,
     CompanyProfile,
     Currency,
+    Decimal,
     DownloadEntry,
     DownloadReport,
     DownloadResponse,
@@ -103,6 +104,7 @@ pub use borsa_core::{
     Range,
     RecommendationRow,
     RecommendationSummary,
+    RoundingStrategy,
     SearchReport,
     SearchRequest,
 

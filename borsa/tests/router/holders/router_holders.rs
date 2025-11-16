@@ -1,6 +1,6 @@
 use crate::helpers::{MSFT, MockConnector};
 use borsa::Borsa;
-use borsa_core::{AssetKind, MajorHolder};
+use borsa_core::{AssetKind, Decimal, MajorHolder};
 
 #[tokio::test]
 async fn holders_falls_back_and_succeeds() {
@@ -12,7 +12,7 @@ async fn holders_falls_back_and_succeeds() {
         .name("ok_holders")
         .returns_major_holders_ok(vec![MajorHolder {
             category: "Test".into(),
-            value: 0.0,
+            value: dec("0.0"),
         }])
         .build();
 
@@ -25,5 +25,9 @@ async fn holders_falls_back_and_succeeds() {
     let inst = crate::helpers::instrument(&MSFT, AssetKind::Equity);
     let rows = borsa.major_holders(&inst).await.unwrap();
     assert_eq!(rows.len(), 1);
-    assert!((rows[0].value - 0.0).abs() < f64::EPSILON);
+    assert_eq!(rows[0].value, dec("0.0"));
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }

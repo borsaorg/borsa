@@ -1,6 +1,6 @@
 use crate::helpers::{MockConnector, X, dt, ts, usd};
 use borsa::Borsa;
-use borsa_core::{AssetKind, OptionChain, OptionContract};
+use borsa_core::{AssetKind, Decimal, OptionChain, OptionContract};
 
 #[tokio::test]
 async fn option_chain_falls_back_and_succeeds() {
@@ -25,7 +25,7 @@ async fn option_chain_falls_back_and_succeeds() {
                     ask: Some(usd("2.6")),
                     volume: Some(10),
                     open_interest: Some(100),
-                    implied_volatility: Some(0.4),
+                    implied_volatility: Some(dec("0.4")),
                     in_the_money: false,
                     expiration_at: Some(dt(2024, 6, 25, 0, 0, 0)),
                     expiration_date: chrono::NaiveDate::from_ymd_opt(2024, 6, 25).unwrap(),
@@ -54,4 +54,8 @@ async fn option_chain_falls_back_and_succeeds() {
         ch.calls[0].strike.amount(),
         rust_decimal::Decimal::from(50u8)
     );
+}
+
+fn dec(input: &str) -> Decimal {
+    input.parse().expect("valid decimal literal")
 }
